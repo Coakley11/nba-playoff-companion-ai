@@ -2,6 +2,6 @@ streamlit
 pandas
 plotly
 numpy
-scikit-learn
-nba_api
 statsmodels
+nba_api
+streamlit-autorefresh
