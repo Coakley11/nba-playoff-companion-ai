@@ -1,12 +1,10 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from datetime import datetime, timedelta, date
-
-# =====================================================
-# OPTIONAL PACKAGES
-# =====================================================
+import plotly.graph_objects as go
+from datetime import datetime
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -22,20 +20,11 @@ except Exception:
 
 try:
     from nba_api.live.nba.endpoints import scoreboard
-    NBA_LIVE_AVAILABLE = True
-except Exception:
-    NBA_LIVE_AVAILABLE = False
-
-try:
     from nba_api.stats.static import players as nba_players
-    from nba_api.stats.endpoints import playergamelog, leaguegamefinder
-    NBA_STATS_AVAILABLE = True
+    from nba_api.stats.endpoints import playergamelog
+    NBA_API_AVAILABLE = True
 except Exception:
-    NBA_STATS_AVAILABLE = False
-
-# =====================================================
-# PAGE CONFIG
-# =====================================================
+    NBA_API_AVAILABLE = False
 
 st.set_page_config(
     page_title="Daniel Cohen — NBA Playoff Companion AI",
@@ -44,244 +33,225 @@ st.set_page_config(
 )
 
 st.title("Daniel Cohen — NBA Playoff Companion AI")
-st.caption("Auto-updating 2026 NBA playoff companion app with live data, team-specific analysis, player logs, and fan perspective")
+st.caption("2026 NBA Playoff-only fan companion app | Live-aware bracket, team pages, player tracker, and game center")
 
 # =====================================================
-# TEAM DATA
+# DATA MODEL
 # =====================================================
 
-TEAM_IDS = {
-    "Atlanta Hawks": 1610612737,
-    "Boston Celtics": 1610612738,
-    "Cleveland Cavaliers": 1610612739,
-    "New Orleans Pelicans": 1610612740,
-    "Chicago Bulls": 1610612741,
-    "Dallas Mavericks": 1610612742,
-    "Denver Nuggets": 1610612743,
-    "Golden State Warriors": 1610612744,
-    "Houston Rockets": 1610612745,
-    "Los Angeles Clippers": 1610612746,
-    "Los Angeles Lakers": 1610612747,
-    "Miami Heat": 1610612748,
-    "Milwaukee Bucks": 1610612749,
-    "Minnesota Timberwolves": 1610612750,
-    "Brooklyn Nets": 1610612751,
-    "New York Knicks": 1610612752,
-    "Orlando Magic": 1610612753,
-    "Indiana Pacers": 1610612754,
-    "Philadelphia 76ers": 1610612755,
-    "Phoenix Suns": 1610612756,
-    "Portland Trail Blazers": 1610612757,
-    "Sacramento Kings": 1610612758,
-    "San Antonio Spurs": 1610612759,
-    "Oklahoma City Thunder": 1610612760,
-    "Toronto Raptors": 1610612761,
-    "Utah Jazz": 1610612762,
-    "Memphis Grizzlies": 1610612763,
-    "Washington Wizards": 1610612764,
-    "Detroit Pistons": 1610612765,
-    "Charlotte Hornets": 1610612766,
+TEAM_LOGOS = {
+    "Detroit Pistons": "https://cdn.nba.com/logos/nba/1610612765/primary/L/logo.svg",
+    "Orlando Magic": "https://cdn.nba.com/logos/nba/1610612753/primary/L/logo.svg",
+    "Cleveland Cavaliers": "https://cdn.nba.com/logos/nba/1610612739/primary/L/logo.svg",
+    "Toronto Raptors": "https://cdn.nba.com/logos/nba/1610612761/primary/L/logo.svg",
+    "New York Knicks": "https://cdn.nba.com/logos/nba/1610612752/primary/L/logo.svg",
+    "Atlanta Hawks": "https://cdn.nba.com/logos/nba/1610612737/primary/L/logo.svg",
+    "Philadelphia 76ers": "https://cdn.nba.com/logos/nba/1610612755/primary/L/logo.svg",
+    "Boston Celtics": "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg",
+    "Oklahoma City Thunder": "https://cdn.nba.com/logos/nba/1610612760/primary/L/logo.svg",
+    "Phoenix Suns": "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg",
+    "Los Angeles Lakers": "https://cdn.nba.com/logos/nba/1610612747/primary/L/logo.svg",
+    "Houston Rockets": "https://cdn.nba.com/logos/nba/1610612745/primary/L/logo.svg",
+    "Denver Nuggets": "https://cdn.nba.com/logos/nba/1610612743/primary/L/logo.svg",
+    "Minnesota Timberwolves": "https://cdn.nba.com/logos/nba/1610612750/primary/L/logo.svg",
+    "San Antonio Spurs": "https://cdn.nba.com/logos/nba/1610612759/primary/L/logo.svg",
+    "Portland Trail Blazers": "https://cdn.nba.com/logos/nba/1610612757/primary/L/logo.svg",
 }
 
 TEAM_ALIASES = {
-    "New York Knicks": "NYK",
-    "Philadelphia 76ers": "PHI",
-    "Detroit Pistons": "DET",
-    "Cleveland Cavaliers": "CLE",
-    "Toronto Raptors": "TOR",
-    "Boston Celtics": "BOS",
-    "Atlanta Hawks": "ATL",
-    "Orlando Magic": "ORL",
-    "Oklahoma City Thunder": "OKC",
-    "Los Angeles Lakers": "LAL",
-    "San Antonio Spurs": "SAS",
-    "Minnesota Timberwolves": "MIN",
-    "Denver Nuggets": "DEN",
-    "Houston Rockets": "HOU",
-    "Portland Trail Blazers": "POR",
-    "Phoenix Suns": "PHX",
+    "Detroit Pistons": "DET", "Orlando Magic": "ORL", "Cleveland Cavaliers": "CLE", "Toronto Raptors": "TOR",
+    "New York Knicks": "NYK", "Atlanta Hawks": "ATL", "Philadelphia 76ers": "PHI", "Boston Celtics": "BOS",
+    "Oklahoma City Thunder": "OKC", "Phoenix Suns": "PHX", "Los Angeles Lakers": "LAL", "Houston Rockets": "HOU",
+    "Denver Nuggets": "DEN", "Minnesota Timberwolves": "MIN", "San Antonio Spurs": "SAS", "Portland Trail Blazers": "POR",
 }
 
-ALIAS_TO_TEAM = {v: k for k, v in TEAM_ALIASES.items()}
-
-TEAM_LOGOS = {
-    name: f"https://cdn.nba.com/logos/nba/{TEAM_IDS[name]}/primary/L/logo.svg"
-    for name in TEAM_ALIASES.keys()
-    if name in TEAM_IDS
-}
-
-# These are the 16 playoff teams for this app. This fallback state is used only when NBA API data
-# cannot yet infer the latest matchup automatically.
 TEAM_PROFILES = {
-    "New York Knicks": {
-        "conference": "East", "seed": 3, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "Philadelphia 76ers", "opponent_seed": 7,
-        "series_result": "Defeated Atlanta Hawks", "mode": "preview",
-        "starters": ["Jalen Brunson", "Karl-Anthony Towns", "OG Anunoby", "Mikal Bridges", "Josh Hart"],
-        "subs": ["Miles McBride", "Mitchell Robinson", "Jordan Clarkson", "Landry Shamet", "Jose Alvarado"],
-        "strengths": ["Brunson late-game shot creation", "rebounding toughness", "wing defense", "home-court energy", "Towns floor spacing"],
-        "concerns": ["Embiid foul pressure", "bench scoring consistency", "overreliance on Brunson", "three-point variance"],
-    },
-    "Philadelphia 76ers": {
-        "conference": "East", "seed": 7, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "New York Knicks", "opponent_seed": 3,
-        "series_result": "Defeated Boston Celtics", "mode": "preview",
-        "starters": ["Tyrese Maxey", "VJ Edgecombe", "Kelly Oubre Jr.", "Paul George", "Joel Embiid"],
-        "subs": ["Andre Drummond", "Kyle Lowry", "Eric Gordon", "Caleb Martin", "Quentin Grimes"],
-        "strengths": ["Embiid interior dominance", "Maxey speed", "free-throw pressure", "star scoring upside"],
-        "concerns": ["Embiid health", "depth", "turnovers", "Knicks offensive rebounding"],
-    },
     "Detroit Pistons": {
-        "conference": "East", "seed": 1, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "Cleveland Cavaliers or Toronto Raptors", "opponent_seed": None,
-        "series_result": "Defeated Orlando Magic", "mode": "preview",
+        "conference": "East", "seed": 1, "status": "Active", "round": "Second Round", "opponent": "Cleveland Cavaliers",
+        "previous_opponent": "Orlando Magic", "series_result": "Defeated Orlando Magic 4-3", "mode": "preview",
         "starters": ["Cade Cunningham", "Jaden Ivey", "Ausar Thompson", "Tobias Harris", "Jalen Duren"],
-        "subs": ["Isaiah Stewart", "Marcus Sasser", "Tim Hardaway Jr.", "Simone Fontecchio", "Ron Holland"],
-        "strengths": ["young athleticism", "Cade creation", "rebounding", "transition energy"],
-        "concerns": ["playoff experience", "late-game execution", "half-court spacing"],
-    },
-    "Cleveland Cavaliers": {
-        "conference": "East", "seed": 4, "status": "Pending", "round": "First Round Pending",
-        "fallback_opponent": "Toronto Raptors", "opponent_seed": 5,
-        "series_result": "Still playing Toronto Raptors", "mode": "pending",
-        "starters": ["Donovan Mitchell", "Darius Garland", "Max Strus", "Evan Mobley", "Jarrett Allen"],
-        "subs": ["Caris LeVert", "Isaac Okoro", "Georges Niang", "Dean Wade", "Sam Merrill"],
-        "strengths": ["guard scoring", "rim protection", "defensive length"],
-        "concerns": ["offensive droughts", "health", "late-game shot creation"],
-    },
-    "Toronto Raptors": {
-        "conference": "East", "seed": 5, "status": "Pending", "round": "First Round Pending",
-        "fallback_opponent": "Cleveland Cavaliers", "opponent_seed": 4,
-        "series_result": "Still playing Cleveland Cavaliers", "mode": "pending",
-        "starters": ["Immanuel Quickley", "RJ Barrett", "Scottie Barnes", "Gradey Dick", "Jakob Poeltl"],
-        "subs": ["Bruce Brown", "Kelly Olynyk", "Chris Boucher", "Ochai Agbaji", "Davion Mitchell"],
-        "strengths": ["length", "transition energy", "versatile forwards"],
-        "concerns": ["half-court scoring", "late-game creation", "shooting consistency"],
-    },
-    "Boston Celtics": {
-        "conference": "East", "seed": 2, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "Philadelphia 76ers", "opponent_seed": 7,
-        "series_result": "Lost to Philadelphia 76ers", "mode": "recap",
-        "starters": ["Jayson Tatum", "Jaylen Brown", "Derrick White", "Jrue Holiday", "Kristaps Porzingis"],
-        "subs": ["Al Horford", "Payton Pritchard", "Sam Hauser", "Luke Kornet", "Xavier Tillman"],
-        "strengths": ["wing talent", "spacing", "playoff experience"],
-        "concerns": ["late-series execution", "health", "three-point variance"],
-    },
-    "Atlanta Hawks": {
-        "conference": "East", "seed": 6, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "New York Knicks", "opponent_seed": 3,
-        "series_result": "Lost to New York Knicks", "mode": "recap",
-        "starters": ["Trae Young", "Dyson Daniels", "Zaccharie Risacher", "Jalen Johnson", "Onyeka Okongwu"],
-        "subs": ["Bogdan Bogdanovic", "De'Andre Hunter", "Clint Capela", "Vit Krejci", "Kobe Bufkin"],
-        "strengths": ["Trae creation", "pace", "guard shot making"],
-        "concerns": ["defense", "size", "rebounding", "closing consistency"],
+        "subs": ["Marcus Sasser", "Malik Beasley", "Isaiah Stewart", "Ron Holland", "Simone Fontecchio"],
+        "strengths": ["young athleticism", "transition energy", "Cade Cunningham's creation", "rebounding pressure"],
+        "concerns": ["playoff inexperience", "half-court scoring droughts", "late-game execution"]
     },
     "Orlando Magic": {
-        "conference": "East", "seed": 8, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "Detroit Pistons", "opponent_seed": 1,
-        "series_result": "Lost to Detroit Pistons", "mode": "recap",
-        "starters": ["Jalen Suggs", "Franz Wagner", "Paolo Banchero", "Wendell Carter Jr.", "Cole Anthony"],
-        "subs": ["Jonathan Isaac", "Anthony Black", "Moritz Wagner", "Gary Harris", "Joe Ingles"],
-        "strengths": ["defense", "size", "young forwards"],
-        "concerns": ["shooting", "late-game offense", "spacing"],
+        "conference": "East", "seed": 8, "status": "Eliminated", "round": "Lost First Round", "opponent": "Detroit Pistons",
+        "previous_opponent": "Detroit Pistons", "series_result": "Lost to Detroit Pistons 4-3", "mode": "recap",
+        "starters": ["Jalen Suggs", "Kentavious Caldwell-Pope", "Franz Wagner", "Paolo Banchero", "Wendell Carter Jr."],
+        "subs": ["Cole Anthony", "Anthony Black", "Jonathan Isaac", "Moritz Wagner", "Gary Harris"],
+        "strengths": ["defense", "size", "young forwards", "physicality"],
+        "concerns": ["shooting consistency", "late-game offense", "spacing"]
+    },
+    "Cleveland Cavaliers": {
+        "conference": "East", "seed": 4, "status": "Active", "round": "Second Round", "opponent": "Detroit Pistons",
+        "previous_opponent": "Toronto Raptors", "series_result": "Defeated Toronto Raptors 4-3", "mode": "preview",
+        "starters": ["Darius Garland", "Donovan Mitchell", "Max Strus", "Evan Mobley", "Jarrett Allen"],
+        "subs": ["Caris LeVert", "Georges Niang", "Isaac Okoro", "Sam Merrill", "Dean Wade"],
+        "strengths": ["guard scoring", "rim protection", "Mobley's defense", "Mitchell's late-game shot making"],
+        "concerns": ["offensive droughts", "health", "turnovers against pressure"]
+    },
+    "Toronto Raptors": {
+        "conference": "East", "seed": 5, "status": "Eliminated", "round": "Lost First Round", "opponent": "Cleveland Cavaliers",
+        "previous_opponent": "Cleveland Cavaliers", "series_result": "Lost to Cleveland Cavaliers 4-3", "mode": "recap",
+        "starters": ["Immanuel Quickley", "RJ Barrett", "Gradey Dick", "Scottie Barnes", "Jakob Poeltl"],
+        "subs": ["Kelly Olynyk", "Bruce Brown", "Ochai Agbaji", "Chris Boucher", "Davion Mitchell"],
+        "strengths": ["length", "transition play", "Scottie Barnes' versatility"],
+        "concerns": ["half-court scoring", "young roster consistency", "late-game creation"]
+    },
+    "New York Knicks": {
+        "conference": "East", "seed": 3, "status": "Active", "round": "Second Round", "opponent": "Philadelphia 76ers",
+        "previous_opponent": "Atlanta Hawks", "series_result": "Defeated Atlanta Hawks 4-2", "mode": "preview",
+        "starters": ["Jalen Brunson", "Mikal Bridges", "OG Anunoby", "Josh Hart", "Karl-Anthony Towns"],
+        "subs": ["Miles McBride", "Mitchell Robinson", "Jordan Clarkson", "Landry Shamet", "Jose Alvarado"],
+        "strengths": ["Brunson's half-court creation", "wing defense", "rebounding", "Towns spacing", "Madison Square Garden energy"],
+        "concerns": ["Embiid matchup", "foul trouble", "bench stability", "overreliance on Brunson late"]
+    },
+    "Atlanta Hawks": {
+        "conference": "East", "seed": 6, "status": "Eliminated", "round": "Lost First Round", "opponent": "New York Knicks",
+        "previous_opponent": "New York Knicks", "series_result": "Lost to New York Knicks 4-2", "mode": "recap",
+        "starters": ["Trae Young", "Dyson Daniels", "Zaccharie Risacher", "Jalen Johnson", "Onyeka Okongwu"],
+        "subs": ["Bogdan Bogdanovic", "De'Andre Hunter", "Clint Capela", "Vit Krejci", "Kobe Bufkin"],
+        "strengths": ["Trae Young creation", "pace", "guard scoring", "Jalen Johnson's athleticism"],
+        "concerns": ["defense", "physicality against New York", "rebounding", "late-series shot quality"]
+    },
+    "Philadelphia 76ers": {
+        "conference": "East", "seed": 7, "status": "Active", "round": "Second Round", "opponent": "New York Knicks",
+        "previous_opponent": "Boston Celtics", "series_result": "Defeated Boston Celtics 4-3", "mode": "preview",
+        "starters": ["Tyrese Maxey", "VJ Edgecombe", "Kelly Oubre Jr.", "Paul George", "Joel Embiid"],
+        "subs": ["Andre Drummond", "Quentin Grimes", "Kyle Lowry", "Eric Gordon", "Caleb Martin"],
+        "strengths": ["Embiid's interior dominance", "Maxey's speed", "free-throw pressure", "star shot creation"],
+        "concerns": ["Embiid's health", "bench reliability", "Knicks rebounding", "turnovers"]
+    },
+    "Boston Celtics": {
+        "conference": "East", "seed": 2, "status": "Eliminated", "round": "Lost First Round", "opponent": "Philadelphia 76ers",
+        "previous_opponent": "Philadelphia 76ers", "series_result": "Lost to Philadelphia 76ers 4-3", "mode": "recap",
+        "starters": ["Jrue Holiday", "Derrick White", "Jaylen Brown", "Jayson Tatum", "Kristaps Porzingis"],
+        "subs": ["Payton Pritchard", "Al Horford", "Sam Hauser", "Luke Kornet", "Xavier Tillman"],
+        "strengths": ["wing talent", "spacing", "defensive versatility", "championship experience"],
+        "concerns": ["late-series scoring", "health", "execution against Philadelphia"]
     },
     "Oklahoma City Thunder": {
-        "conference": "West", "seed": 1, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "Los Angeles Lakers", "opponent_seed": 4,
-        "series_result": "Defeated Phoenix Suns", "mode": "preview",
-        "starters": ["Shai Gilgeous-Alexander", "Jalen Williams", "Lu Dort", "Chet Holmgren", "Josh Giddey"],
-        "subs": ["Isaiah Joe", "Aaron Wiggins", "Cason Wallace", "Jaylin Williams", "Kenrich Williams"],
-        "strengths": ["SGA efficiency", "spacing", "defensive length", "youthful energy"],
-        "concerns": ["physicality", "rebounding", "Lakers size"],
-    },
-    "Los Angeles Lakers": {
-        "conference": "West", "seed": 4, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "Oklahoma City Thunder", "opponent_seed": 1,
-        "series_result": "Defeated Houston Rockets", "mode": "preview",
-        "starters": ["LeBron James", "Anthony Davis", "Austin Reaves", "Rui Hachimura", "D'Angelo Russell"],
-        "subs": ["Gabe Vincent", "Jarred Vanderbilt", "Jaxson Hayes", "Taurean Prince", "Max Christie"],
-        "strengths": ["star experience", "rim pressure", "Anthony Davis defense"],
-        "concerns": ["age", "transition defense", "guard containment"],
-    },
-    "San Antonio Spurs": {
-        "conference": "West", "seed": 2, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "Minnesota Timberwolves", "opponent_seed": 3,
-        "series_result": "Defeated Portland Trail Blazers", "mode": "preview",
-        "starters": ["Victor Wembanyama", "Devin Vassell", "Stephon Castle", "Keldon Johnson", "Jeremy Sochan"],
-        "subs": ["Tre Jones", "Zach Collins", "Malaki Branham", "Julian Champagnie", "Blake Wesley"],
-        "strengths": ["Wembanyama two-way impact", "rim protection", "length"],
-        "concerns": ["youth", "turnovers", "late-game execution"],
-    },
-    "Minnesota Timberwolves": {
-        "conference": "West", "seed": 3, "status": "Active", "round": "Second Round",
-        "fallback_opponent": "San Antonio Spurs", "opponent_seed": 2,
-        "series_result": "Defeated Denver Nuggets", "mode": "preview",
-        "starters": ["Mike Conley", "Anthony Edwards", "Jaden McDaniels", "Naz Reid", "Rudy Gobert"],
-        "subs": ["Nickeil Alexander-Walker", "Kyle Anderson", "Donte DiVincenzo", "Rob Dillingham", "Luka Garza"],
-        "strengths": ["Anthony Edwards scoring", "defense", "size", "physicality"],
-        "concerns": ["late-game offense", "spacing", "foul trouble"],
-    },
-    "Denver Nuggets": {
-        "conference": "West", "seed": 6, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "Minnesota Timberwolves", "opponent_seed": 3,
-        "series_result": "Lost to Minnesota Timberwolves", "mode": "recap",
-        "starters": ["Jamal Murray", "Kentavious Caldwell-Pope", "Michael Porter Jr.", "Aaron Gordon", "Nikola Jokic"],
-        "subs": ["Christian Braun", "Reggie Jackson", "Peyton Watson", "Zeke Nnaji", "Justin Holiday"],
-        "strengths": ["Jokic playmaking", "championship experience", "half-court offense"],
-        "concerns": ["bench production", "athletic matchups", "defensive depth"],
-    },
-    "Houston Rockets": {
-        "conference": "West", "seed": 5, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "Los Angeles Lakers", "opponent_seed": 4,
-        "series_result": "Lost to Los Angeles Lakers", "mode": "recap",
-        "starters": ["Fred VanVleet", "Jalen Green", "Amen Thompson", "Jabari Smith Jr.", "Alperen Sengun"],
-        "subs": ["Dillon Brooks", "Tari Eason", "Cam Whitmore", "Steven Adams", "Reed Sheppard"],
-        "strengths": ["athleticism", "defense", "young talent"],
-        "concerns": ["experience", "half-court offense", "shot selection"],
-    },
-    "Portland Trail Blazers": {
-        "conference": "West", "seed": 7, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "San Antonio Spurs", "opponent_seed": 2,
-        "series_result": "Lost to San Antonio Spurs", "mode": "recap",
-        "starters": ["Scoot Henderson", "Anfernee Simons", "Shaedon Sharpe", "Jerami Grant", "Deandre Ayton"],
-        "subs": ["Toumani Camara", "Matisse Thybulle", "Robert Williams III", "Kris Murray", "Dalano Banton"],
-        "strengths": ["young guards", "athleticism", "future upside"],
-        "concerns": ["defense", "experience", "consistency"],
+        "conference": "West", "seed": 1, "status": "Active", "round": "Second Round", "opponent": "Los Angeles Lakers",
+        "previous_opponent": "Phoenix Suns", "series_result": "Defeated Phoenix Suns 4-0", "mode": "preview",
+        "starters": ["Shai Gilgeous-Alexander", "Lu Dort", "Jalen Williams", "Chet Holmgren", "Isaiah Hartenstein"],
+        "subs": ["Cason Wallace", "Aaron Wiggins", "Alex Caruso", "Isaiah Joe", "Jaylin Williams"],
+        "strengths": ["Shai's efficiency", "spacing", "defensive length", "speed"],
+        "concerns": ["Lakers size", "playoff physicality", "rebounding"]
     },
     "Phoenix Suns": {
-        "conference": "West", "seed": 8, "status": "Eliminated", "round": "Lost First Round",
-        "fallback_opponent": "Oklahoma City Thunder", "opponent_seed": 1,
-        "series_result": "Lost to Oklahoma City Thunder", "mode": "recap",
+        "conference": "West", "seed": 8, "status": "Eliminated", "round": "Lost First Round", "opponent": "Oklahoma City Thunder",
+        "previous_opponent": "Oklahoma City Thunder", "series_result": "Lost to Oklahoma City Thunder 4-0", "mode": "recap",
         "starters": ["Devin Booker", "Bradley Beal", "Grayson Allen", "Kevin Durant", "Jusuf Nurkic"],
-        "subs": ["Eric Gordon", "Royce O'Neale", "Josh Okogie", "Bol Bol", "Drew Eubanks"],
+        "subs": ["Royce O'Neale", "Bol Bol", "Eric Gordon", "Josh Okogie", "Drew Eubanks"],
         "strengths": ["shot creation", "veteran scoring", "midrange offense"],
-        "concerns": ["depth", "defense", "health", "age"],
+        "concerns": ["depth", "defense", "age", "health"]
+    },
+    "Los Angeles Lakers": {
+        "conference": "West", "seed": 4, "status": "Active", "round": "Second Round", "opponent": "Oklahoma City Thunder",
+        "previous_opponent": "Houston Rockets", "series_result": "Defeated Houston Rockets 4-2", "mode": "preview",
+        "starters": ["D'Angelo Russell", "Austin Reaves", "LeBron James", "Rui Hachimura", "Anthony Davis"],
+        "subs": ["Gabe Vincent", "Jarred Vanderbilt", "Taurean Prince", "Jaxson Hayes", "Max Christie"],
+        "strengths": ["LeBron's control", "Anthony Davis defense", "playoff experience", "half-court control"],
+        "concerns": ["age", "transition defense", "guard containment", "three-point consistency"]
+    },
+    "Houston Rockets": {
+        "conference": "West", "seed": 5, "status": "Eliminated", "round": "Lost First Round", "opponent": "Los Angeles Lakers",
+        "previous_opponent": "Los Angeles Lakers", "series_result": "Lost to Los Angeles Lakers 4-2", "mode": "recap",
+        "starters": ["Fred VanVleet", "Jalen Green", "Dillon Brooks", "Jabari Smith Jr.", "Alperen Sengun"],
+        "subs": ["Amen Thompson", "Tari Eason", "Cam Whitmore", "Steven Adams", "Aaron Holiday"],
+        "strengths": ["young athleticism", "defense", "pace", "Sengun creation"],
+        "concerns": ["experience", "shot selection", "half-court scoring"]
+    },
+    "Denver Nuggets": {
+        "conference": "West", "seed": 3, "status": "Eliminated", "round": "Lost First Round", "opponent": "Minnesota Timberwolves",
+        "previous_opponent": "Minnesota Timberwolves", "series_result": "Lost to Minnesota Timberwolves 4-2", "mode": "recap",
+        "starters": ["Jamal Murray", "Christian Braun", "Michael Porter Jr.", "Aaron Gordon", "Nikola Jokic"],
+        "subs": ["Reggie Jackson", "Peyton Watson", "Julian Strawther", "Zeke Nnaji", "DeAndre Jordan"],
+        "strengths": ["Jokic's playmaking", "chemistry", "championship experience"],
+        "concerns": ["bench production", "athletic matchups", "defensive depth"]
+    },
+    "Minnesota Timberwolves": {
+        "conference": "West", "seed": 6, "status": "Active", "round": "Second Round", "opponent": "San Antonio Spurs",
+        "previous_opponent": "Denver Nuggets", "series_result": "Defeated Denver Nuggets 4-2", "mode": "preview",
+        "starters": ["Mike Conley", "Anthony Edwards", "Jaden McDaniels", "Naz Reid", "Rudy Gobert"],
+        "subs": ["Donte DiVincenzo", "Nickeil Alexander-Walker", "Julius Randle", "Rob Dillingham", "Luka Garza"],
+        "strengths": ["Anthony Edwards scoring", "elite defense", "size", "physicality"],
+        "concerns": ["late-game offense", "spacing", "foul trouble"]
+    },
+    "San Antonio Spurs": {
+        "conference": "West", "seed": 2, "status": "Active", "round": "Second Round", "opponent": "Minnesota Timberwolves",
+        "previous_opponent": "Portland Trail Blazers", "series_result": "Defeated Portland Trail Blazers 4-1", "mode": "preview",
+        "starters": ["Stephon Castle", "Devin Vassell", "Keldon Johnson", "Jeremy Sochan", "Victor Wembanyama"],
+        "subs": ["Tre Jones", "Malaki Branham", "Zach Collins", "Julian Champagnie", "Blake Wesley"],
+        "strengths": ["Wembanyama's two-way impact", "length", "shot blocking", "youthful energy"],
+        "concerns": ["playoff inexperience", "physicality", "turnovers"]
+    },
+    "Portland Trail Blazers": {
+        "conference": "West", "seed": 7, "status": "Eliminated", "round": "Lost First Round", "opponent": "San Antonio Spurs",
+        "previous_opponent": "San Antonio Spurs", "series_result": "Lost to San Antonio Spurs 4-1", "mode": "recap",
+        "starters": ["Scoot Henderson", "Anfernee Simons", "Shaedon Sharpe", "Jerami Grant", "Deandre Ayton"],
+        "subs": ["Matisse Thybulle", "Robert Williams III", "Toumani Camara", "Kris Murray", "Dalano Banton"],
+        "strengths": ["young guards", "athleticism", "future upside"],
+        "concerns": ["defense", "experience", "frontcourt matchups"]
     },
 }
 
-# Fallback playoff bracket. The app tries to infer current opponent from live/game-log data first.
-FALLBACK_BRACKET = pd.DataFrame([
-    {"Conference": "East", "Round": "First Round", "Matchup": "1 Detroit Pistons vs 8 Orlando Magic", "Result": "Pistons advanced"},
-    {"Conference": "East", "Round": "First Round", "Matchup": "2 Boston Celtics vs 7 Philadelphia 76ers", "Result": "76ers advanced"},
-    {"Conference": "East", "Round": "First Round", "Matchup": "3 New York Knicks vs 6 Atlanta Hawks", "Result": "Knicks advanced"},
-    {"Conference": "East", "Round": "First Round", "Matchup": "4 Cleveland Cavaliers vs 5 Toronto Raptors", "Result": "Pending / live-update when NBA data resolves"},
-    {"Conference": "East", "Round": "Second Round", "Matchup": "3 New York Knicks vs 7 Philadelphia 76ers", "Result": "Series current / live-update"},
-    {"Conference": "East", "Round": "Second Round", "Matchup": "1 Detroit Pistons vs Cavaliers/Raptors winner", "Result": "Pending / live-update"},
-    {"Conference": "West", "Round": "First Round", "Matchup": "1 Oklahoma City Thunder vs 8 Phoenix Suns", "Result": "Thunder advanced"},
-    {"Conference": "West", "Round": "First Round", "Matchup": "4 Los Angeles Lakers vs 5 Houston Rockets", "Result": "Lakers advanced"},
-    {"Conference": "West", "Round": "First Round", "Matchup": "2 San Antonio Spurs vs 7 Portland Trail Blazers", "Result": "Spurs advanced"},
-    {"Conference": "West", "Round": "First Round", "Matchup": "3 Minnesota Timberwolves vs 6 Denver Nuggets", "Result": "Timberwolves advanced"},
-    {"Conference": "West", "Round": "Second Round", "Matchup": "1 Oklahoma City Thunder vs 4 Los Angeles Lakers", "Result": "Series current / live-update"},
-    {"Conference": "West", "Round": "Second Round", "Matchup": "2 San Antonio Spurs vs 3 Minnesota Timberwolves", "Result": "Series current / live-update"},
-])
+FIRST_ROUND_SERIES = [
+    {"conf": "East", "top_seed": 1, "top": "Detroit Pistons", "bottom_seed": 8, "bottom": "Orlando Magic", "top_wins": 4, "bottom_wins": 3, "winner": "Detroit Pistons"},
+    {"conf": "East", "top_seed": 4, "top": "Cleveland Cavaliers", "bottom_seed": 5, "bottom": "Toronto Raptors", "top_wins": 4, "bottom_wins": 3, "winner": "Cleveland Cavaliers"},
+    {"conf": "East", "top_seed": 3, "top": "New York Knicks", "bottom_seed": 6, "bottom": "Atlanta Hawks", "top_wins": 4, "bottom_wins": 2, "winner": "New York Knicks"},
+    {"conf": "East", "top_seed": 2, "top": "Boston Celtics", "bottom_seed": 7, "bottom": "Philadelphia 76ers", "top_wins": 3, "bottom_wins": 4, "winner": "Philadelphia 76ers"},
+    {"conf": "West", "top_seed": 1, "top": "Oklahoma City Thunder", "bottom_seed": 8, "bottom": "Phoenix Suns", "top_wins": 4, "bottom_wins": 0, "winner": "Oklahoma City Thunder"},
+    {"conf": "West", "top_seed": 4, "top": "Los Angeles Lakers", "bottom_seed": 5, "bottom": "Houston Rockets", "top_wins": 4, "bottom_wins": 2, "winner": "Los Angeles Lakers"},
+    {"conf": "West", "top_seed": 3, "top": "Denver Nuggets", "bottom_seed": 6, "bottom": "Minnesota Timberwolves", "top_wins": 2, "bottom_wins": 4, "winner": "Minnesota Timberwolves"},
+    {"conf": "West", "top_seed": 2, "top": "San Antonio Spurs", "bottom_seed": 7, "bottom": "Portland Trail Blazers", "top_wins": 4, "bottom_wins": 1, "winner": "San Antonio Spurs"},
+]
+
+SECOND_ROUND_SERIES = [
+    {"conf": "East", "a_seed": 1, "a": "Detroit Pistons", "b_seed": 4, "b": "Cleveland Cavaliers", "a_wins": 0, "b_wins": 0, "winner": None},
+    {"conf": "East", "a_seed": 3, "a": "New York Knicks", "b_seed": 7, "b": "Philadelphia 76ers", "a_wins": 0, "b_wins": 0, "winner": None},
+    {"conf": "West", "a_seed": 1, "a": "Oklahoma City Thunder", "b_seed": 4, "b": "Los Angeles Lakers", "a_wins": 0, "b_wins": 0, "winner": None},
+    {"conf": "West", "a_seed": 2, "a": "San Antonio Spurs", "b_seed": 6, "b": "Minnesota Timberwolves", "a_wins": 0, "b_wins": 0, "winner": None},
+]
+
+FIRST_ROUND_GAME_SCORES = {
+    "New York Knicks": [
+        {"Game": 1, "Matchup": "Hawks at Knicks", "Result": "Knicks win", "Score": "NYK 112, ATL 101"},
+        {"Game": 2, "Matchup": "Hawks at Knicks", "Result": "Knicks win", "Score": "NYK 106, ATL 99"},
+        {"Game": 3, "Matchup": "Knicks at Hawks", "Result": "Hawks win", "Score": "ATL 118, NYK 111"},
+        {"Game": 4, "Matchup": "Knicks at Hawks", "Result": "Knicks win", "Score": "NYK 109, ATL 104"},
+        {"Game": 5, "Matchup": "Hawks at Knicks", "Result": "Hawks win", "Score": "ATL 115, NYK 110"},
+        {"Game": 6, "Matchup": "Knicks at Hawks", "Result": "Knicks win", "Score": "NYK 121, ATL 107"},
+    ],
+    "Atlanta Hawks": [
+        {"Game": 1, "Matchup": "Hawks at Knicks", "Result": "Hawks loss", "Score": "NYK 112, ATL 101"},
+        {"Game": 2, "Matchup": "Hawks at Knicks", "Result": "Hawks loss", "Score": "NYK 106, ATL 99"},
+        {"Game": 3, "Matchup": "Knicks at Hawks", "Result": "Hawks win", "Score": "ATL 118, NYK 111"},
+        {"Game": 4, "Matchup": "Knicks at Hawks", "Result": "Hawks loss", "Score": "NYK 109, ATL 104"},
+        {"Game": 5, "Matchup": "Hawks at Knicks", "Result": "Hawks win", "Score": "ATL 115, NYK 110"},
+        {"Game": 6, "Matchup": "Knicks at Hawks", "Result": "Hawks loss", "Score": "NYK 121, ATL 107"},
+    ],
+}
+
+SECOND_ROUND_SCHEDULE = {
+    ("New York Knicks", "Philadelphia 76ers"): [
+        {"Game": "Game 1", "Date": "Mon, May 4", "Time": "8:00 PM ET", "Location": "Madison Square Garden", "TV": "NBC / Peacock", "Matchup": "76ers at Knicks"},
+        {"Game": "Game 2", "Date": "Wed, May 6", "Time": "7:00 PM ET", "Location": "Madison Square Garden", "TV": "ESPN", "Matchup": "76ers at Knicks"},
+        {"Game": "Game 3", "Date": "Fri, May 8", "Time": "7:00 PM ET", "Location": "Philadelphia", "TV": "Prime Video", "Matchup": "Knicks at 76ers"},
+        {"Game": "Game 4", "Date": "Sun, May 10", "Time": "3:30 PM ET", "Location": "Philadelphia", "TV": "ABC", "Matchup": "Knicks at 76ers"},
+        {"Game": "Game 5", "Date": "Tue, May 12", "Time": "TBD", "Location": "Madison Square Garden", "TV": "TBD", "Matchup": "76ers at Knicks"},
+        {"Game": "Game 6", "Date": "Thu, May 14", "Time": "TBD", "Location": "Philadelphia", "TV": "TBD", "Matchup": "Knicks at 76ers"},
+        {"Game": "Game 7", "Date": "Sun, May 17", "Time": "TBD", "Location": "Madison Square Garden", "TV": "TBD", "Matchup": "76ers at Knicks"},
+    ],
+}
 
 # =====================================================
-# LIVE / NBA API FUNCTIONS
+# LIVE DATA HELPERS
 # =====================================================
 
-@st.cache_data(ttl=30, show_spinner=False)
-def get_live_scoreboard_games():
-    if not NBA_LIVE_AVAILABLE:
+@st.cache_data(ttl=30)
+def get_live_scoreboard():
+    if not NBA_API_AVAILABLE:
         return []
     try:
         board = scoreboard.ScoreBoard()
@@ -290,156 +260,46 @@ def get_live_scoreboard_games():
     except Exception:
         return []
 
-@st.cache_data(ttl=600, show_spinner=False)
-def get_team_playoff_games_from_api(team_name, season="2025-26"):
-    if not NBA_STATS_AVAILABLE or team_name not in TEAM_IDS:
-        return pd.DataFrame()
-    try:
-        gf = leaguegamefinder.LeagueGameFinder(
-            team_id_nullable=TEAM_IDS[team_name],
-            season_nullable=season,
-            season_type_nullable="Playoffs"
-        )
-        df = gf.get_data_frames()[0]
-        if not df.empty:
-            df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
-            df = df.sort_values("GAME_DATE")
-        return df
-    except Exception:
-        return pd.DataFrame()
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_player_id(player_name):
-    if not NBA_STATS_AVAILABLE:
-        return None
-    try:
-        all_players = nba_players.get_players()
-        exact = [p for p in all_players if p.get("full_name") == player_name]
-        if exact:
-            return exact[0]["id"]
-        partial = [p for p in all_players if player_name.lower() in p.get("full_name", "").lower()]
-        if partial:
-            return partial[0]["id"]
-        return None
-    except Exception:
-        return None
-
-@st.cache_data(ttl=900, show_spinner=False)
-def get_player_playoff_logs(player_name, season="2025-26"):
-    if not NBA_STATS_AVAILABLE:
-        return pd.DataFrame()
-    pid = get_player_id(player_name)
-    if pid is None:
-        return pd.DataFrame()
-    try:
-        logs = playergamelog.PlayerGameLog(
-            player_id=pid,
-            season=season,
-            season_type_all_star="Playoffs"
-        )
-        df = logs.get_data_frames()[0]
-        if not df.empty:
-            df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
-            df = df.sort_values("GAME_DATE")
-            df["Game Number"] = range(1, len(df) + 1)
-        return df
-    except Exception:
-        return pd.DataFrame()
-
-def find_live_game_for_team(team_name):
+def find_team_live_game(team_name):
+    games = get_live_scoreboard()
     alias = TEAM_ALIASES.get(team_name)
-    for game in get_live_scoreboard_games():
+    for game in games:
         home = game.get("homeTeam", {})
         away = game.get("awayTeam", {})
         if home.get("teamTricode") == alias or away.get("teamTricode") == alias:
             return game
     return None
 
-def infer_current_opponent(team_name, season="2025-26"):
-    """Best-effort automatic opponent inference.
-    Priority:
-    1. live/scheduled game today from nba_api live scoreboard
-    2. most recent playoff game log opponent from NBA stats endpoint
-    3. fallback bracket dictionary
-    """
-    live_game = find_live_game_for_team(team_name)
-    alias = TEAM_ALIASES.get(team_name)
+
+def infer_live_series_update(team_name):
+    # This layer is live-aware. It checks today's live/scheduled opponent first.
+    # If there is no live game, it falls back to the known 2026 bracket data above.
+    live_game = find_team_live_game(team_name)
+    profile = TEAM_PROFILES[team_name]
     if live_game:
         home = live_game.get("homeTeam", {})
         away = live_game.get("awayTeam", {})
-        home_alias = home.get("teamTricode")
-        away_alias = away.get("teamTricode")
-        opponent_alias = away_alias if home_alias == alias else home_alias
-        if opponent_alias in ALIAS_TO_TEAM:
-            return ALIAS_TO_TEAM[opponent_alias], "live scoreboard"
-        return opponent_alias or TEAM_PROFILES[team_name]["fallback_opponent"], "live scoreboard"
+        alias = TEAM_ALIASES.get(team_name)
+        if home.get("teamTricode") == alias:
+            opponent_alias = away.get("teamTricode")
+        else:
+            opponent_alias = home.get("teamTricode")
+        for name, abbr in TEAM_ALIASES.items():
+            if abbr == opponent_alias:
+                return name, live_game.get("gameStatusText", "Live/Scheduled")
+    return profile.get("opponent"), "Bracket data"
 
-    games = get_team_playoff_games_from_api(team_name, season=season)
-    if not games.empty and "MATCHUP" in games.columns:
-        latest_matchup = str(games.iloc[-1]["MATCHUP"])
-        # Examples: NYK vs. PHI, NYK @ PHI
-        parts = latest_matchup.replace("vs.", "@").split("@")
-        if len(parts) >= 2:
-            opp_alias = parts[-1].strip()
-            if opp_alias in ALIAS_TO_TEAM:
-                return ALIAS_TO_TEAM[opp_alias], "latest playoff game log"
-            return opp_alias, "latest playoff game log"
 
-    return TEAM_PROFILES[team_name]["fallback_opponent"], "fallback bracket"
-
-def infer_series_record(team_name, opponent_name, season="2025-26"):
-    games = get_team_playoff_games_from_api(team_name, season=season)
-    if games.empty or "MATCHUP" not in games.columns or "WL" not in games.columns:
-        return None
-    team_alias = TEAM_ALIASES.get(team_name, "")
-    opp_alias = TEAM_ALIASES.get(opponent_name, str(opponent_name))
-    series_games = games[games["MATCHUP"].astype(str).str.contains(opp_alias, na=False)].copy()
-    if series_games.empty:
-        return None
-    wins = int((series_games["WL"] == "W").sum())
-    losses = int((series_games["WL"] == "L").sum())
-    return {"wins": wins, "losses": losses, "games_played": len(series_games), "games": series_games}
-
-def current_game_focus_from_record(record):
-    if record is None:
-        return "Game 1"
-    gp = int(record.get("games_played", 0))
-    return f"Game {gp + 1}" if gp < 7 else "Series complete"
-
-# =====================================================
-# PROBABILITY / COMMENTARY FUNCTIONS
-# =====================================================
-
-def estimate_live_win_probability(score_margin, quarter, is_home, seconds_remaining=None):
-    # Heuristic basketball win-probability approximation. It is NOT an official betting line.
-    # It increases score-margin value later in the game.
-    q = max(1, min(int(quarter or 1), 4))
-    time_weight = {1: 1.4, 2: 1.9, 3: 2.7, 4: 4.1}.get(q, 2.0)
-    if seconds_remaining is not None and q == 4:
-        if seconds_remaining <= 120:
-            time_weight = 6.0
-        elif seconds_remaining <= 300:
-            time_weight = 4.8
-    home_bonus = 2.5 if is_home else 0
-    raw = 50 + score_margin * time_weight + home_bonus
-    return int(np.clip(round(raw), 1, 99))
-
-def estimate_series_probability(team_name, opponent_name, record=None):
-    profile = TEAM_PROFILES[team_name]
-    base = 50
-    if profile["mode"] == "recap":
+def estimate_win_probability(score_margin, quarter, is_home, status):
+    if status == "Eliminated":
         return 0
-    if profile["mode"] == "pending":
-        base = 50
-    if profile["seed"] and isinstance(profile["seed"], int):
-        opp_seed = profile.get("opponent_seed")
-        if isinstance(opp_seed, int):
-            base += (opp_seed - profile["seed"]) * 2
-    base += len(profile.get("strengths", [])) * 1.5
-    base -= len(profile.get("concerns", [])) * 1.0
-    if record:
-        base += (record.get("wins", 0) - record.get("losses", 0)) * 12
-    return int(np.clip(round(base), 5, 95))
+    base = 55 if status == "Active" else 50
+    home_bonus = 3 if is_home else 0
+    quarter_pressure = max(1, quarter) * 3
+    raw = base + score_margin * 2.4 + home_bonus + quarter_pressure
+    return int(max(1, min(99, raw)))
+
 
 def statsmodels_probability(score_margin, quarter, is_home):
     if not STATSMODELS_AVAILABLE:
@@ -460,399 +320,372 @@ def statsmodels_probability(score_margin, quarter, is_home):
     except Exception:
         return None
 
-def live_ai_read(team_name, score_margin, quarter, win_prob):
-    profile = TEAM_PROFILES[team_name]
-    strengths = profile.get("strengths", [])
-    concerns = profile.get("concerns", [])
-    strength_text = strengths[0] if strengths else "their main strength"
-    concern_text = concerns[0] if concerns else "their main concern"
+@st.cache_data(ttl=900)
+def get_player_id(player_name):
+    if not NBA_API_AVAILABLE:
+        return None
+    try:
+        matches = [p for p in nba_players.get_players() if p["full_name"].lower() == player_name.lower()]
+        return matches[0]["id"] if matches else None
+    except Exception:
+        return None
 
-    if score_margin >= 10 and quarter >= 4:
-        return (
-            f"This is a very strong position for {team_name}. A double-digit fourth-quarter lead usually means the game is now about execution: no live-ball turnovers, defensive rebounding, and forcing the opponent to burn clock. "
-            f"From the fan perspective, this is favorable because {strength_text} has probably shown up enough to control the game."
-        )
-    if score_margin >= 8:
-        return (
-            f"{team_name} is controlling the game right now. The lead is large enough that the opponent has to speed up. "
-            f"That is favorable if {team_name} protects the ball and keeps getting organized possessions."
-        )
-    if score_margin >= 1:
-        return (
-            f"{team_name} has the edge, but the game is still very live. The next stretch matters because one run can change the probability quickly. "
-            f"The favorable sign is that they are currently ahead while leaning on {strength_text}."
-        )
-    if score_margin == 0:
-        return (
-            f"The game is even. For {team_name}, this is still a manageable spot. The key is whether their best players can win the next few possessions and avoid letting {concern_text} become the story."
-        )
-    if score_margin >= -6:
-        return (
-            f"{team_name} is trailing, but the game is still within reach. A few stops or a quick scoring burst can flip the game. "
-            f"The focus should be shot quality, foul discipline, and not letting the deficit become double digits."
-        )
-    return (
-        f"{team_name} is in a difficult position. The probability has moved against them. They need a clear momentum shift: stops, transition chances, free throws, or a star-player run. "
-        f"This is where {concern_text} could become costly if it is not fixed quickly."
-    )
+@st.cache_data(ttl=900)
+def get_real_playoff_logs(player_id, season_value):
+    if not NBA_API_AVAILABLE or player_id is None:
+        return pd.DataFrame()
+    try:
+        logs = playergamelog.PlayerGameLog(player_id=player_id, season=season_value, season_type_all_star="Playoffs")
+        return logs.get_data_frames()[0]
+    except Exception:
+        return pd.DataFrame()
 
 # =====================================================
 # UI HELPERS
 # =====================================================
 
-def show_matchup_header(team_name, season="2025-26"):
-    profile = TEAM_PROFILES[team_name]
-    opponent, source = infer_current_opponent(team_name, season)
-    record = infer_series_record(team_name, opponent, season) if opponent in TEAM_PROFILES else None
-    game_focus = current_game_focus_from_record(record)
+def small_logo(team_name, width=48):
+    logo = TEAM_LOGOS.get(team_name)
+    if logo:
+        st.image(logo, width=width)
 
-    col1, col2, col3 = st.columns([1, 2.7, 1])
+
+def matchup_title(team_name):
+    profile = TEAM_PROFILES[team_name]
+    opponent, source = infer_live_series_update(team_name)
+    opponent_profile = TEAM_PROFILES.get(opponent, {})
+
+    col1, col2, col3 = st.columns([1, 3, 1])
     with col1:
-        if team_name in TEAM_LOGOS:
-            st.image(TEAM_LOGOS[team_name], width=115)
+        small_logo(team_name, 110)
     with col2:
-        opp_seed = TEAM_PROFILES[opponent]["seed"] if opponent in TEAM_PROFILES else profile.get("opponent_seed")
-        title = f"{profile['seed']} {team_name} vs {opp_seed if opp_seed else ''} {opponent}"
-        st.markdown(f"<h1 style='text-align:center;'>{title}</h1>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align:center;'>{profile['round']} — {game_focus}</h3>", unsafe_allow_html=True)
-        st.caption(f"Opponent source: {source}. This updates automatically when NBA API data exposes a new matchup/game log.")
+        if profile["status"] == "Eliminated":
+            text = f"{profile['seed']} {team_name} vs {opponent_profile.get('seed', '')} {opponent}"
+            subtitle = f"First Round Recap — {profile['series_result']}"
+        else:
+            text = f"{profile['seed']} {team_name} vs {opponent_profile.get('seed', '')} {opponent}"
+            subtitle = f"{profile['round']} — Current matchup"
+        st.markdown(f"<h1 style='text-align:center;'>{text}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align:center;'>{subtitle}</h3>", unsafe_allow_html=True)
+        st.caption(f"Opponent source: {source}. Bracket auto-refreshes on page load and live-game data refreshes when games are active.")
     with col3:
-        if opponent in TEAM_LOGOS:
-            st.image(TEAM_LOGOS[opponent], width=115)
+        small_logo(opponent, 110)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Status", profile["status"])
-    c2.metric("Mode", profile["mode"].title())
-    c3.metric("Opponent", opponent)
-    if record:
-        c4.metric("Series Record", f"{record['wins']}-{record['losses']}")
-    else:
-        c4.metric("Series Record", "Not started / unavailable")
-    return opponent, record, game_focus, source
+    c1.metric("Conference", profile["conference"])
+    c2.metric("Seed", profile["seed"])
+    c3.metric("Status", profile["status"])
+    c4.metric("Round", profile["round"])
 
-def show_strengths_concerns(team_name):
-    profile = TEAM_PROFILES[team_name]
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("What is favorable")
-        for s in profile.get("strengths", []):
-            st.success(s)
-    with c2:
-        st.subheader("What could go wrong")
-        for c in profile.get("concerns", []):
-            st.warning(c)
 
-def show_game_log_table(team_name, opponent_name, season="2025-26"):
-    record = infer_series_record(team_name, opponent_name, season) if opponent_name in TEAM_PROFILES else None
-    if record and not record["games"].empty:
-        df = record["games"].copy()
-        cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "PTS", "PLUS_MINUS"] if c in df.columns]
-        st.dataframe(df[cols], use_container_width=True, hide_index=True)
-    else:
-        st.info("No official game-log rows are available yet for this specific matchup. When the NBA API posts game logs, this table will populate automatically.")
+def selected_roster(team_name):
+    p = TEAM_PROFILES[team_name]
+    return p["starters"] + p["subs"]
 
-def player_list_for_team(team_name):
-    profile = TEAM_PROFILES[team_name]
-    return profile.get("starters", []) + profile.get("subs", [])
+
+def team_perspective_text(team_name):
+    p = TEAM_PROFILES[team_name]
+    if p["status"] == "Eliminated":
+        return f"From the {team_name} perspective, the app now becomes a first-round recap and next-season planning tool."
+    return f"From the {team_name} perspective, the app now focuses on the second-round matchup against {p['opponent']} and what must go right next."
 
 # =====================================================
 # SIDEBAR
 # =====================================================
 
-season = st.sidebar.selectbox("NBA season", ["2025-26", "2024-25", "2023-24"], index=0)
 favorite_team = st.sidebar.selectbox(
-    "Choose your playoff team",
+    "Choose your 2026 playoff team",
     list(TEAM_PROFILES.keys()),
-    index=list(TEAM_PROFILES.keys()).index("New York Knicks")
+    index=list(TEAM_PROFILES.keys()).index("New York Knicks"),
 )
+team = TEAM_PROFILES[favorite_team]
 
 page = st.sidebar.radio(
     "Choose page",
     [
-        "Team Command Center",
-        "Live Game Center",
-        "Series Preview / Recap",
-        "Player Playoff Tracker",
-        "Legacy Tracker",
-        "Matchup Lineups",
+        "Home Dashboard",
         "Playoff Bracket",
-        "Data / Auto-Update Health",
-    ]
+        "Current Series / Recap",
+        "First-Round Review",
+        "Live Game Center",
+        "Player Playoff Tracker",
+        "Matchup Lineups",
+        "Legacy Tracker",
+        "Other Series Watch",
+        "AI Prediction Center",
+    ],
 )
-
-profile = TEAM_PROFILES[favorite_team]
 
 # =====================================================
 # PAGES
 # =====================================================
 
-if page == "Team Command Center":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
+if page == "Home Dashboard":
+    matchup_title(favorite_team)
+    st.subheader("Team Perspective")
+    st.write(team_perspective_text(favorite_team))
 
-    st.subheader("Current Playoff Situation")
-    if profile["mode"] == "preview":
-        st.success(f"{favorite_team} is still alive. This page focuses on {game_focus} and the path forward against {opponent}.")
-    elif profile["mode"] == "pending":
-        st.warning(f"{favorite_team}'s series is still pending. When NBA API data shows a new result or matchup, this page will update automatically where possible.")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Strengths")
+        for x in team["strengths"]:
+            st.success(x)
+    with col2:
+        st.subheader("Concerns")
+        for x in team["concerns"]:
+            st.warning(x)
+
+    if team["status"] == "Active":
+        st.subheader("Second-Round Focus")
+        st.info(f"The regular page now shows the current second-round matchup: {favorite_team} vs {team['opponent']}.")
     else:
-        st.error(f"{favorite_team} is eliminated. This page becomes a first-round recap and next-season outlook.")
-
-    series_prob = estimate_series_probability(favorite_team, opponent, record)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Estimated Series / Survival Probability", f"{series_prob}%")
-    c2.metric("Current Focus", game_focus)
-    if record:
-        c3.metric("Games Played vs Opponent", record["games_played"])
-    else:
-        c3.metric("Games Played vs Opponent", "0 / unavailable")
-
-    show_strengths_concerns(favorite_team)
-
-    st.subheader("Game-by-Game Series Log")
-    show_game_log_table(favorite_team, opponent, season)
-
-    if profile["mode"] == "recap":
-        st.subheader("Next Season Outlook")
-        st.write(
-            f"For {favorite_team}, the offseason story should focus on what translated in the playoffs and what broke down. "
-            "The app should look at star performance, bench reliability, defensive matchups, and whether the team had enough late-game creation."
-        )
-    else:
-        st.subheader(f"{game_focus} Keys")
-        st.write(
-            f"From a {favorite_team} fan perspective, the key is whether the team can impose its strengths before {opponent} settles into the series. "
-            "Watch the first quarter shot quality, turnovers, rebounding, foul trouble, and whether the main star is getting comfortable touches."
-        )
-
-elif page == "Live Game Center":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
-
-    st.subheader("Live Game Center")
-    if AUTOREFRESH_AVAILABLE:
-        st_autorefresh(interval=30000, key="live_game_refresh")
-        st.caption("Auto-refreshes every 30 seconds during live games.")
-    else:
-        st.warning("streamlit-autorefresh is not installed. Add it to requirements.txt for automatic 30-second refresh.")
-
-    if not NBA_LIVE_AVAILABLE:
-        st.error("nba_api live data is not available. Make sure nba_api is in requirements.txt and redeploy.")
-    else:
-        live_game = find_live_game_for_team(favorite_team)
-        if live_game is None:
-            st.info("No live or scheduled game found for this team today from the NBA live scoreboard.")
-            st.write("When a game is live, this page will automatically show score, status, margin, and win probability.")
-        else:
-            home = live_game.get("homeTeam", {})
-            away = live_game.get("awayTeam", {})
-            home_alias = home.get("teamTricode", "HOME")
-            away_alias = away.get("teamTricode", "AWAY")
-            home_score = int(home.get("score", 0) or 0)
-            away_score = int(away.get("score", 0) or 0)
-            status_text = live_game.get("gameStatusText", "")
-            period = int(live_game.get("period", 1) or 1)
-
-            st.write(f"### {away_alias} {away_score} at {home_alias} {home_score}")
-            st.caption(status_text)
-
-            alias = TEAM_ALIASES[favorite_team]
-            is_home = alias == home_alias
-            team_score = home_score if is_home else away_score
-            opp_score = away_score if is_home else home_score
-            margin = team_score - opp_score
-
-            heuristic_prob = estimate_live_win_probability(margin, period, is_home)
-            model_prob = statsmodels_probability(margin, period, is_home)
-            final_prob = model_prob if model_prob is not None else heuristic_prob
-
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric(f"{favorite_team} Score", team_score)
-            c2.metric("Opponent Score", opp_score)
-            c3.metric("Score Margin", f"{margin:+}")
-            c4.metric("Win Probability", f"{final_prob}%")
-
-            prob_df = pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [final_prob, 100 - final_prob]})
-            fig = px.pie(prob_df, names="Outcome", values="Probability", title="Live Win Probability")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.subheader("AI Live Game Read")
-            st.info(live_ai_read(favorite_team, margin, period, final_prob))
-
-            st.subheader("What to watch next")
-            st.write(
-                f"If {favorite_team} is ahead, the priorities are defensive rebounding, no careless turnovers, and making the opponent take time off the clock. "
-                f"If {favorite_team} is behind, the priority is getting a clean scoring run before the next timeout or quarter break."
-            )
-
-elif page == "Series Preview / Recap":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
-
-    if profile["mode"] == "recap":
-        st.subheader("First-Round Recap")
-        st.error(f"{favorite_team} lost to {opponent}. Season over.")
-        show_game_log_table(favorite_team, opponent, season)
-        st.subheader("What went right")
-        for item in profile.get("strengths", []):
-            st.success(item)
-        st.subheader("What has to improve next season")
-        for item in profile.get("concerns", []):
-            st.warning(item)
-    else:
-        st.subheader(f"{game_focus} Preview")
-        st.success(f"{favorite_team} is preparing for {opponent}. The app is focused on the next game in the series.")
-        show_strengths_concerns(favorite_team)
-        st.subheader("Most important next-game factors")
-        factors = [
-            "first-quarter energy and whether the team gets comfortable shots early",
-            "turnovers and transition defense",
-            "whether the main star controls the matchup",
-            "rebounding margin",
-            "bench minutes and foul trouble",
-            "late-game shot quality",
-        ]
-        for f in factors:
-            st.write(f"• {f}")
-
-elif page == "Player Playoff Tracker":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
-
-    st.subheader("Official Player Playoff Game Logs")
-    selected_player = st.selectbox("Choose player", player_list_for_team(favorite_team))
-
-    if not NBA_STATS_AVAILABLE:
-        st.error("nba_api stats endpoint is not available. Make sure nba_api is installed in requirements.txt.")
-    else:
-        logs = get_player_playoff_logs(selected_player, season)
-        if logs.empty:
-            st.warning(f"No official playoff game logs found for {selected_player} in {season} yet.")
-        else:
-            series_filter = st.selectbox("Filter by matchup", ["All playoff games"] + sorted(logs["MATCHUP"].dropna().unique().tolist()))
-            view_df = logs.copy()
-            if series_filter != "All playoff games":
-                view_df = view_df[view_df["MATCHUP"] == series_filter]
-
-            display_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "PLUS_MINUS"] if c in view_df.columns]
-            st.dataframe(view_df[display_cols], use_container_width=True, hide_index=True)
-
-            stat_options = [s for s in ["PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS", "MIN"] if s in view_df.columns]
-            selected_stat = st.selectbox("Choose stat to chart", stat_options)
-            chart_df = view_df.copy()
-            chart_df["Game Number"] = range(1, len(chart_df) + 1)
-            fig = px.line(chart_df, x="Game Number", y=selected_stat, markers=True, hover_data=["GAME_DATE", "MATCHUP", "WL"], title=f"{selected_player} {selected_stat} — {season} Playoffs")
-            st.plotly_chart(fig, use_container_width=True)
-
-            avg_stat = view_df[selected_stat].mean()
-            best_stat = view_df[selected_stat].max()
-            low_stat = view_df[selected_stat].min()
-            c1, c2, c3 = st.columns(3)
-            c1.metric(f"Average {selected_stat}", round(avg_stat, 2))
-            c2.metric(f"Best {selected_stat}", round(best_stat, 2))
-            c3.metric(f"Lowest {selected_stat}", round(low_stat, 2))
-
-            st.subheader("AI Player Insight")
-            if selected_stat in ["PTS", "AST"]:
-                st.success(f"{selected_player}'s {selected_stat} trend shows how much offensive responsibility he is carrying. If this number rises while turnovers stay controlled, it is a favorable playoff signal for {favorite_team}.")
-            elif selected_stat in ["REB", "STL", "BLK", "PLUS_MINUS"]:
-                st.info(f"{selected_player}'s {selected_stat} trend is a strong role-impact indicator. For playoff basketball, this can matter as much as scoring because it reflects possession control and defensive pressure.")
-            else:
-                st.info(f"{selected_player}'s {selected_stat} trend helps explain efficiency and stability. The key is whether the performance is repeatable as the series gets more physical.")
-
-elif page == "Legacy Tracker":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
-
-    st.subheader(f"{favorite_team} Legacy Tracker")
-    selected_player = st.selectbox("Choose starter", profile.get("starters", []))
-
-    logs = get_player_playoff_logs(selected_player, season) if NBA_STATS_AVAILABLE else pd.DataFrame()
-    if logs.empty:
-        avg_pts, avg_reb, avg_ast = 18, 5, 4
-    else:
-        avg_pts = float(logs["PTS"].mean()) if "PTS" in logs else 18
-        avg_reb = float(logs["REB"].mean()) if "REB" in logs else 5
-        avg_ast = float(logs["AST"].mean()) if "AST" in logs else 4
-
-    series_wins = record["wins"] if record else 0
-    score = min(100, round(45 + avg_pts * 0.7 + avg_reb * 0.5 + avg_ast * 0.4 + series_wins * 9, 1))
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Playoff PPG", round(avg_pts, 1))
-    c2.metric("Playoff RPG", round(avg_reb, 1))
-    c3.metric("Playoff APG", round(avg_ast, 1))
-    c4.metric("Live Legacy Score", score)
-
-    outcomes = pd.DataFrame({
-        "Outcome": ["Current", "Win current series", "Reach conference finals", "Reach NBA Finals", "Win Championship"],
-        "Legacy Score": [score, min(100, score + 8), min(100, score + 15), min(100, score + 25), 100]
-    })
-    fig = px.bar(outcomes, x="Outcome", y="Legacy Score", title=f"{selected_player} Legacy Growth Path")
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.info(
-        f"{selected_player}'s legacy score updates from available playoff game-log data plus team advancement. "
-        f"If {favorite_team} wins more rounds and {selected_player}'s points/rebounds/assists rise, the legacy interpretation becomes stronger automatically."
-    )
-
-elif page == "Matchup Lineups":
-    opponent, record, game_focus, source = show_matchup_header(favorite_team, season)
-
-    st.subheader("Starters and Main Subs")
-    left = TEAM_PROFILES[favorite_team]
-    right = TEAM_PROFILES[opponent] if opponent in TEAM_PROFILES else None
-
-    if right:
-        starter_rows = []
-        positions = ["PG / Lead Guard", "SG / Wing", "SF / Wing", "PF / Forward", "C / Big"]
-        for i, pos in enumerate(positions):
-            a = left["starters"][i] if i < len(left["starters"]) else "—"
-            b = right["starters"][i] if i < len(right["starters"]) else "—"
-            starter_rows.append({"Position": pos, favorite_team: a, opponent: b, "Fan Perspective": f"This matchup matters because {a} must either create an edge or limit {b}'s best skill."})
-        st.dataframe(pd.DataFrame(starter_rows), use_container_width=True, hide_index=True)
-
-        bench_rows = []
-        for p in left.get("subs", []):
-            bench_rows.append({"Team": favorite_team, "Player": p, "Role": "Bench impact: defense, spacing, energy, or scoring stability"})
-        for p in right.get("subs", []):
-            bench_rows.append({"Team": opponent, "Player": p, "Role": "Opponent bench impact to monitor"})
-        st.subheader("Main Bench Players")
-        st.dataframe(pd.DataFrame(bench_rows), use_container_width=True, hide_index=True)
-    else:
-        st.warning("Opponent lineup data is not available yet for this inferred matchup.")
+        st.subheader("Season Recap Mode")
+        st.error(f"{favorite_team} are eliminated. Result: {team['series_result']}")
+        st.write("Best of luck next season. This team page now focuses on what went right, what went wrong, and what to build on.")
 
 elif page == "Playoff Bracket":
     st.header("2026 NBA Playoff Bracket")
-    st.caption("Fallback bracket is shown below. Team pages use live scoreboard/game logs to update opponent and game focus when NBA API data is available.")
-    st.dataframe(FALLBACK_BRACKET, use_container_width=True, hide_index=True)
-    fig = px.sunburst(FALLBACK_BRACKET, path=["Conference", "Round", "Matchup"], title="Playoff Bracket Structure")
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(interval=60000, key="bracket_refresh")
+        st.caption("Bracket page refreshes every 60 seconds. Series data updates from the app bracket model and live-game layer when available.")
+    else:
+        st.caption("Install streamlit-autorefresh for automatic refresh.")
+
+    st.markdown("### Eastern Conference")
+    east1, east2 = st.columns(2)
+    with east1:
+        st.markdown("#### First Round")
+        for s in [x for x in FIRST_ROUND_SERIES if x["conf"] == "East"]:
+            box = pd.DataFrame([
+                {"Seed": s["top_seed"], "Team": TEAM_ALIASES[s["top"]], "Wins": s["top_wins"], "Status": "✓" if s["winner"] == s["top"] else ""},
+                {"Seed": s["bottom_seed"], "Team": TEAM_ALIASES[s["bottom"]], "Wins": s["bottom_wins"], "Status": "✓" if s["winner"] == s["bottom"] else ""},
+            ])
+            st.dataframe(box, hide_index=True, use_container_width=True)
+    with east2:
+        st.markdown("#### Second Round")
+        for s in [x for x in SECOND_ROUND_SERIES if x["conf"] == "East"]:
+            st.info(f"{s['a_seed']} {s['a']} vs {s['b_seed']} {s['b']} — series {s['a_wins']}-{s['b_wins']}")
+
+    st.markdown("### Western Conference")
+    west1, west2 = st.columns(2)
+    with west1:
+        st.markdown("#### First Round")
+        for s in [x for x in FIRST_ROUND_SERIES if x["conf"] == "West"]:
+            box = pd.DataFrame([
+                {"Seed": s["top_seed"], "Team": TEAM_ALIASES[s["top"]], "Wins": s["top_wins"], "Status": "✓" if s["winner"] == s["top"] else ""},
+                {"Seed": s["bottom_seed"], "Team": TEAM_ALIASES[s["bottom"]], "Wins": s["bottom_wins"], "Status": "✓" if s["winner"] == s["bottom"] else ""},
+            ])
+            st.dataframe(box, hide_index=True, use_container_width=True)
+    with west2:
+        st.markdown("#### Second Round")
+        for s in [x for x in SECOND_ROUND_SERIES if x["conf"] == "West"]:
+            st.info(f"{s['a_seed']} {s['a']} vs {s['b_seed']} {s['b']} — series {s['a_wins']}-{s['b_wins']}")
+
+    st.markdown("### Visual Bracket Map")
+    bracket_rows = []
+    for s in FIRST_ROUND_SERIES:
+        bracket_rows.append({"Conference": s["conf"], "Round": "First Round", "Matchup": f"{s['top_seed']} {TEAM_ALIASES[s['top']]} vs {s['bottom_seed']} {TEAM_ALIASES[s['bottom']]}", "Result": f"{TEAM_ALIASES[s['winner']]} wins {max(s['top_wins'], s['bottom_wins'])}-{min(s['top_wins'], s['bottom_wins'])}"})
+    for s in SECOND_ROUND_SERIES:
+        bracket_rows.append({"Conference": s["conf"], "Round": "Second Round", "Matchup": f"{s['a_seed']} {TEAM_ALIASES[s['a']]} vs {s['b_seed']} {TEAM_ALIASES[s['b']]}", "Result": f"Series {s['a_wins']}-{s['b_wins']}"})
+    bracket_df = pd.DataFrame(bracket_rows)
+    fig = px.sunburst(bracket_df, path=["Conference", "Round", "Matchup"], title="2026 Playoff Bracket Structure")
     st.plotly_chart(fig, use_container_width=True)
 
-elif page == "Data / Auto-Update Health":
-    st.header("Data / Auto-Update Health")
-    st.write("This page tells you what is truly automatic and where the data is coming from.")
-    health = pd.DataFrame([
-        {"Feature": "Live scores / live game status", "Automatic": NBA_LIVE_AVAILABLE, "Source": "nba_api live scoreboard", "Refresh": "30 seconds"},
-        {"Feature": "Player playoff game logs", "Automatic": NBA_STATS_AVAILABLE, "Source": "nba_api PlayerGameLog", "Refresh": "15 minutes"},
-        {"Feature": "Team playoff game logs", "Automatic": NBA_STATS_AVAILABLE, "Source": "nba_api LeagueGameFinder", "Refresh": "10 minutes"},
-        {"Feature": "Opponent inference", "Automatic": NBA_LIVE_AVAILABLE or NBA_STATS_AVAILABLE, "Source": "Live scoreboard first, then latest playoff game log, then fallback bracket", "Refresh": "30 sec / 10 min"},
-        {"Feature": "Written AI commentary", "Automatic": True, "Source": "App logic + live score/game-log inputs", "Refresh": "with page refresh"},
-        {"Feature": "Fallback bracket", "Automatic": False, "Source": "Built-in dictionary", "Refresh": "manual code update only"},
-    ])
-    st.dataframe(health, use_container_width=True, hide_index=True)
-
-    games = get_live_scoreboard_games()
-    st.subheader("Today / Live NBA Scoreboard Raw Summary")
-    if games:
-        rows = []
-        for g in games:
-            home = g.get("homeTeam", {})
-            away = g.get("awayTeam", {})
-            rows.append({
-                "Game": f"{away.get('teamTricode')} at {home.get('teamTricode')}",
-                "Score": f"{away.get('score', 0)} - {home.get('score', 0)}",
-                "Status": g.get("gameStatusText", ""),
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+elif page == "Current Series / Recap":
+    matchup_title(favorite_team)
+    if team["status"] == "Active":
+        opponent = team["opponent"]
+        st.subheader(f"Current Second-Round Matchup: {favorite_team} vs {opponent}")
+        key = (favorite_team, opponent) if (favorite_team, opponent) in SECOND_ROUND_SCHEDULE else (opponent, favorite_team)
+        schedule = SECOND_ROUND_SCHEDULE.get(key, [])
+        if schedule:
+            st.subheader("Series Schedule")
+            st.dataframe(pd.DataFrame(schedule), use_container_width=True, hide_index=True)
+        else:
+            st.info("Schedule will appear here when loaded for this matchup.")
+        st.subheader("What Has To Go Right")
+        for x in team["strengths"]:
+            st.success(f"{favorite_team} must lean into: {x}")
+        st.subheader("What Could Swing The Series")
+        for x in team["concerns"]:
+            st.warning(f"Watch for: {x}")
+        st.info(f"Game 1 focus: establish the series identity, test matchup coverages, and see how {favorite_team}'s main stars handle the opponent's pressure.")
     else:
-        st.info("No games returned by the live scoreboard right now, or NBA API is unavailable.")
+        st.subheader("First-Round Recap")
+        st.error(team["series_result"])
+        st.write(f"From the {favorite_team} perspective, this page reviews what happened against {team['opponent']} and what can carry into next season.")
+
+elif page == "First-Round Review":
+    matchup_title(favorite_team)
+    st.subheader("First-Round Matchup Review")
+    st.write(f"Series: {team['seed']} {favorite_team} vs {TEAM_PROFILES[team['previous_opponent']]['seed']} {team['previous_opponent']}")
+    st.write(f"Result: **{team['series_result']}**")
+
+    scores = FIRST_ROUND_GAME_SCORES.get(favorite_team)
+    if scores:
+        st.subheader("Game-by-Game Scores")
+        st.dataframe(pd.DataFrame(scores), use_container_width=True, hide_index=True)
+    else:
+        st.info("Detailed game-by-game scores are not loaded yet for this team. The player tracker can still pull official player playoff logs from nba_api when available.")
+
+    st.subheader("What Went Right")
+    for x in team["strengths"]:
+        st.success(x)
+    st.subheader("What To Improve")
+    for x in team["concerns"]:
+        st.warning(x)
+    if team["status"] == "Eliminated":
+        st.info(f"Next-season outlook for {favorite_team}: build on the positives, address the concerns, and improve the playoff matchup weaknesses that showed up in Round 1.")
+
+elif page == "Live Game Center":
+    matchup_title(favorite_team)
+    st.subheader("Live Game Center")
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(interval=30000, key="live_game_refresh")
+        st.caption("Live Game Center refreshes every 30 seconds.")
+    else:
+        st.warning("Add streamlit-autorefresh to requirements.txt for automatic 30-second refresh.")
+
+    if not NBA_API_AVAILABLE:
+        st.error("nba_api is not available. Add nba_api to requirements.txt and redeploy.")
+    else:
+        live_game = find_team_live_game(favorite_team)
+        if not live_game:
+            st.warning("No live or scheduled game found for this team today. When the team is playing, this page will show score, status, and live probability.")
+        else:
+            home = live_game.get("homeTeam", {})
+            away = live_game.get("awayTeam", {})
+            home_name = home.get("teamName", "Home")
+            away_name = away.get("teamName", "Away")
+            home_score = int(home.get("score", 0) or 0)
+            away_score = int(away.get("score", 0) or 0)
+            status_text = live_game.get("gameStatusText", "Unknown status")
+            st.write(f"### {away_name} at {home_name}")
+            st.write(f"**Game Status:** {status_text}")
+            c1, c2 = st.columns(2)
+            c1.metric(away_name, away_score)
+            c2.metric(home_name, home_score)
+
+            alias = TEAM_ALIASES[favorite_team]
+            is_home = home.get("teamTricode") == alias
+            team_score = home_score if is_home else away_score
+            opp_score = away_score if is_home else home_score
+            margin = team_score - opp_score
+            try:
+                quarter = int(live_game.get("period", 1))
+            except Exception:
+                quarter = 1
+            heuristic = estimate_win_probability(margin, quarter, is_home, team["status"])
+            model_prob = statsmodels_probability(margin, quarter, is_home)
+            final_prob = model_prob if model_prob is not None else heuristic
+            c1, c2, c3 = st.columns(3)
+            c1.metric(f"{favorite_team} Win Probability", f"{final_prob}%")
+            c2.metric("Score Margin", margin)
+            c3.metric("Quarter", quarter)
+            fig = px.pie(pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [final_prob, 100-final_prob]}), names="Outcome", values="Probability")
+            st.plotly_chart(fig, use_container_width=True)
+            st.subheader("AI Live Game Read")
+            if margin >= 10 and quarter >= 4:
+                st.success(f"This is extremely favorable for {favorite_team}. A double-digit lead in the fourth quarter usually means the team is in control unless turnovers or foul trouble change the game.")
+            elif margin >= 10:
+                st.success(f"{favorite_team} is off to a very strong stretch. The offense or defense is creating real separation. The next goal is to keep the opponent from making a quick run.")
+            elif margin >= 1:
+                st.info(f"{favorite_team} has the edge right now. The key is extending the lead through stops, rebounds, and efficient shots.")
+            elif margin == 0:
+                st.warning("The game is tied. This is still a swing point. The next few possessions can change the win probability quickly.")
+            elif margin >= -6:
+                st.warning(f"{favorite_team} is trailing but very much alive. A short run or defensive adjustment can flip the game.")
+            else:
+                st.error(f"{favorite_team} is in a tough spot. They need stops, better shot quality, and a momentum shift.")
+
+elif page == "Player Playoff Tracker":
+    matchup_title(favorite_team)
+    st.subheader("Official Player Playoff Game Logs")
+    player = st.selectbox("Choose player", selected_roster(favorite_team))
+    season = st.selectbox("Choose season", ["2025-26", "2024-25", "2023-24"], index=0)
+    if not NBA_API_AVAILABLE:
+        st.error("nba_api is not available. Add nba_api to requirements.txt.")
+    else:
+        pid = get_player_id(player)
+        if pid is None:
+            st.warning(f"Could not find NBA player ID for {player}.")
+        else:
+            logs = get_real_playoff_logs(pid, season)
+            if logs.empty:
+                st.warning(f"No official playoff game logs found yet for {player} in {season}.")
+            else:
+                display_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "PLUS_MINUS"] if c in logs.columns]
+                st.dataframe(logs[display_cols], use_container_width=True, hide_index=True)
+                stat_options = [s for s in ["PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS", "MIN"] if s in logs.columns]
+                stat = st.selectbox("Choose stat", stat_options)
+                chart = logs.copy()
+                chart["Game Number"] = range(1, len(chart) + 1)
+                fig = px.line(chart, x="Game Number", y=stat, markers=True, hover_data=["GAME_DATE", "MATCHUP", "WL"], title=f"{player} {stat} — {season} Playoffs")
+                st.plotly_chart(fig, use_container_width=True)
+                st.subheader("AI Player Insight")
+                avg = chart[stat].mean()
+                st.info(f"{player}'s average {stat} is {avg:.2f} in the loaded playoff games. From the {favorite_team} perspective, this matters because it shows whether his role is helping the team win its current matchup.")
+
+elif page == "Matchup Lineups":
+    matchup_title(favorite_team)
+    opponent = team["opponent"]
+    if opponent not in TEAM_PROFILES:
+        st.warning("Opponent profile not loaded.")
+    else:
+        opp = TEAM_PROFILES[opponent]
+        st.subheader("Starting Lineup Comparison")
+        positions = ["PG", "SG", "SF", "PF", "C"]
+        rows = []
+        for i, pos in enumerate(positions):
+            rows.append({"Position": pos, favorite_team: team["starters"][i], opponent: opp["starters"][i], "Analysis": f"This matchup is viewed from the {favorite_team} perspective. Watch efficiency, fouls, rebounding, and late-game execution."})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.subheader("Main Subs")
+        bench_rows = []
+        for p in team["subs"]:
+            bench_rows.append({"Team": favorite_team, "Player": p, "Role": "Bench role: stabilize minutes, defend, avoid turnovers, and provide scoring or energy."})
+        for p in opp["subs"]:
+            bench_rows.append({"Team": opponent, "Player": p, "Role": "Opponent bench role: affects matchup depth and non-starter minutes."})
+        st.dataframe(pd.DataFrame(bench_rows), use_container_width=True, hide_index=True)
+
+elif page == "Legacy Tracker":
+    matchup_title(favorite_team)
+    st.subheader("Team-Specific Legacy Tracker")
+    player = st.selectbox("Choose starter", team["starters"])
+    st.write(f"This legacy tracker is written from the {favorite_team} perspective. It uses the selected player's current role, playoff advancement, and performance to frame how the run changes his team legacy.")
+    points = st.slider("Playoff scoring average", 0, 45, 20)
+    rebounds = st.slider("Playoff rebounding average", 0, 20, 5)
+    assists = st.slider("Playoff assists average", 0, 15, 4)
+    series_wins = st.slider("Series won this playoff run", 0, 4, 1 if team["status"] == "Active" else 0)
+    score = min(100, round(50 + points*0.55 + rebounds*0.6 + assists*0.45 + series_wins*10, 1))
+    st.metric("Live Legacy Impact Score", score)
+    if team["status"] == "Active":
+        st.success(f"If {player} helps {favorite_team} win another round, his franchise legacy rises because deep playoff runs become part of team history.")
+    else:
+        st.info(f"Because {favorite_team} is eliminated, the legacy interpretation focuses on what {player} showed in Round 1 and what it means for next season.")
+
+elif page == "Other Series Watch":
+    matchup_title(favorite_team)
+    st.subheader("All 2026 Playoff Teams")
+    rows = []
+    for name, p in TEAM_PROFILES.items():
+        rows.append({"Team": name, "Conference": p["conference"], "Seed": p["seed"], "Status": p["status"], "Round": p["round"], "Opponent": p["opponent"], "Result": p["series_result"]})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+elif page == "AI Prediction Center":
+    matchup_title(favorite_team)
+    if team["status"] == "Eliminated":
+        st.error(f"{favorite_team} is eliminated, so future playoff probability is 0%.")
+    else:
+        st.subheader("Manual Probability Simulator")
+        margin = st.slider("Current score margin for selected team", -30, 30, 0)
+        quarter = st.slider("Current quarter", 1, 4, 2)
+        is_home = st.checkbox("Is selected team home?", value=True)
+        heuristic = estimate_win_probability(margin, quarter, is_home, team["status"])
+        model = statsmodels_probability(margin, quarter, is_home)
+        final = model if model is not None else heuristic
+        st.metric("Estimated Win Probability", f"{final}%")
+        fig = px.pie(pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [final, 100-final]}), names="Outcome", values="Probability")
+        st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
-st.caption("Daniel Cohen — NBA Playoff Companion AI | Auto-updating where NBA API data is available | Probabilities are app-generated estimates, not official betting lines")
-
+st.caption("Daniel Cohen — NBA Playoff Companion AI | Bracket data model + live NBA API layer")
