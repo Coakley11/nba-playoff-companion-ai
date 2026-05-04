@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,7 +20,7 @@ except Exception:
 try:
     from nba_api.live.nba.endpoints import scoreboard
     from nba_api.stats.static import players as nba_players
-    from nba_api.stats.endpoints import playergamelog
+    from nba_api.stats.endpoints import playergamelog, leaguegamefinder
     NBA_API_AVAILABLE = True
 except Exception:
     NBA_API_AVAILABLE = False
@@ -272,6 +271,177 @@ def find_team_live_game(team_name):
     return None
 
 
+@st.cache_data(ttl=600)
+def get_official_playoff_gamefinder(season="2025-26"):
+    if not NBA_API_AVAILABLE:
+        return pd.DataFrame()
+    try:
+        finder = leaguegamefinder.LeagueGameFinder(
+            season_nullable=season,
+            season_type_nullable="Playoffs"
+        )
+        return finder.get_data_frames()[0]
+    except Exception:
+        return pd.DataFrame()
+
+
+def update_series_from_official_games(series_list, season="2025-26"):
+    games = get_official_playoff_gamefinder(season)
+    updated = []
+
+    for s in series_list:
+        row = dict(s)
+        a_name = row.get("a", row.get("top"))
+        b_name = row.get("b", row.get("bottom"))
+        a_abbr = TEAM_ALIASES.get(a_name)
+        b_abbr = TEAM_ALIASES.get(b_name)
+
+        if games.empty or not a_abbr or not b_abbr or "TEAM_ABBREVIATION" not in games.columns or "WL" not in games.columns:
+            updated.append(row)
+            continue
+
+        matchup_col = games["MATCHUP"].astype(str) if "MATCHUP" in games.columns else pd.Series([""] * len(games))
+        a_rows = games[(games["TEAM_ABBREVIATION"] == a_abbr) & (matchup_col.str.contains(b_abbr, na=False)) & (games["WL"] == "W")]
+        b_rows = games[(games["TEAM_ABBREVIATION"] == b_abbr) & (matchup_col.str.contains(a_abbr, na=False)) & (games["WL"] == "W")]
+
+        if len(a_rows) > 0 or len(b_rows) > 0:
+            if "a_wins" in row:
+                row["a_wins"] = int(len(a_rows))
+                row["b_wins"] = int(len(b_rows))
+                if row["a_wins"] >= 4:
+                    row["winner"] = a_name
+                elif row["b_wins"] >= 4:
+                    row["winner"] = b_name
+            else:
+                row["top_wins"] = int(len(a_rows))
+                row["bottom_wins"] = int(len(b_rows))
+                if row["top_wins"] >= 4:
+                    row["winner"] = a_name
+                elif row["bottom_wins"] >= 4:
+                    row["winner"] = b_name
+        updated.append(row)
+    return updated
+
+
+def series_card_html(team_a, seed_a, wins_a, team_b, seed_b, wins_b, winner=None):
+    logo_a = TEAM_LOGOS.get(team_a, "")
+    logo_b = TEAM_LOGOS.get(team_b, "")
+    abbr_a = TEAM_ALIASES.get(team_a, team_a[:3].upper())
+    abbr_b = TEAM_ALIASES.get(team_b, team_b[:3].upper())
+    check_a = "✅" if winner == team_a else ""
+    check_b = "✅" if winner == team_b else ""
+    faded_a = " winner-row" if winner == team_a else (" faded-row" if winner and winner != team_a else "")
+    faded_b = " winner-row" if winner == team_b else (" faded-row" if winner and winner != team_b else "")
+    return f"""
+    <div class='series-card'>
+      <div class='team-row{faded_a}'>
+        <span class='seed'>{seed_a}</span>
+        <img src='{logo_a}' class='team-logo' />
+        <span class='abbr'>{abbr_a}</span>
+        <span class='wins'>{wins_a}</span>
+        <span class='check'>{check_a}</span>
+      </div>
+      <div class='team-row{faded_b}'>
+        <span class='seed'>{seed_b}</span>
+        <img src='{logo_b}' class='team-logo' />
+        <span class='abbr'>{abbr_b}</span>
+        <span class='wins'>{wins_b}</span>
+        <span class='check'>{check_b}</span>
+      </div>
+    </div>
+    """
+
+
+def tbd_card_html(title="TBD"):
+    return f"""
+    <div class='series-card tbd-card'>
+      <div class='team-row'><span class='seed'>-</span><span class='abbr'>{title}</span><span class='wins'>--</span></div>
+      <div class='team-row'><span class='seed'>-</span><span class='abbr'>TBD</span><span class='wins'>--</span></div>
+    </div>
+    """
+
+
+def render_dynamic_bracket():
+    first = update_series_from_official_games(FIRST_ROUND_SERIES)
+    second = update_series_from_official_games(SECOND_ROUND_SERIES)
+
+    east_first = [x for x in first if x["conf"] == "East"]
+    west_first = [x for x in first if x["conf"] == "West"]
+    east_second = [x for x in second if x["conf"] == "East"]
+    west_second = [x for x in second if x["conf"] == "West"]
+
+    east_finalists = [s.get("winner") for s in east_second if s.get("winner")]
+    west_finalists = [s.get("winner") for s in west_second if s.get("winner")]
+
+    css = """
+    <style>
+    .bracket-wrap {background: radial-gradient(circle at top, #222078, #090b1a 60%, #05060d); padding: 24px; border-radius: 24px; border: 1px solid rgba(255,255,255,.15); color: white;}
+    .bracket-title {text-align:center; font-size:52px; font-weight:900; letter-spacing:2px; margin-bottom:2px;}
+    .bracket-subtitle {text-align:center; color:#cdd3ff; font-size:18px; margin-bottom:18px;}
+    .bracket-grid {display:grid; grid-template-columns: 1.2fr 1fr .9fr 1fr 1.2fr; gap:22px; align-items:center;}
+    .conf-title-east {color:#4da3ff; font-size:24px; font-weight:800; margin: 8px 0 12px;}
+    .conf-title-west {color:#ff5050; font-size:24px; font-weight:800; margin: 8px 0 12px; text-align:right;}
+    .round-title {font-weight:800; color:#ffffff; text-transform:uppercase; margin: 10px 0; font-size:16px;}
+    .series-card {background:linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.04)); border:1px solid rgba(255,255,255,.22); border-radius:12px; margin:10px 0; padding:8px; box-shadow:0 12px 28px rgba(0,0,0,.28);}
+    .team-row {display:grid; grid-template-columns: 26px 36px 1fr 32px 24px; align-items:center; gap:8px; padding:6px; border-bottom:1px solid rgba(255,255,255,.12);}
+    .team-row:last-child {border-bottom:0;}
+    .team-logo {width:32px; height:32px; object-fit:contain;}
+    .seed {font-weight:800; color:#d7e0ff;}
+    .abbr {font-weight:900; font-size:20px; letter-spacing:.5px;}
+    .wins {font-weight:900; font-size:24px; text-align:right;}
+    .check {color:#32ff76; font-size:20px;}
+    .winner-row {background:rgba(44,255,120,.12); border-radius:8px;}
+    .faded-row {opacity:.55;}
+    .center-panel {text-align:center;}
+    .trophy {font-size:78px; margin:8px 0;}
+    .finals-box {background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border:1px solid rgba(255,255,255,.28); border-radius:16px; padding:18px; margin:12px 0;}
+    .live-dot {display:inline-block; width:12px; height:12px; background:#13e45d; border-radius:999px; margin-right:8px;}
+    .small-note {font-size:13px; color:#c8cae8; text-align:center; margin-top:12px;}
+    @media (max-width: 1000px) {.bracket-grid {grid-template-columns:1fr;} .conf-title-west {text-align:left;} .bracket-title{font-size:34px;}}
+    </style>
+    """
+
+    html = css + "<div class='bracket-wrap'>"
+    html += "<div class='bracket-title'>NBA PLAYOFFS</div><div class='bracket-subtitle'>2026 • Auto-updating bracket view</div>"
+    html += "<div class='bracket-grid'>"
+
+    html += "<div><div class='conf-title-east'>EASTERN CONFERENCE</div><div class='round-title'>First Round</div>"
+    for s in east_first:
+        html += series_card_html(s["top"], s["top_seed"], s["top_wins"], s["bottom"], s["bottom_seed"], s["bottom_wins"], s.get("winner"))
+    html += "</div>"
+
+    html += "<div><div class='round-title'>Conference Semifinals</div>"
+    for s in east_second:
+        html += series_card_html(s["a"], s["a_seed"], s["a_wins"], s["b"], s["b_seed"], s["b_wins"], s.get("winner"))
+    html += "</div>"
+
+    html += "<div class='center-panel'><div class='round-title'>Conference Finals</div>"
+    if len(east_finalists) >= 2:
+        html += series_card_html(east_finalists[0], TEAM_PROFILES[east_finalists[0]]["seed"], 0, east_finalists[1], TEAM_PROFILES[east_finalists[1]]["seed"], 0, None)
+    else:
+        html += tbd_card_html("EAST TBD")
+    html += "<div class='trophy'>🏆</div><div class='finals-box'><b>NBA FINALS</b><br/>Eastern Champion: TBD<br/>Western Champion: TBD</div>"
+    if len(west_finalists) >= 2:
+        html += series_card_html(west_finalists[0], TEAM_PROFILES[west_finalists[0]]["seed"], 0, west_finalists[1], TEAM_PROFILES[west_finalists[1]]["seed"], 0, None)
+    else:
+        html += tbd_card_html("WEST TBD")
+    html += "</div>"
+
+    html += "<div><div class='round-title'>Conference Semifinals</div>"
+    for s in west_second:
+        html += series_card_html(s["a"], s["a_seed"], s["a_wins"], s["b"], s["b_seed"], s["b_wins"], s.get("winner"))
+    html += "</div>"
+
+    html += "<div><div class='conf-title-west'>WESTERN CONFERENCE</div><div class='round-title'>First Round</div>"
+    for s in west_first:
+        html += series_card_html(s["top"], s["top_seed"], s["top_wins"], s["bottom"], s["bottom_seed"], s["bottom_wins"], s.get("winner"))
+    html += "</div>"
+
+    html += "</div><div class='small-note'><span class='live-dot'></span>Auto-refreshes on the app. Official NBA playoff game logs are used when available; otherwise the app uses the built-in bracket model.</div></div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+    return first, second
+
 def infer_live_series_update(team_name):
     # This layer is live-aware. It checks today's live/scheduled opponent first.
     # If there is no live game, it falls back to the known 2026 bracket data above.
@@ -445,51 +615,38 @@ if page == "Home Dashboard":
 
 elif page == "Playoff Bracket":
     st.header("2026 NBA Playoff Bracket")
+
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=60000, key="bracket_refresh")
-        st.caption("Bracket page refreshes every 60 seconds. Series data updates from the app bracket model and live-game layer when available.")
+        st.caption("This bracket refreshes every 60 seconds. When official NBA playoff data is available, series records update automatically.")
     else:
-        st.caption("Install streamlit-autorefresh for automatic refresh.")
+        st.caption("Add streamlit-autorefresh to requirements.txt for automatic bracket refresh.")
 
-    st.markdown("### Eastern Conference")
-    east1, east2 = st.columns(2)
-    with east1:
-        st.markdown("#### First Round")
-        for s in [x for x in FIRST_ROUND_SERIES if x["conf"] == "East"]:
-            box = pd.DataFrame([
-                {"Seed": s["top_seed"], "Team": TEAM_ALIASES[s["top"]], "Wins": s["top_wins"], "Status": "✓" if s["winner"] == s["top"] else ""},
-                {"Seed": s["bottom_seed"], "Team": TEAM_ALIASES[s["bottom"]], "Wins": s["bottom_wins"], "Status": "✓" if s["winner"] == s["bottom"] else ""},
-            ])
-            st.dataframe(box, hide_index=True, use_container_width=True)
-    with east2:
-        st.markdown("#### Second Round")
-        for s in [x for x in SECOND_ROUND_SERIES if x["conf"] == "East"]:
-            st.info(f"{s['a_seed']} {s['a']} vs {s['b_seed']} {s['b']} — series {s['a_wins']}-{s['b_wins']}")
+    st.info(
+        "This is the dynamic app version of the bracket image: team logos, seeds, first-round results, second-round matchups, and live-updating series records when NBA data is available."
+    )
 
-    st.markdown("### Western Conference")
-    west1, west2 = st.columns(2)
-    with west1:
-        st.markdown("#### First Round")
-        for s in [x for x in FIRST_ROUND_SERIES if x["conf"] == "West"]:
-            box = pd.DataFrame([
-                {"Seed": s["top_seed"], "Team": TEAM_ALIASES[s["top"]], "Wins": s["top_wins"], "Status": "✓" if s["winner"] == s["top"] else ""},
-                {"Seed": s["bottom_seed"], "Team": TEAM_ALIASES[s["bottom"]], "Wins": s["bottom_wins"], "Status": "✓" if s["winner"] == s["bottom"] else ""},
-            ])
-            st.dataframe(box, hide_index=True, use_container_width=True)
-    with west2:
-        st.markdown("#### Second Round")
-        for s in [x for x in SECOND_ROUND_SERIES if x["conf"] == "West"]:
-            st.info(f"{s['a_seed']} {s['a']} vs {s['b_seed']} {s['b']} — series {s['a_wins']}-{s['b_wins']}")
+    updated_first, updated_second = render_dynamic_bracket()
 
-    st.markdown("### Visual Bracket Map")
-    bracket_rows = []
-    for s in FIRST_ROUND_SERIES:
-        bracket_rows.append({"Conference": s["conf"], "Round": "First Round", "Matchup": f"{s['top_seed']} {TEAM_ALIASES[s['top']]} vs {s['bottom_seed']} {TEAM_ALIASES[s['bottom']]}", "Result": f"{TEAM_ALIASES[s['winner']]} wins {max(s['top_wins'], s['bottom_wins'])}-{min(s['top_wins'], s['bottom_wins'])}"})
-    for s in SECOND_ROUND_SERIES:
-        bracket_rows.append({"Conference": s["conf"], "Round": "Second Round", "Matchup": f"{s['a_seed']} {TEAM_ALIASES[s['a']]} vs {s['b_seed']} {TEAM_ALIASES[s['b']]}", "Result": f"Series {s['a_wins']}-{s['b_wins']}"})
-    bracket_df = pd.DataFrame(bracket_rows)
-    fig = px.sunburst(bracket_df, path=["Conference", "Round", "Matchup"], title="2026 Playoff Bracket Structure")
-    st.plotly_chart(fig, use_container_width=True)
+    with st.expander("See bracket data table"):
+        rows = []
+        for s in updated_first:
+            rows.append({
+                "Conference": s["conf"],
+                "Round": "First Round",
+                "Matchup": f"{s['top_seed']} {s['top']} vs {s['bottom_seed']} {s['bottom']}",
+                "Series": f"{s['top_wins']}-{s['bottom_wins']}",
+                "Winner": s.get("winner", "TBD")
+            })
+        for s in updated_second:
+            rows.append({
+                "Conference": s["conf"],
+                "Round": "Second Round",
+                "Matchup": f"{s['a_seed']} {s['a']} vs {s['b_seed']} {s['b']}",
+                "Series": f"{s['a_wins']}-{s['b_wins']}",
+                "Winner": s.get("winner") or "TBD"
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 elif page == "Current Series / Recap":
     matchup_title(favorite_team)
@@ -689,4 +846,3 @@ elif page == "AI Prediction Center":
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | Bracket data model + live NBA API layer")
-
