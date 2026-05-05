@@ -12,9 +12,15 @@ except Exception:
 
 try:
     from nba_api.live.nba.endpoints import scoreboard, boxscore
+    try:
+        from nba_api.live.nba.endpoints import playbyplay
+        NBA_PLAYBYPLAY_AVAILABLE = True
+    except Exception:
+        NBA_PLAYBYPLAY_AVAILABLE = False
     NBA_LIVE_AVAILABLE = True
 except Exception:
     NBA_LIVE_AVAILABLE = False
+    NBA_PLAYBYPLAY_AVAILABLE = False
 
 try:
     from nba_api.stats.static import players as nba_players
@@ -150,6 +156,165 @@ def get_live_boxscore(game_id):
     except Exception:
         return {}
 
+@st.cache_data(ttl=30)
+def get_live_play_by_play(game_id):
+    """Best-effort live play-by-play. If unavailable, returns an empty list."""
+    if not NBA_LIVE_AVAILABLE or not game_id or not globals().get("NBA_PLAYBYPLAY_AVAILABLE", False):
+        return []
+    try:
+        data = playbyplay.PlayByPlay(game_id).get_dict()
+        return data.get("game", {}).get("actions", [])
+    except Exception:
+        return []
+
+def parse_plus_minus(value):
+    try:
+        if isinstance(value, str):
+            return float(value.replace("+", ""))
+        return float(value)
+    except Exception:
+        return 0.0
+
+def extract_boxscore_rows(boxscore_game):
+    rows = []
+    for side in ["homeTeam", "awayTeam"]:
+        t = boxscore_game.get(side, {})
+        tri = t.get("teamTricode", "")
+        team_name = t.get("teamName", tri)
+        for p in t.get("players", []):
+            stats = p.get("statistics", {})
+            rows.append({
+                "Team": tri,
+                "Team Name": team_name,
+                "Player": p.get("name", ""),
+                "MIN": stats.get("minutes", ""),
+                "PTS": stats.get("points", 0) or 0,
+                "REB": stats.get("reboundsTotal", 0) or 0,
+                "AST": stats.get("assists", 0) or 0,
+                "STL": stats.get("steals", 0) or 0,
+                "BLK": stats.get("blocks", 0) or 0,
+                "TO": stats.get("turnovers", 0) or 0,
+                "FGM": stats.get("fieldGoalsMade", 0) or 0,
+                "FGA": stats.get("fieldGoalsAttempted", 0) or 0,
+                "3PM": stats.get("threePointersMade", 0) or 0,
+                "3PA": stats.get("threePointersAttempted", 0) or 0,
+                "FTM": stats.get("freeThrowsMade", 0) or 0,
+                "FTA": stats.get("freeThrowsAttempted", 0) or 0,
+                "+/-": stats.get("plusMinusPoints", 0) or 0,
+            })
+    return rows
+
+def choose_team_mvp(boxscore_rows, team_alias):
+    df = pd.DataFrame(boxscore_rows)
+    if df.empty or "Team" not in df.columns:
+        return None, pd.DataFrame()
+    team_df = df[df["Team"] == team_alias].copy()
+    if team_df.empty:
+        return None, team_df
+    for col in ["PTS", "REB", "AST", "STL", "BLK", "TO"]:
+        team_df[col] = pd.to_numeric(team_df[col], errors="coerce").fillna(0)
+    team_df["PLUS_NUM"] = team_df["+/-"].apply(parse_plus_minus)
+    team_df["MVP Score"] = (
+        team_df["PTS"]
+        + 1.2 * team_df["REB"]
+        + 1.5 * team_df["AST"]
+        + 3.0 * team_df["STL"]
+        + 3.0 * team_df["BLK"]
+        - 2.0 * team_df["TO"]
+        + 0.35 * team_df["PLUS_NUM"]
+    )
+    team_df = team_df.sort_values("MVP Score", ascending=False)
+    return team_df.iloc[0].to_dict(), team_df
+
+def summarize_top_stat_plays(mvp_row):
+    if not mvp_row:
+        return []
+    plays = []
+    pts = int(mvp_row.get("PTS", 0) or 0)
+    reb = int(mvp_row.get("REB", 0) or 0)
+    ast = int(mvp_row.get("AST", 0) or 0)
+    stl = int(mvp_row.get("STL", 0) or 0)
+    blk = int(mvp_row.get("BLK", 0) or 0)
+    threes = int(mvp_row.get("3PM", 0) or 0)
+    plus = mvp_row.get("+/-", 0)
+    if pts >= 25:
+        plays.append(f"Carried a major scoring load with {pts} points.")
+    elif pts >= 15:
+        plays.append(f"Gave the offense a steady scoring lift with {pts} points.")
+    if ast >= 7:
+        plays.append(f"Created offense for teammates with {ast} assists.")
+    if reb >= 10:
+        plays.append(f"Controlled possessions on the glass with {reb} rebounds.")
+    if threes >= 3:
+        plays.append(f"Stretched the defense by making {threes} threes.")
+    if stl + blk >= 3:
+        plays.append(f"Made defensive-impact plays with {stl} steals and {blk} blocks.")
+    plays.append(f"Finished with a plus/minus of {plus}, showing strong team impact during his minutes.")
+    return plays
+
+def is_game_final(game):
+    text = str(game.get("gameStatusText", "")).lower()
+    status_num = game.get("gameStatus")
+    return "final" in text or status_num == 3
+
+def matchup_advantage_text(team, opponent, position, team_player, opp_player):
+    # Generalized scouting language. These are qualitative projections, not official rankings.
+    pos_guides = {
+        "PG": "ball pressure, decision-making, pace control, and late-clock shot creation",
+        "SG": "shooting, perimeter defense, secondary creation, and transition play",
+        "SF": "wing defense, size, spot-up shooting, and ability to attack mismatches",
+        "PF": "physicality, rebounding, switching, and matchup versatility",
+        "C": "rim protection, rebounding, interior scoring, and spacing",
+    }
+    guide = pos_guides.get(position, "two-way impact")
+    return f"This matchup comes down to {guide}. {team_player} has to win his role without letting {opp_player} tilt the matchup."
+
+def pregame_keys(team_name):
+    p = TEAM_PROFILES[team_name]
+    keys = [
+        f"Lean into {p['strengths'][0]} early so the game starts on the team's terms.",
+        f"Protect against {p['concerns'][0]}, because that is the quickest way for the opponent to take control.",
+        "Win the first six minutes of each half; playoff games often swing around those stretches.",
+        "Keep turnovers down and avoid giving up easy transition points.",
+        "Get the main scorers comfortable without forcing low-quality shots.",
+    ]
+    return keys
+
+def postgame_team_mvp_section(team_name, game, boxscore_game):
+    alias = TEAM_ALIASES.get(team_name)
+    rows = extract_boxscore_rows(boxscore_game)
+    if not rows:
+        st.info("Full box score is not available yet.")
+        return
+    st.subheader("Full Box Score")
+    full_df = pd.DataFrame(rows)
+    display_cols = ["Team", "Player", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "FGM", "FGA", "3PM", "3PA", "FTM", "FTA", "+/-"]
+    st.dataframe(full_df[display_cols], use_container_width=True)
+
+    if is_game_final(game):
+        st.subheader(f"Postgame Team MVP: {team_name}")
+        mvp, team_df = choose_team_mvp(rows, alias)
+        if not mvp:
+            st.warning("Could not identify a team MVP from the box score yet.")
+            return
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("MVP", mvp.get("Player", ""))
+        c2.metric("Points", int(mvp.get("PTS", 0)))
+        c3.metric("Rebounds", int(mvp.get("REB", 0)))
+        c4.metric("Assists", int(mvp.get("AST", 0)))
+        st.success(
+            f"{mvp.get('Player')} grades out as the team MVP because he combined scoring, creation, rebounding/defense, and plus-minus impact. "
+            f"His MVP Score was {round(float(mvp.get('MVP Score', 0)), 1)} using a weighted box-score model."
+        )
+        st.write("Key stat-based plays and impact moments:")
+        for item in summarize_top_stat_plays(mvp):
+            st.write(f"• {item}")
+    else:
+        st.subheader("Live MVP Watch")
+        mvp, team_df = choose_team_mvp(rows, alias)
+        if mvp:
+            st.info(f"Current team MVP candidate: {mvp.get('Player')} — {int(mvp.get('PTS',0))} PTS, {int(mvp.get('REB',0))} REB, {int(mvp.get('AST',0))} AST.")
+
 def calc_live_win_prob(margin, period, is_home):
     period = max(1, min(int(period or 1), 4))
     weight = {1:1.2, 2:1.8, 3:2.7, 4:4.2}.get(period, 4.2)
@@ -241,7 +406,7 @@ def render_dynamic_bracket():
     st.markdown(html, unsafe_allow_html=True)
 
 favorite_team = st.sidebar.selectbox("Choose your playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
-page = st.sidebar.radio("Choose page", ["Home Dashboard","Playoff Bracket","Current Series","First Round Review","Live Game Center","Player Playoff Tracker","Legacy Tracker","Matchup Lineups"])
+page = st.sidebar.radio("Choose page", ["Home Dashboard","Playoff Bracket","Current Series","Pregame Preview","First Round Review","Live Game Center","Player Playoff Tracker","Legacy Tracker","Matchup Lineups","Series Matchup Advantages"])
 profile = TEAM_PROFILES[favorite_team]
 
 if page == "Home Dashboard":
@@ -279,6 +444,28 @@ elif page == "Current Series":
     else:
         st.warning("This team is eliminated. Current Series is now a recap page.")
         st.write(profile["first_round_result"])
+
+elif page == "Pregame Preview":
+    render_matchup_header(favorite_team, use_first_round=False)
+    if profile["status"] != "Active":
+        st.warning("This team is eliminated, so there is no next-game preview.")
+        st.write(profile["first_round_result"])
+    else:
+        st.subheader("Before the Next Game")
+        opponent = profile["current_opponent"]
+        st.write(f"Next-game focus: {favorite_team} vs {opponent}")
+        st.write("What to look for:")
+        for key in pregame_keys(favorite_team):
+            st.write(f"• {key}")
+        st.subheader("How this team can win the next game")
+        st.success(
+            f"The clearest path is to make the game revolve around {profile['strengths'][0]} and {profile['strengths'][1]}, "
+            f"while preventing {profile['concerns'][0]} from becoming the story."
+        )
+        st.subheader("Opponent pressure points")
+        opp = TEAM_PROFILES[opponent]
+        for c in opp["concerns"]:
+            st.warning(f"Attack this opponent concern: {c}")
 
 elif page == "First Round Review":
     render_matchup_header(favorite_team, use_first_round=True)
@@ -334,16 +521,7 @@ elif page == "Live Game Center":
             st.info(positive_live_read(favorite_team, margin, prob, period))
             bs = get_live_boxscore(game.get("gameId"))
             if bs:
-                rows = []
-                for side in ["homeTeam","awayTeam"]:
-                    t = bs.get(side,{})
-                    tri = t.get("teamTricode","")
-                    for p in t.get("players",[]):
-                        stats = p.get("statistics",{})
-                        rows.append({"Team":tri,"Player":p.get("name",""),"MIN":stats.get("minutes",""),"PTS":stats.get("points",0),"REB":stats.get("reboundsTotal",0),"AST":stats.get("assists",0),"STL":stats.get("steals",0),"BLK":stats.get("blocks",0),"TO":stats.get("turnovers",0),"+/-":stats.get("plusMinusPoints",0)})
-                if rows:
-                    st.subheader("Live Player Box Score")
-                    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+                postgame_team_mvp_section(favorite_team, game, bs)
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team, use_first_round=False)
@@ -399,13 +577,61 @@ elif page == "Matchup Lineups":
     else:
         opponent = profile["current_opponent"]
         opp = TEAM_PROFILES[opponent]
-        positions = ["PG","SG","SF","PF","C"]
-        rows = [{"Position":pos, favorite_team: profile["starters"][i], opponent: opp["starters"][i], "Advantage":"Depends on matchup"} for i,pos in enumerate(positions)]
-        st.subheader("Projected Starters")
+        positions = ["PG", "SG", "SF", "PF", "C"]
+        rows = []
+        for i, pos in enumerate(positions):
+            team_player = profile["starters"][i]
+            opp_player = opp["starters"][i]
+            rows.append({
+                "Position": pos,
+                favorite_team: team_player,
+                opponent: opp_player,
+                "Advantage": "Slight edge depends on execution",
+                "Why it matters": matchup_advantage_text(favorite_team, opponent, pos, team_player, opp_player),
+            })
+        st.subheader("Projected Starter Matchups")
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
-        bench = [{"Team":favorite_team,"Player":p} for p in profile["subs"]] + [{"Team":opponent,"Player":p} for p in opp["subs"]]
+        bench = [{"Team": favorite_team, "Player": p, "Role": "Bench stability, matchup minutes, and avoiding negative runs"} for p in profile["subs"]]
+        bench += [{"Team": opponent, "Player": p, "Role": "Opponent bench pressure and rotation depth"} for p in opp["subs"]]
         st.subheader("Main Bench / Subs")
         st.dataframe(pd.DataFrame(bench), use_container_width=True)
+        st.info("The biggest matchup swings usually come from foul trouble, bench minutes, transition defense, and whether the star creators can get to their preferred spots.")
+
+elif page == "Series Matchup Advantages":
+    render_matchup_header(favorite_team, use_first_round=False)
+    if profile["status"] != "Active":
+        st.warning("This team is eliminated, so matchup advantages are shown as first-round lessons.")
+        st.write(profile["first_round_result"])
+    else:
+        opponent = profile["current_opponent"]
+        opp = TEAM_PROFILES[opponent]
+        st.subheader("Team Advantages")
+        adv_rows = []
+        categories = ["Star creation", "Rebounding", "Defense", "Shooting/spacing", "Bench", "Late-game execution"]
+        for cat in categories:
+            if cat == "Star creation":
+                edge = favorite_team if profile["strengths"][0] else "Even"
+                why = f"{favorite_team} leans on {profile['strengths'][0]}; {opponent} counters with {opp['strengths'][0]}."
+            elif cat == "Rebounding":
+                edge = "Even / game-dependent"
+                why = "This depends heavily on center minutes, foul trouble, and who controls long rebounds."
+            elif cat == "Defense":
+                edge = "Even / matchup-dependent"
+                why = "Wing defense, rim protection, and transition defense decide this category."
+            elif cat == "Shooting/spacing":
+                edge = "Depends on role players"
+                why = "Open threes from the supporting cast can swing the series quickly."
+            elif cat == "Bench":
+                edge = "Depends on non-star minutes"
+                why = "The team that survives bench stretches without a major scoring drought gains a series edge."
+            else:
+                edge = "Star-player dependent"
+                why = "Close playoff games are often decided by shot creation, turnovers, and free throws in the final five minutes."
+            adv_rows.append({"Category": cat, "Projected Edge": edge, "Why": why})
+        st.dataframe(pd.DataFrame(adv_rows), use_container_width=True)
+        st.subheader("What has to happen next")
+        for key in pregame_keys(favorite_team):
+            st.write(f"• {key}")
 
 st.divider()
-st.caption("Daniel Cohen — NBA Playoff Companion AI | Dynamic bracket + live data where available")
+st.caption("Daniel Cohen — NBA Playoff Companion AI | Dynamic bracket + live box scores + postgame MVP + matchup advantages")
