@@ -29,26 +29,44 @@ st.caption("2026 NBA playoff companion app with live game center, dynamic bracke
 
 st.markdown("""
 <style>
+/* Clear, readable sidebar */
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #111827, #1f2937);
+    background: linear-gradient(180deg, #f8fafc, #e5e7eb) !important;
+    color: #111827 !important;
+}
+section[data-testid="stSidebar"] * {
+    color: #111827 !important;
 }
 section[data-testid="stSidebar"] label {
-    font-size: 16px !important;
-    font-weight: 700 !important;
+    font-size: 17px !important;
+    font-weight: 800 !important;
+}
+section[data-testid="stSidebar"] .stRadio label {
+    color: #111827 !important;
 }
 div[role="radiogroup"] label {
-    padding: 8px 6px;
-    border-radius: 10px;
+    padding: 9px 8px !important;
+    border-radius: 12px !important;
+    color: #111827 !important;
 }
 div[role="radiogroup"] label:hover {
-    background-color: rgba(255,255,255,0.08);
+    background-color: rgba(249, 115, 22, 0.18) !important;
+}
+div[role="radiogroup"] label[data-baseweb="radio"] {
+    color: #111827 !important;
+}
+.small-card {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px;
+    padding: 12px;
 }
 .player-card {
     text-align:center;
     border-radius: 16px;
     padding: 8px;
     border: 1px solid rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.06);
 }
 </style>
 """, unsafe_allow_html=True)
