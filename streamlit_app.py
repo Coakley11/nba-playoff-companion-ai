@@ -29,44 +29,26 @@ st.caption("2026 NBA playoff companion app with live game center, dynamic bracke
 
 st.markdown("""
 <style>
-/* Clear, readable sidebar */
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #f8fafc, #e5e7eb) !important;
-    color: #111827 !important;
-}
-section[data-testid="stSidebar"] * {
-    color: #111827 !important;
+    background: linear-gradient(180deg, #111827, #1f2937);
 }
 section[data-testid="stSidebar"] label {
-    font-size: 17px !important;
-    font-weight: 800 !important;
-}
-section[data-testid="stSidebar"] .stRadio label {
-    color: #111827 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
 }
 div[role="radiogroup"] label {
-    padding: 9px 8px !important;
-    border-radius: 12px !important;
-    color: #111827 !important;
+    padding: 8px 6px;
+    border-radius: 10px;
 }
 div[role="radiogroup"] label:hover {
-    background-color: rgba(249, 115, 22, 0.18) !important;
-}
-div[role="radiogroup"] label[data-baseweb="radio"] {
-    color: #111827 !important;
-}
-.small-card {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 16px;
-    padding: 12px;
+    background-color: rgba(255,255,255,0.08);
 }
 .player-card {
     text-align:center;
     border-radius: 16px;
     padding: 8px;
     border: 1px solid rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.05);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -100,12 +82,12 @@ TEAM_ALIASES = {
 TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Philadelphia 76ers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","rebounding","physical wing defense","home-court energy"],"concerns":["bench scoring consistency","foul trouble","overreliance on Brunson late"]},
     "Philadelphia 76ers": {"seed":7,"conference":"East","status":"Active","round":"Second Round","current_opponent":"New York Knicks","first_round_opponent":"Boston Celtics","first_round_result":"Defeated Boston Celtics, 4-3","starters":["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],"subs":["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"],"strengths":["Embiid interior pressure","Maxey speed","free-throw pressure","star scoring"],"concerns":["Embiid health","transition defense","depth","turnovers"]},
-    "Detroit Pistons": {"seed":1,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Isaiah Stewart","Marcus Sasser","Malik Beasley","Simone Fontecchio","Ron Holland"],"strengths":["Cade Cunningham creation","rebounding","young athleticism","transition pressure"],"concerns":["playoff inexperience","late-game execution","half-court droughts"]},
-    "Cleveland Cavaliers": {"seed":4,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Sam Merrill","Georges Niang","Dean Wade"],"strengths":["guard scoring","rim protection","defensive size","Mitchell shot creation"],"concerns":["offensive droughts","health","turnovers under pressure"]},
-    "Oklahoma City Thunder": {"seed":1,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Los Angeles Lakers","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Isaiah Joe","Aaron Wiggins","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","spacing","defensive length","pace"],"concerns":["playoff physicality","Lakers size","late-game pressure"]},
-    "Los Angeles Lakers": {"seed":4,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Jaxson Hayes","Christian Wood"],"strengths":["star experience","rim pressure","Anthony Davis defense","LeBron control"],"concerns":["transition defense","age","three-point consistency"]},
+    "Detroit Pistons": {"seed":1,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"],"strengths":["Cade Cunningham creation","rebounding","young athleticism","transition pressure"],"concerns":["playoff inexperience","late-game execution","half-court droughts"]},
+    "Cleveland Cavaliers": {"seed":4,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["guard scoring","rim protection","defensive size","Mitchell shot creation"],"concerns":["offensive droughts","health","turnovers under pressure"]},
+    "Oklahoma City Thunder": {"seed":1,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Los Angeles Lakers","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","spacing","defensive length","pace"],"concerns":["playoff physicality","Lakers size","late-game pressure"]},
+    "Los Angeles Lakers": {"seed":4,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"],"strengths":["star experience","rim pressure","Anthony Davis defense","LeBron control"],"concerns":["transition defense","age","three-point consistency"]},
     "San Antonio Spurs": {"seed":2,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Minnesota Timberwolves","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["playoff inexperience","turnovers","physicality"]},
-    "Minnesota Timberwolves": {"seed":6,"conference":"West","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Naz Reid","Rob Dillingham","Josh Minott"],"strengths":["defense","size","Anthony Edwards scoring","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
+    "Minnesota Timberwolves": {"seed":6,"conference":"West","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"],"strengths":["defense","size","Anthony Edwards scoring","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
     "Atlanta Hawks": {"seed":6,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"New York Knicks","first_round_result":"Lost to New York Knicks, 4-2","starters":["Trae Young","Dyson Daniels","Zaccharie Risacher","Jalen Johnson","Onyeka Okongwu"],"subs":["Bogdan Bogdanovic","De'Andre Hunter","Clint Capela","Vit Krejci","Kobe Bufkin"],"strengths":["Trae creation","pace","pick-and-roll scoring"],"concerns":["defense","rebounding","physical matchups"]},
     "Boston Celtics": {"seed":2,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Philadelphia 76ers","first_round_result":"Lost to Philadelphia 76ers, 4-3","starters":["Jrue Holiday","Derrick White","Jaylen Brown","Jayson Tatum","Kristaps Porzingis"],"subs":["Payton Pritchard","Sam Hauser","Al Horford","Luke Kornet","Neemias Queta"],"strengths":["wing scoring","spacing","experience"],"concerns":["late-series execution","health","three-point variance"]},
     "Orlando Magic": {"seed":8,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Detroit Pistons","first_round_result":"Lost to Detroit Pistons, 4-3","starters":["Jalen Suggs","Kentavious Caldwell-Pope","Franz Wagner","Paolo Banchero","Wendell Carter Jr."],"subs":["Cole Anthony","Jonathan Isaac","Anthony Black","Moritz Wagner","Gary Harris"],"strengths":["defense","size","young forwards"],"concerns":["shooting","late-game offense","spacing"]},
@@ -115,50 +97,6 @@ TEAM_PROFILES = {
     "Denver Nuggets": {"seed":3,"conference":"West","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Minnesota Timberwolves","first_round_result":"Lost to Minnesota Timberwolves, 4-2","starters":["Jamal Murray","Christian Braun","Michael Porter Jr.","Aaron Gordon","Nikola Jokic"],"subs":["Reggie Jackson","Peyton Watson","Zeke Nnaji","Julian Strawther","DeAndre Jordan"],"strengths":["Jokic offense","chemistry","half-court execution"],"concerns":["bench depth","athletic matchups","defensive speed"]},
     "Houston Rockets": {"seed":5,"conference":"West","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Los Angeles Lakers","first_round_result":"Lost to Los Angeles Lakers, 4-2","starters":["Fred VanVleet","Jalen Green","Amen Thompson","Jabari Smith Jr.","Alperen Sengun"],"subs":["Dillon Brooks","Tari Eason","Cam Whitmore","Steven Adams","Reed Sheppard"],"strengths":["young athleticism","defense","pace"],"concerns":["half-court scoring","playoff experience","shot selection"]},
 }
-
-
-# Position-by-position matchup advantage analysis for active second-round series.
-# These are analyst-style summaries, not official NBA ratings.
-MATCHUP_ADVANTAGES = {
-    ("New York Knicks", "Philadelphia 76ers"): [
-        {"Position":"PG", "Advantage":"Knicks", "Why":"Jalen Brunson has the stronger half-court control and late-game shot creation. Tyrese Maxey's speed is dangerous, but Brunson is the more reliable possession-by-possession playoff engine."},
-        {"Position":"SG", "Advantage":"Knicks", "Why":"Mikal Bridges gives New York a more proven two-way wing/guard option with size, durability, and defensive versatility."},
-        {"Position":"SF", "Advantage":"Knicks", "Why":"OG Anunoby gives New York the edge because of his physical defense, strength, and ability to guard elite perimeter scorers while still spacing the floor."},
-        {"Position":"PF", "Advantage":"76ers", "Why":"Paul George has the higher scoring ceiling and shot-creation package if healthy. Josh Hart's rebounding and toughness keep it close, but George has the star-skill advantage."},
-        {"Position":"C", "Advantage":"76ers", "Why":"Joel Embiid is the most dominant interior player in the matchup. Karl-Anthony Towns gives the Knicks spacing, but Embiid's scoring, foul pressure, and rim presence are the bigger individual advantage."},
-    ],
-    ("Philadelphia 76ers", "New York Knicks"): [],
-    ("Detroit Pistons", "Cleveland Cavaliers"): [
-        {"Position":"PG", "Advantage":"Pistons", "Why":"Cade Cunningham's size and control give Detroit a matchup edge as a big initiating guard. Garland is quicker, but Cade can see over pressure and organize the offense."},
-        {"Position":"SG", "Advantage":"Cavaliers", "Why":"Donovan Mitchell is the best pure scorer in this position matchup and has the playoff shot-making advantage over Jaden Ivey."},
-        {"Position":"SF", "Advantage":"Pistons", "Why":"Ausar Thompson gives Detroit a defensive and athletic edge. Strus provides shooting, but Ausar can change possessions with pressure and transition play."},
-        {"Position":"PF", "Advantage":"Cavaliers", "Why":"Evan Mobley's defense, length, and two-way impact give Cleveland a clear frontcourt edge over Tobias Harris."},
-        {"Position":"C", "Advantage":"Cavaliers", "Why":"Jarrett Allen's experience, rim protection, and vertical finishing give Cleveland a slight edge, though Jalen Duren's rebounding keeps this matchup competitive."},
-    ],
-    ("Cleveland Cavaliers", "Detroit Pistons"): [],
-    ("Oklahoma City Thunder", "Los Angeles Lakers"): [
-        {"Position":"PG", "Advantage":"Thunder", "Why":"Shai Gilgeous-Alexander is the clear advantage because of his elite scoring, foul pressure, and late-game creation."},
-        {"Position":"SG", "Advantage":"Lakers", "Why":"Austin Reaves gives the Lakers more offensive creation than Lu Dort, though Dort's defense is a major counterweight."},
-        {"Position":"SF", "Advantage":"Lakers", "Why":"LeBron James gives Los Angeles the experience, passing, and physical control edge, even with Jalen Williams being a strong two-way player."},
-        {"Position":"PF", "Advantage":"Thunder", "Why":"Chet Holmgren's rim protection and floor spacing create a difficult matchup for Rui Hachimura."},
-        {"Position":"C", "Advantage":"Lakers", "Why":"Anthony Davis has the bigger two-way star impact at center. Hartenstein adds rebounding and screening, but Davis is the matchup advantage."},
-    ],
-    ("Los Angeles Lakers", "Oklahoma City Thunder"): [],
-    ("San Antonio Spurs", "Minnesota Timberwolves"): [
-        {"Position":"PG", "Advantage":"Timberwolves", "Why":"Mike Conley's experience and decision-making give Minnesota the steadier playoff point guard advantage over Stephon Castle."},
-        {"Position":"SG", "Advantage":"Timberwolves", "Why":"Anthony Edwards is the strongest perimeter scorer in the series and gives Minnesota a clear advantage at shooting guard."},
-        {"Position":"SF", "Advantage":"Timberwolves", "Why":"Jaden McDaniels gives Minnesota length, defense, and playoff wing versatility against Keldon Johnson."},
-        {"Position":"PF", "Advantage":"Timberwolves", "Why":"Naz Reid's scoring and shooting give Minnesota the advantage at power forward, especially if he pulls San Antonio's bigs away from the rim."},
-        {"Position":"C", "Advantage":"Spurs", "Why":"Victor Wembanyama's shot-blocking, range, and overall two-way ceiling give San Antonio the center advantage even against Rudy Gobert's defense."},
-    ],
-    ("Minnesota Timberwolves", "San Antonio Spurs"): [],
-}
-
-# Mirror matchup analysis so either selected team displays the same accurate matchup rows.
-for _k, _v in list(MATCHUP_ADVANTAGES.items()):
-    if _v:
-        a, b = _k
-        MATCHUP_ADVANTAGES[(b, a)] = _v
 
 FIRST_ROUND_SERIES = {
     "DET-ORL": {"conf":"East","a":"Detroit Pistons","b":"Orlando Magic","a_wins":4,"b_wins":3,"winner":"Detroit Pistons"},
@@ -172,13 +110,33 @@ FIRST_ROUND_SERIES = {
 }
 
 SECOND_ROUND_SERIES = {
-    "DET-CLE": {"conf":"East","a":"Detroit Pistons","b":"Cleveland Cavaliers","a_wins":0,"b_wins":0,"winner":None,"games":[]},
+    "DET-CLE": {"conf":"East","a":"Detroit Pistons","b":"Cleveland Cavaliers","a_wins":1,"b_wins":0,"winner":None,"games":[{"Game":"Game 1","Score":"Pistons 111, Cavaliers 101","Winner":"Detroit Pistons"}]},
     "NYK-PHI": {"conf":"East","a":"New York Knicks","b":"Philadelphia 76ers","a_wins":1,"b_wins":0,"winner":None,"games":[{"Game":"Game 1","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks"}]},
     "OKC-LAL": {"conf":"West","a":"Oklahoma City Thunder","b":"Los Angeles Lakers","a_wins":0,"b_wins":0,"winner":None,"games":[]},
     "SAS-MIN": {"conf":"West","a":"San Antonio Spurs","b":"Minnesota Timberwolves","a_wins":0,"b_wins":1,"winner":None,"games":[{"Game":"Game 1","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves"}]},
 }
 
 FIRST_ROUND_GAME_SCORES = {
+    "Detroit Pistons": [
+        {"Game":1,"Date":"Apr 18","Matchup":"Magic at Pistons","Score":"Magic 112, Pistons 101","Winner":"Orlando Magic"},
+        {"Game":2,"Date":"Apr 21","Matchup":"Magic at Pistons","Score":"Pistons 98, Magic 83","Winner":"Detroit Pistons"},
+        {"Game":3,"Date":"Apr 24","Matchup":"Pistons at Magic","Score":"Magic 113, Pistons 105","Winner":"Orlando Magic"},
+        {"Game":4,"Date":"Apr 26","Matchup":"Pistons at Magic","Score":"Magic 94, Pistons 88","Winner":"Orlando Magic"},
+        {"Game":5,"Date":"Apr 29","Matchup":"Magic at Pistons","Score":"Pistons 116, Magic 109","Winner":"Detroit Pistons"},
+        {"Game":6,"Date":"May 1","Matchup":"Pistons at Magic","Score":"Pistons 93, Magic 79","Winner":"Detroit Pistons"},
+        {"Game":7,"Date":"May 3","Matchup":"Magic at Pistons","Score":"Pistons 116, Magic 94","Winner":"Detroit Pistons"},
+    ],
+    "Orlando Magic": [],
+    "Cleveland Cavaliers": [
+        {"Game":1,"Date":"Apr 19","Matchup":"Raptors at Cavaliers","Score":"Cavaliers 126, Raptors 113","Winner":"Cleveland Cavaliers"},
+        {"Game":2,"Date":"Apr 22","Matchup":"Raptors at Cavaliers","Score":"Cavaliers 115, Raptors 105","Winner":"Cleveland Cavaliers"},
+        {"Game":3,"Date":"Apr 25","Matchup":"Cavaliers at Raptors","Score":"Raptors 126, Cavaliers 104","Winner":"Toronto Raptors"},
+        {"Game":4,"Date":"Apr 27","Matchup":"Cavaliers at Raptors","Score":"Raptors 93, Cavaliers 89","Winner":"Toronto Raptors"},
+        {"Game":5,"Date":"Apr 29","Matchup":"Raptors at Cavaliers","Score":"Cavaliers 125, Raptors 120","Winner":"Cleveland Cavaliers"},
+        {"Game":6,"Date":"May 1","Matchup":"Cavaliers at Raptors","Score":"Raptors 112, Cavaliers 110","Winner":"Toronto Raptors"},
+        {"Game":7,"Date":"May 3","Matchup":"Raptors at Cavaliers","Score":"Cavaliers 114, Raptors 102","Winner":"Cleveland Cavaliers"},
+    ],
+    "Toronto Raptors": [],
     "New York Knicks": [
         {"Game":1,"Date":"Apr 19","Matchup":"Hawks at Knicks","Score":"Knicks 113, Hawks 102","Winner":"New York Knicks"},
         {"Game":2,"Date":"Apr 22","Matchup":"Hawks at Knicks","Score":"Hawks 107, Knicks 106","Winner":"Atlanta Hawks"},
@@ -186,9 +144,94 @@ FIRST_ROUND_GAME_SCORES = {
         {"Game":4,"Date":"Apr 27","Matchup":"Knicks at Hawks","Score":"Knicks 114, Hawks 98","Winner":"New York Knicks"},
         {"Game":5,"Date":"Apr 29","Matchup":"Hawks at Knicks","Score":"Knicks 126, Hawks 97","Winner":"New York Knicks"},
         {"Game":6,"Date":"May 1","Matchup":"Knicks at Hawks","Score":"Knicks 140, Hawks 89","Winner":"New York Knicks"},
-    ]
+    ],
+    "Atlanta Hawks": [],
+    "Boston Celtics": [
+        {"Game":1,"Date":"Apr 18","Matchup":"76ers at Celtics","Score":"Celtics 123, 76ers 91","Winner":"Boston Celtics"},
+        {"Game":2,"Date":"Apr 21","Matchup":"76ers at Celtics","Score":"76ers 111, Celtics 97","Winner":"Philadelphia 76ers"},
+        {"Game":3,"Date":"Apr 24","Matchup":"Celtics at 76ers","Score":"Celtics 108, 76ers 100","Winner":"Boston Celtics"},
+        {"Game":4,"Date":"Apr 26","Matchup":"Celtics at 76ers","Score":"Celtics 128, 76ers 96","Winner":"Boston Celtics"},
+        {"Game":5,"Date":"Apr 28","Matchup":"76ers at Celtics","Score":"76ers 113, Celtics 97","Winner":"Philadelphia 76ers"},
+        {"Game":6,"Date":"Apr 30","Matchup":"Celtics at 76ers","Score":"76ers 106, Celtics 93","Winner":"Philadelphia 76ers"},
+        {"Game":7,"Date":"May 2","Matchup":"76ers at Celtics","Score":"76ers 109, Celtics 100","Winner":"Philadelphia 76ers"},
+    ],
+    "Philadelphia 76ers": [],
+    "Oklahoma City Thunder": [
+        {"Game":1,"Date":"Apr 18","Matchup":"Suns at Thunder","Score":"Thunder 119, Suns 84","Winner":"Oklahoma City Thunder"},
+        {"Game":2,"Date":"Apr 20","Matchup":"Suns at Thunder","Score":"Thunder 120, Suns 107","Winner":"Oklahoma City Thunder"},
+        {"Game":3,"Date":"Apr 23","Matchup":"Thunder at Suns","Score":"Thunder 121, Suns 109","Winner":"Oklahoma City Thunder"},
+        {"Game":4,"Date":"Apr 25","Matchup":"Thunder at Suns","Score":"Thunder 131, Suns 122","Winner":"Oklahoma City Thunder"},
+    ],
+    "Phoenix Suns": [],
+    "San Antonio Spurs": [
+        {"Game":1,"Date":"Apr 19","Matchup":"Trail Blazers at Spurs","Score":"Spurs 111, Trail Blazers 98","Winner":"San Antonio Spurs"},
+        {"Game":2,"Date":"Apr 22","Matchup":"Trail Blazers at Spurs","Score":"Trail Blazers 106, Spurs 103","Winner":"Portland Trail Blazers"},
+        {"Game":3,"Date":"Apr 24","Matchup":"Spurs at Trail Blazers","Score":"Spurs 120, Trail Blazers 108","Winner":"San Antonio Spurs"},
+        {"Game":4,"Date":"Apr 26","Matchup":"Spurs at Trail Blazers","Score":"Spurs 114, Trail Blazers 93","Winner":"San Antonio Spurs"},
+        {"Game":5,"Date":"Apr 28","Matchup":"Trail Blazers at Spurs","Score":"Spurs 114, Trail Blazers 95","Winner":"San Antonio Spurs"},
+    ],
+    "Portland Trail Blazers": [],
+    "Denver Nuggets": [
+        {"Game":1,"Date":"Apr 19","Matchup":"Timberwolves at Nuggets","Score":"Nuggets 116, Timberwolves 105","Winner":"Denver Nuggets"},
+        {"Game":2,"Date":"Apr 21","Matchup":"Timberwolves at Nuggets","Score":"Timberwolves 119, Nuggets 114","Winner":"Minnesota Timberwolves"},
+        {"Game":3,"Date":"Apr 24","Matchup":"Nuggets at Timberwolves","Score":"Timberwolves 113, Nuggets 96","Winner":"Minnesota Timberwolves"},
+        {"Game":4,"Date":"Apr 26","Matchup":"Nuggets at Timberwolves","Score":"Timberwolves 112, Nuggets 96","Winner":"Minnesota Timberwolves"},
+        {"Game":5,"Date":"Apr 29","Matchup":"Timberwolves at Nuggets","Score":"Nuggets 125, Timberwolves 113","Winner":"Denver Nuggets"},
+        {"Game":6,"Date":"May 1","Matchup":"Nuggets at Timberwolves","Score":"Timberwolves 110, Nuggets 98","Winner":"Minnesota Timberwolves"},
+    ],
+    "Minnesota Timberwolves": [],
+    "Los Angeles Lakers": [
+        {"Game":1,"Date":"Apr 18","Matchup":"Rockets at Lakers","Score":"Lakers 107, Rockets 98","Winner":"Los Angeles Lakers"},
+        {"Game":2,"Date":"Apr 20","Matchup":"Rockets at Lakers","Score":"Lakers 101, Rockets 94","Winner":"Los Angeles Lakers"},
+        {"Game":3,"Date":"Apr 23","Matchup":"Lakers at Rockets","Score":"Lakers 112, Rockets 108 (OT)","Winner":"Los Angeles Lakers"},
+        {"Game":4,"Date":"Apr 25","Matchup":"Lakers at Rockets","Score":"Rockets 116, Lakers 96","Winner":"Houston Rockets"},
+        {"Game":5,"Date":"Apr 28","Matchup":"Rockets at Lakers","Score":"Rockets 99, Lakers 93","Winner":"Houston Rockets"},
+        {"Game":6,"Date":"Apr 30","Matchup":"Lakers at Rockets","Score":"Lakers 98, Rockets 78","Winner":"Los Angeles Lakers"},
+    ],
+    "Houston Rockets": [],
 }
+# Mirror score lists so both teams in the first-round matchup show the full same series log.
+FIRST_ROUND_GAME_SCORES["Orlando Magic"] = FIRST_ROUND_GAME_SCORES["Detroit Pistons"]
+FIRST_ROUND_GAME_SCORES["Toronto Raptors"] = FIRST_ROUND_GAME_SCORES["Cleveland Cavaliers"]
 FIRST_ROUND_GAME_SCORES["Atlanta Hawks"] = FIRST_ROUND_GAME_SCORES["New York Knicks"]
+FIRST_ROUND_GAME_SCORES["Philadelphia 76ers"] = FIRST_ROUND_GAME_SCORES["Boston Celtics"]
+FIRST_ROUND_GAME_SCORES["Phoenix Suns"] = FIRST_ROUND_GAME_SCORES["Oklahoma City Thunder"]
+FIRST_ROUND_GAME_SCORES["Portland Trail Blazers"] = FIRST_ROUND_GAME_SCORES["San Antonio Spurs"]
+FIRST_ROUND_GAME_SCORES["Minnesota Timberwolves"] = FIRST_ROUND_GAME_SCORES["Denver Nuggets"]
+FIRST_ROUND_GAME_SCORES["Houston Rockets"] = FIRST_ROUND_GAME_SCORES["Los Angeles Lakers"]
+
+STORED_TOP_PLAYS = {
+    "New York Knicks": [
+        {"Game":"Game 1 vs 76ers","Top Play":"Jalen Brunson erupted for 27 first-half points and repeatedly got to his spots before Philadelphia could load up.","Why it mattered":"It gave New York control of the game early and forced the 76ers to chase the scoreboard."},
+        {"Game":"Game 1 vs 76ers","Top Play":"The Knicks' wing defense turned the game into difficult possessions for Tyrese Maxey and Philadelphia's perimeter scorers.","Why it mattered":"It helped New York hold Philadelphia under 100 while the Knicks' offense ran away with the game."},
+        {"Game":"Game 1 vs 76ers","Top Play":"Karl-Anthony Towns, OG Anunoby and Mikal Bridges all scored efficiently as New York stretched the lead into blowout range.","Why it mattered":"It showed the Knicks did not need Brunson alone to carry the scoring load."},
+    ],
+    "Philadelphia 76ers": [
+        {"Game":"Game 1 vs Knicks","Top Play":"Paul George gave Philadelphia its steadiest wing scoring stretch in a difficult blowout loss.","Why it mattered":"It was one of the few offensive pieces the Sixers can build on for Game 2."},
+        {"Game":"Game 1 vs Knicks","Top Play":"Joel Embiid drew interior attention even while the Knicks controlled the game.","Why it mattered":"Philadelphia still needs Embiid touches to bend New York's defense."},
+    ],
+    "Minnesota Timberwolves": [
+        {"Game":"Game 1 vs Spurs","Top Play":"Anthony Edwards returned from injury and gave Minnesota the late-game scoring pressure it needed in a 104-102 road win.","Why it mattered":"It helped Minnesota steal home-court advantage from San Antonio."},
+        {"Game":"Game 1 vs Spurs","Top Play":"Minnesota survived Victor Wembanyama's historic rim-protection performance by finding enough offense in key moments.","Why it mattered":"It showed the Wolves can win even when Wembanyama dominates defensively."},
+    ],
+    "San Antonio Spurs": [
+        {"Game":"Game 1 vs Timberwolves","Top Play":"Victor Wembanyama delivered a dominant defensive performance with a playoff-record shot-blocking night.","Why it mattered":"Even in the loss, it showed San Antonio has a series-changing defensive anchor."},
+        {"Game":"Game 1 vs Timberwolves","Top Play":"The Spurs kept the game within one possession deep into the finish.","Why it mattered":"It showed the matchup is competitive and small execution details can swing Game 2."},
+    ],
+    "Detroit Pistons": [
+        {"Game":"Game 1 vs Cavaliers","Top Play":"Detroit controlled the fourth quarter and closed out Cleveland 111-101 behind Cade Cunningham's orchestration.","Why it mattered":"It gave the Pistons a 1-0 series lead and protected home court."},
+        {"Game":"Game 1 vs Cavaliers","Top Play":"Jalen Duren and Detroit's frontcourt work helped the Pistons win the physical battle.","Why it mattered":"That physical edge is a major part of Detroit's path in the series."},
+    ],
+    "Cleveland Cavaliers": [
+        {"Game":"Game 1 vs Pistons","Top Play":"Donovan Mitchell and Darius Garland created the best Cleveland scoring stretches before Detroit pulled away.","Why it mattered":"Cleveland's path back starts with cleaner guard creation and better late-game execution."},
+    ],
+}
+
+def stored_top_plays_for_team(team_name):
+    plays = STORED_TOP_PLAYS.get(team_name, [
+        {"Game":"Latest completed game","Top Play":f"{team_name}'s most important plays will appear here after the game is logged.","Why it mattered":"Live play-by-play or manually verified highlights are needed for exact top-play detail."}
+    ])
+    return pd.DataFrame(plays)
 
 # ------------------------------------------------------------------
 # Live helpers
@@ -320,20 +363,38 @@ def shot_actions_from_playbyplay(actions, team_alias):
 
 def draw_shot_chart(shots_df, title):
     fig = go.Figure()
-    # Half-court outline
-    fig.add_shape(type="rect", x0=-25, y0=0, x1=25, y1=47, line=dict(color="white", width=2))
-    fig.add_shape(type="rect", x0=-8, y0=0, x1=8, y1=19, line=dict(color="white", width=2))
-    fig.add_shape(type="circle", x0=-6, y0=-1, x1=6, y1=11, line=dict(color="white", width=2))
-    fig.add_shape(type="circle", x0=-23.75, y0=0, x1=23.75, y1=47.5, line=dict(color="white", width=2))
-    fig.add_shape(type="line", x0=-22, y0=0, x1=-22, y1=14, line=dict(color="white", width=2))
-    fig.add_shape(type="line", x0=22, y0=0, x1=22, y1=14, line=dict(color="white", width=2))
-    fig.add_shape(type="circle", x0=-0.75, y0=4.25, x1=0.75, y1=5.75, line=dict(color="orange", width=2))
+    fig.update_layout(
+        title=title,
+        height=620,
+        plot_bgcolor="#c68642",
+        paper_bgcolor="#f3d3a3",
+        font=dict(color="#111827"),
+        xaxis=dict(range=[-27, 27], visible=False),
+        yaxis=dict(range=[0, 50], visible=False),
+        legend=dict(orientation="h"),
+        margin=dict(l=20, r=20, t=55, b=20),
+    )
+    court_line = dict(color="#5c2e0e", width=3)
+    fig.add_shape(type="rect", x0=-25, y0=0, x1=25, y1=47, line=court_line)
+    fig.add_shape(type="rect", x0=-8, y0=0, x1=8, y1=19, line=court_line)
+    fig.add_shape(type="circle", x0=-6, y0=-1, x1=6, y1=11, line=court_line)
+    fig.add_shape(type="circle", x0=-23.75, y0=0, x1=23.75, y1=47.5, line=court_line)
+    fig.add_shape(type="line", x0=-22, y0=0, x1=-22, y1=14, line=court_line)
+    fig.add_shape(type="line", x0=22, y0=0, x1=22, y1=14, line=court_line)
+    fig.add_shape(type="circle", x0=-0.75, y0=4.25, x1=0.75, y1=5.75, line=dict(color="#d97706", width=3))
     if not shots_df.empty:
         made = shots_df[shots_df["Made"] == True]
         missed = shots_df[shots_df["Made"] == False]
-        fig.add_trace(go.Scatter(x=made["x"], y=made["y"], mode="markers", name="Made shots", text=made["Description"], marker=dict(symbol="circle-open", color="blue", size=16, line=dict(width=3))))
-        fig.add_trace(go.Scatter(x=missed["x"], y=missed["y"], mode="markers", name="Missed shots", text=missed["Description"], marker=dict(symbol="x", color="red", size=16, line=dict(width=3))))
-    fig.update_layout(title=title, height=620, plot_bgcolor="#102030", paper_bgcolor="#102030", font=dict(color="white"), xaxis=dict(range=[-27, 27], visible=False), yaxis=dict(range=[0, 50], visible=False), legend=dict(orientation="h"))
+        fig.add_trace(go.Scatter(
+            x=made["x"], y=made["y"], mode="markers", name="Made O",
+            text=made["Description"], hovertemplate="%{text}<extra>Made</extra>",
+            marker=dict(symbol="circle-open", color="#0047FF", size=18, line=dict(width=5, color="#0047FF"))
+        ))
+        fig.add_trace(go.Scatter(
+            x=missed["x"], y=missed["y"], mode="markers", name="Missed X",
+            text=missed["Description"], hovertemplate="%{text}<extra>Missed</extra>",
+            marker=dict(symbol="x", color="#E00000", size=17, line=dict(width=5, color="#E00000"))
+        ))
     return fig
 
 def game_story(team_name, margin, prob, box_df):
@@ -368,25 +429,56 @@ def what_next(team_name, margin):
 def what_if_df(margin, period, is_home):
     return pd.DataFrame([{"Scenario": f"{'+' if swing>=0 else ''}{swing} point swing", "New Margin": margin+swing, "Projected Win Probability": f"{calc_win_probability(margin+swing, period, is_home)}%"} for swing in [10, 5, 0, -5, -10]])
 
+def is_high_value_play(desc):
+    d = (desc or "").lower()
+    low_value = ["free throw", "personal foul", "technical", "timeout", "substitution", "violation", "delay"]
+    if any(x in d for x in low_value):
+        return False
+    high_value = ["dunk", "alley", "3pt", "three", "step back", "steal", "block", "fast break", "putback", "driving layup", "pullup", "turnaround", "go-ahead", "ties"]
+    return any(x in d for x in high_value)
+
+def explain_top_play(desc, team_name):
+    d = (desc or "").lower()
+    if "3pt" in d or "three" in d:
+        return f"It was a high-value scoring play that stretched the defense for {team_name}."
+    if "dunk" in d or "alley" in d or "layup" in d:
+        return f"It created efficient rim pressure for {team_name}."
+    if "steal" in d:
+        return f"It created a turnover and changed possession pressure."
+    if "block" in d:
+        return f"It protected the rim and stopped a quality attempt."
+    return f"It was one of the most meaningful live actions available in the play-by-play feed."
+
+def top_plays_from_actions(actions, team_alias, team_name, limit=5):
+    rows = []
+    for a in actions:
+        if (a.get("teamTricode") or "") != team_alias:
+            continue
+        desc = a.get("description", "") or ""
+        if not is_high_value_play(desc):
+            continue
+        rows.append({
+            "Period": a.get("period", ""),
+            "Clock": a.get("clock", ""),
+            "Top Play": desc,
+            "Why it mattered": explain_top_play(desc, team_name),
+        })
+    if not rows:
+        return stored_top_plays_for_team(team_name)
+    return pd.DataFrame(rows[-limit:])
+
 # ------------------------------------------------------------------
 # UI helpers
 # ------------------------------------------------------------------
 def render_matchup_header(team_name, first_round=False):
     profile = TEAM_PROFILES[team_name]
     opponent = profile["first_round_opponent"] if first_round else (profile["current_opponent"] or profile["first_round_opponent"])
-    conference_label = f"{profile['conference']}ern Conference" if profile["conference"] in ["East", "West"] else f"{profile['conference']} Conference"
-    round_text = "First Round Review" if first_round else profile["round"]
-    label = f"{conference_label} {round_text}"
+    label = "First Round Review" if first_round else profile["round"]
     c1, c2, c3 = st.columns([1, 2.4, 1])
-    with c1:
-        st.image(TEAM_LOGOS[team_name], width=110)
+    with c1: st.image(TEAM_LOGOS[team_name], width=110)
     with c2:
-        st.markdown(
-            f"<div style='text-align:center;'><h1>({profile['seed']}) {team_name} vs ({TEAM_PROFILES[opponent]['seed']}) {opponent}</h1><h3>{label}</h3></div>",
-            unsafe_allow_html=True
-        )
-    with c3:
-        st.image(TEAM_LOGOS[opponent], width=110)
+        st.markdown(f"<div style='text-align:center;'><h1>({profile['seed']}) {team_name} vs ({TEAM_PROFILES[opponent]['seed']}) {opponent}</h1><h3>{label}</h3></div>", unsafe_allow_html=True)
+    with c3: st.image(TEAM_LOGOS[opponent], width=110)
 
 def team_logo_html(team, size=28):
     return f"<img src='{TEAM_LOGOS[team]}' width='{size}' style='vertical-align:middle;margin-right:8px;'>"
@@ -667,6 +759,8 @@ if page == "Home Dashboard":
     if current_series and current_series.get("games"):
         st.subheader("Current Series Scores")
         st.dataframe(pd.DataFrame(current_series["games"]), use_container_width=True)
+        st.subheader("Latest Completed Game Top Plays")
+        st.dataframe(stored_top_plays_for_team(favorite_team), use_container_width=True)
     render_team_outlook(favorite_team)
 
 elif page == "Playoff Bracket":
@@ -680,6 +774,8 @@ elif page == "Current Series":
         if current_series and current_series.get("games"):
             st.subheader("Game Results")
             st.dataframe(pd.DataFrame(current_series["games"]), use_container_width=True)
+            st.subheader("Top Plays From Completed Games")
+            st.dataframe(stored_top_plays_for_team(favorite_team), use_container_width=True)
         render_team_outlook(favorite_team)
     else:
         st.warning(profile["first_round_result"])
@@ -688,6 +784,7 @@ elif page == "First Round Review":
     render_matchup_header(favorite_team, first_round=True)
     st.info(profile["first_round_result"])
     st.write("This page is only for the first-round matchup.")
+    st.subheader("Official first-round game-by-game scores")
     scores = FIRST_ROUND_GAME_SCORES.get(favorite_team, [])
     if scores:
         st.dataframe(pd.DataFrame(scores), use_container_width=True)
@@ -825,11 +922,11 @@ elif page == "Live Game Center":
                     st.info("Clutch meter becomes more important in the fourth quarter.")
 
                 st.subheader("Top Plays")
-                recent = [a.get("description", "") for a in actions if a.get("description")]
-                for play in recent[-5:][::-1]:
-                    st.write(f"• {play}")
+                st.dataframe(top_plays_from_actions(actions, team_alias, favorite_team), use_container_width=True)
             else:
                 st.info("Live shot chart and clutch details will appear when play-by-play data is available.")
+                st.subheader("Top Plays")
+                st.dataframe(stored_top_plays_for_team(favorite_team), use_container_width=True)
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team, first_round=False)
@@ -885,29 +982,14 @@ elif page == "Matchup Lineups":
         opponent = profile["current_opponent"]
         opp_profile = TEAM_PROFILES[opponent]
         rows = []
-        advantage_rows = MATCHUP_ADVANTAGES.get((favorite_team, opponent), [])
-        advantage_by_pos = {r["Position"]: r for r in advantage_rows}
         for i, pos in enumerate(["PG", "SG", "SF", "PF", "C"]):
-            adv = advantage_by_pos.get(pos, {"Advantage": "Even", "Why": "This matchup depends on health, usage, and game plan."})
-            rows.append({
-                "Position": pos,
-                favorite_team: profile["starters"][i],
-                opponent: opp_profile["starters"][i],
-                "Advantage": adv["Advantage"],
-                "Why": adv["Why"],
-            })
-        st.subheader("Projected Starters — Position Advantages")
+            rows.append({"Position": pos, favorite_team: profile["starters"][i], opponent: opp_profile["starters"][i], "Advantage": "Depends on health, matchup, and game plan"})
+        st.subheader("Projected Starters")
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
-
-        st.subheader("Main Subs / Rotation Depth")
-        bench_rows = []
-        for n, p in enumerate(profile["subs"], start=1):
-            bench_rows.append({"Team": favorite_team, "Rotation Rank": n, "Player": p})
-        for n, p in enumerate(opp_profile["subs"], start=1):
-            bench_rows.append({"Team": opponent, "Rotation Rank": n, "Player": p})
+        bench_rows = [{"Team": favorite_team, "Player": p} for p in profile["subs"]]
+        bench_rows += [{"Team": opponent, "Player": p} for p in opp_profile["subs"]]
+        st.subheader("Main Subs")
         st.dataframe(pd.DataFrame(bench_rows), use_container_width=True)
-
-        st.info("Note: starter and bench groups are projected playoff rotations. Actual lineups can change by injury, matchup, foul trouble, and coaching decisions.")
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | Fixed Streamlit output | Live shot chart: Blue O = make, Red X = miss")
