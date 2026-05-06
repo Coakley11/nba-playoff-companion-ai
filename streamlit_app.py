@@ -18,7 +18,7 @@ except Exception:
 
 try:
     from nba_api.stats.static import players as nba_players
-    from nba_api.stats.endpoints import playergamelog
+    from nba_api.stats.endpoints import playergamelog, playercareerstats
     NBA_STATS_AVAILABLE = True
 except Exception:
     NBA_STATS_AVAILABLE = False
@@ -26,6 +26,32 @@ except Exception:
 st.set_page_config(page_title="Daniel Cohen — NBA Playoff Companion AI", page_icon="🏀", layout="wide")
 st.title("Daniel Cohen — NBA Playoff Companion AI")
 st.caption("2026 NBA playoff companion app with live game center, dynamic bracket, box scores, and live shot chart")
+
+st.markdown("""
+<style>
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #111827, #1f2937);
+}
+section[data-testid="stSidebar"] label {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+}
+div[role="radiogroup"] label {
+    padding: 8px 6px;
+    border-radius: 10px;
+}
+div[role="radiogroup"] label:hover {
+    background-color: rgba(255,255,255,0.08);
+}
+.player-card {
+    text-align:center;
+    border-radius: 16px;
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+}
+</style>
+""", unsafe_allow_html=True)
 
 TEAM_LOGOS = {
     "Detroit Pistons": "https://cdn.nba.com/logos/nba/1610612765/primary/L/logo.svg",
@@ -84,10 +110,10 @@ FIRST_ROUND_SERIES = {
 }
 
 SECOND_ROUND_SERIES = {
-    "DET-CLE": {"conf":"East","a":"Detroit Pistons","b":"Cleveland Cavaliers","a_wins":0,"b_wins":0,"winner":None},
-    "NYK-PHI": {"conf":"East","a":"New York Knicks","b":"Philadelphia 76ers","a_wins":0,"b_wins":0,"winner":None},
-    "OKC-LAL": {"conf":"West","a":"Oklahoma City Thunder","b":"Los Angeles Lakers","a_wins":0,"b_wins":0,"winner":None},
-    "SAS-MIN": {"conf":"West","a":"San Antonio Spurs","b":"Minnesota Timberwolves","a_wins":0,"b_wins":0,"winner":None},
+    "DET-CLE": {"conf":"East","a":"Detroit Pistons","b":"Cleveland Cavaliers","a_wins":0,"b_wins":0,"winner":None,"games":[]},
+    "NYK-PHI": {"conf":"East","a":"New York Knicks","b":"Philadelphia 76ers","a_wins":1,"b_wins":0,"winner":None,"games":[{"Game":"Game 1","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks"}]},
+    "OKC-LAL": {"conf":"West","a":"Oklahoma City Thunder","b":"Los Angeles Lakers","a_wins":0,"b_wins":0,"winner":None,"games":[]},
+    "SAS-MIN": {"conf":"West","a":"San Antonio Spurs","b":"Minnesota Timberwolves","a_wins":0,"b_wins":1,"winner":None,"games":[{"Game":"Game 1","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves"}]},
 }
 
 FIRST_ROUND_GAME_SCORES = {
@@ -286,12 +312,19 @@ def what_if_df(margin, period, is_home):
 def render_matchup_header(team_name, first_round=False):
     profile = TEAM_PROFILES[team_name]
     opponent = profile["first_round_opponent"] if first_round else (profile["current_opponent"] or profile["first_round_opponent"])
-    label = "First Round Review" if first_round else profile["round"]
+    conference_label = f"{profile['conference']}ern Conference" if profile["conference"] in ["East", "West"] else f"{profile['conference']} Conference"
+    round_text = "First Round Review" if first_round else profile["round"]
+    label = f"{conference_label} {round_text}"
     c1, c2, c3 = st.columns([1, 2.4, 1])
-    with c1: st.image(TEAM_LOGOS[team_name], width=110)
+    with c1:
+        st.image(TEAM_LOGOS[team_name], width=110)
     with c2:
-        st.markdown(f"<div style='text-align:center;'><h1>({profile['seed']}) {team_name} vs ({TEAM_PROFILES[opponent]['seed']}) {opponent}</h1><h3>{label}</h3></div>", unsafe_allow_html=True)
-    with c3: st.image(TEAM_LOGOS[opponent], width=110)
+        st.markdown(
+            f"<div style='text-align:center;'><h1>({profile['seed']}) {team_name} vs ({TEAM_PROFILES[opponent]['seed']}) {opponent}</h1><h3>{label}</h3></div>",
+            unsafe_allow_html=True
+        )
+    with c3:
+        st.image(TEAM_LOGOS[opponent], width=110)
 
 def team_logo_html(team, size=28):
     return f"<img src='{TEAM_LOGOS[team]}' width='{size}' style='vertical-align:middle;margin-right:8px;'>"
@@ -328,12 +361,235 @@ def render_dynamic_bracket():
     """
     st.markdown(html, unsafe_allow_html=True)
 
+
+
+# ------------------------------------------------------------------
+# New app polish helpers
+# ------------------------------------------------------------------
+DETAILED_OUTLOOKS = {
+    "New York Knicks": {
+        "working": [
+            "Jalen Brunson gives New York a dependable late-clock creator. When the offense slows down, he can still get to his spot.",
+            "OG Anunoby and Mikal Bridges are the key wing defenders. Their job is to make Tyrese Maxey, Kelly Oubre Jr., and Paul George work for clean catches.",
+            "Josh Hart’s rebounding and extra possessions matter because the Knicks can steal possessions even when the offense is not perfect.",
+            "Karl-Anthony Towns gives New York spacing at center, especially if he pulls Joel Embiid away from the rim."
+        ],
+        "concerns": [
+            "Karl-Anthony Towns has to avoid careless fouls. If Towns sits early, New York loses spacing, size, and a major offensive pressure point.",
+            "Bench scoring has to be steadier from Miles McBride, Jordan Clarkson, Landry Shamet, and Jose Alvarado.",
+            "The Knicks cannot let Embiid live at the free-throw line. Cheap fouls would turn the game into Philadelphia’s preferred style.",
+            "If Brunson has to create every late possession, Philadelphia can trap him and force the ball out of his hands."
+        ],
+        "next_keys": [
+            "Keep Towns on the floor without cheap fouls.",
+            "Use OG and Bridges to slow Maxey’s downhill attacks.",
+            "Get at least one bench scorer to provide real offense.",
+            "Win the rebounding battle and prevent second-chance points.",
+            "Keep Brunson fresh enough to close the fourth quarter."
+        ]
+    },
+    "Philadelphia 76ers": {
+        "working": [
+            "Joel Embiid is the central pressure point. If he gets deep position and draws fouls, Philadelphia can control the game.",
+            "Tyrese Maxey’s speed can bend the Knicks defense before it gets set.",
+            "Paul George and Kelly Oubre Jr. give Philadelphia wing scoring if New York overloads on Embiid and Maxey.",
+            "Andre Drummond can help Philadelphia survive the non-Embiid rebounding minutes."
+        ],
+        "concerns": [
+            "Embiid’s health and mobility determine how dominant Philadelphia can be inside.",
+            "If Maxey is forced into half-court possessions, Philadelphia loses some of its speed advantage.",
+            "The Sixers need steadier bench shooting from Lowry, Gordon, Grimes, and Martin.",
+            "Turnovers against New York’s physical defense can quickly become transition points."
+        ],
+        "next_keys": [
+            "Get Embiid early touches without forcing bad possessions.",
+            "Use Maxey’s speed before New York’s defense gets set.",
+            "Keep Brunson away from comfortable midrange spots.",
+            "Make the Knicks bench defend and score.",
+            "Limit offensive rebounds by Hart, Robinson, and Towns."
+        ]
+    },
+}
+
+DEFAULT_OUTLOOK = {
+    "working": [
+        "The lead ball-handler must organize the offense and keep the team out of rushed possessions.",
+        "The starting wings and bigs need to defend without fouling and finish possessions with rebounds.",
+        "Bench minutes matter because one bad stretch can change a playoff game."
+    ],
+    "concerns": [
+        "Late-game execution needs to stay clean.",
+        "Foul trouble for a key starter can change the rotation.",
+        "Bench scoring must be reliable enough to survive non-star minutes."
+    ],
+    "next_keys": [
+        "Win the rebounding battle.",
+        "Keep turnovers low.",
+        "Get efficient scoring from the top two players.",
+        "Defend without putting the opponent on the free-throw line."
+    ]
+}
+
+def series_for_team(team_name):
+    for key, s in SECOND_ROUND_SERIES.items():
+        if team_name in [s["a"], s["b"]]:
+            return key, s
+    return None, None
+
+def series_status_text(team_name):
+    _, s = series_for_team(team_name)
+    if not s:
+        return "No active second-round series."
+    a, b = s["a"], s["b"]
+    aw, bw = s["a_wins"], s["b_wins"]
+    if team_name == a:
+        if aw > bw: return f"{team_name} leads {aw}-{bw}"
+        if aw < bw: return f"{team_name} trails {aw}-{bw}"
+        return f"Series tied {aw}-{bw}"
+    else:
+        if bw > aw: return f"{team_name} leads {bw}-{aw}"
+        if bw < aw: return f"{team_name} trails {bw}-{aw}"
+        return f"Series tied {bw}-{aw}"
+
+def render_team_outlook(team_name):
+    outlook = DETAILED_OUTLOOKS.get(team_name, DEFAULT_OUTLOOK)
+    st.subheader("Team Outlook")
+    st.write(f"**Series status:** {series_status_text(team_name)}")
+    st.markdown("### What is going well")
+    for item in outlook["working"]:
+        st.success(item)
+    st.markdown("### Specific concerns")
+    for item in outlook["concerns"]:
+        st.warning(item)
+    st.markdown("### Next game keys")
+    for item in outlook["next_keys"]:
+        st.write(f"• {item}")
+
+def render_game_countdown(team_name):
+    profile = TEAM_PROFILES[team_name]
+    live_game = find_live_game_for_team(team_name)
+    st.subheader("Game Status / Live Link")
+    if live_game:
+        status_text = live_game.get("gameStatusText", "Scheduled")
+        home = live_game.get("homeTeam", {})
+        away = live_game.get("awayTeam", {})
+        matchup = f"{away.get('teamName', 'Away')} at {home.get('teamName', 'Home')}"
+        if "Final" in status_text:
+            st.success(f"Final: {matchup}")
+            st.write(status_text)
+        elif status_text and ("Q" in status_text or ":" in status_text or "Halftime" in status_text):
+            st.error(f"🔴 LIVE NOW: {matchup}")
+            st.write(f"Status: {status_text}")
+            if st.button("Go to Live Game Center"):
+                st.session_state["page_override"] = "🏀 Live Game Center"
+                st.rerun()
+        else:
+            st.info(f"Upcoming: {matchup}")
+            st.write(f"Status: {status_text}")
+            st.write("When the game is near tip-off or live, a Live Game Center button appears here.")
+    else:
+        opponent = profile.get("current_opponent")
+        if opponent:
+            st.info(f"Next matchup: {team_name} vs {opponent}")
+            st.write("Tip-off countdown/live status appears here when NBA live data is available.")
+
+@st.cache_data(ttl=3600)
+def get_cached_player_id(name):
+    if not NBA_STATS_AVAILABLE:
+        return None
+    try:
+        matches = [p for p in nba_players.get_players() if p["full_name"] == name]
+        return matches[0]["id"] if matches else None
+    except Exception:
+        return None
+
+def player_headshot(player_name):
+    pid = get_cached_player_id(player_name)
+    if pid:
+        return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
+    return "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
+
+@st.cache_data(ttl=86400)
+def get_season_averages(player_name):
+    pid = get_cached_player_id(player_name)
+    if not pid or not NBA_STATS_AVAILABLE:
+        return {"PTS":"--", "REB":"--", "AST":"--", "STL":"--", "BLK":"--"}
+    try:
+        df = playercareerstats.PlayerCareerStats(player_id=pid).get_data_frames()[0]
+        if df.empty:
+            return {"PTS":"--", "REB":"--", "AST":"--", "STL":"--", "BLK":"--"}
+        row = df.iloc[-1]
+        gp = max(float(row.get("GP", 1)), 1)
+        return {
+            "PTS": round(float(row.get("PTS", 0)) / gp, 1),
+            "REB": round(float(row.get("REB", 0)) / gp, 1),
+            "AST": round(float(row.get("AST", 0)) / gp, 1),
+            "STL": round(float(row.get("STL", 0)) / gp, 1),
+            "BLK": round(float(row.get("BLK", 0)) / gp, 1),
+        }
+    except Exception:
+        return {"PTS":"--", "REB":"--", "AST":"--", "STL":"--", "BLK":"--"}
+
+def player_temperature(row):
+    pts = safe_float(row.get("PTS", 0))
+    fgm = safe_float(row.get("FGM", 0))
+    fga = safe_float(row.get("FGA", 0))
+    fg_pct = fgm / fga if fga > 0 else 0
+    if pts >= 18 and fg_pct >= 0.50:
+        return "🔥"
+    if fga >= 8 and fg_pct <= 0.30:
+        return "❄️"
+    return ""
+
+def render_lineup_cards(team_name, box_df):
+    alias = TEAM_ALIASES.get(team_name)
+    profile = TEAM_PROFILES[team_name]
+    lineup = estimate_current_lineup(box_df, alias)
+    if lineup.empty:
+        return
+    st.markdown(f"### {team_name} live lineup / top-current players")
+    cols = st.columns(5)
+    positions = ["PG", "SG", "SF", "PF", "C"]
+    for i, (_, row) in enumerate(lineup.iterrows()):
+        player = row.get("Player", "")
+        temp = player_temperature(row)
+        season = get_season_averages(player)
+        with cols[i]:
+            st.markdown("<div class='player-card'>", unsafe_allow_html=True)
+            try:
+                st.image(player_headshot(player), width=100)
+            except Exception:
+                pass
+            pos = positions[i] if i < len(positions) else ""
+            st.markdown(f"**{pos} — {player} {temp}**")
+            st.caption("Current Game")
+            st.write(f"PTS {row.get('PTS',0)} | REB {row.get('REB',0)} | AST {row.get('AST',0)}")
+            st.write(f"STL {row.get('STL',0)} | BLK {row.get('BLK',0)}")
+            st.caption("Season Avg")
+            st.write(f"PTS {season['PTS']} | REB {season['REB']} | AST {season['AST']}")
+            st.write(f"STL {season['STL']} | BLK {season['BLK']}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
 # ------------------------------------------------------------------
 # Sidebar
 # ------------------------------------------------------------------
-favorite_team = st.sidebar.selectbox("Choose your playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
+PAGES = {
+    "🏀 Home Dashboard": "Home Dashboard",
+    "🏀 Playoff Bracket": "Playoff Bracket",
+    "🏀 Current Series": "Current Series",
+    "🏀 First Round Review": "First Round Review",
+    "🏀 Live Game Center": "Live Game Center",
+    "🏀 Player Playoff Tracker": "Player Playoff Tracker",
+    "🏀 Legacy Tracker": "Legacy Tracker",
+    "🏀 Matchup Lineups": "Matchup Lineups",
+}
+
+favorite_team = st.sidebar.selectbox("Choose your 2026 NBA playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
 profile = TEAM_PROFILES[favorite_team]
-page = st.sidebar.radio("Choose page", ["Home Dashboard", "Playoff Bracket", "Current Series", "First Round Review", "Live Game Center", "Player Playoff Tracker", "Legacy Tracker", "Matchup Lineups"])
+page_labels = list(PAGES.keys())
+default_label = st.session_state.pop("page_override", "🏀 Home Dashboard")
+page_label = st.sidebar.radio("Choose page", page_labels, index=page_labels.index(default_label) if default_label in page_labels else 0)
+page = PAGES[page_label]
 
 # ------------------------------------------------------------------
 # Pages
@@ -342,19 +598,14 @@ if page == "Home Dashboard":
     render_matchup_header(favorite_team, first_round=False)
     c1, c2, c3 = st.columns(3)
     c1.metric("Status", profile["status"])
-    c2.metric("Round", profile["round"])
+    c2.metric("Series", series_status_text(favorite_team))
     c3.metric("Seed", profile["seed"])
-    st.subheader("Team outlook")
-    if profile["status"] == "Active":
-        st.success(f"{favorite_team} is still alive. Current opponent: {profile['current_opponent']}.")
-    else:
-        st.error(f"{favorite_team} has been eliminated. {profile['first_round_result']}")
-    st.write("Strengths:")
-    for s in profile["strengths"]:
-        st.write(f"• {s}")
-    st.write("Concerns:")
-    for c in profile["concerns"]:
-        st.write(f"• {c}")
+    render_game_countdown(favorite_team)
+    _, current_series = series_for_team(favorite_team)
+    if current_series and current_series.get("games"):
+        st.subheader("Current Series Scores")
+        st.dataframe(pd.DataFrame(current_series["games"]), use_container_width=True)
+    render_team_outlook(favorite_team)
 
 elif page == "Playoff Bracket":
     render_dynamic_bracket()
@@ -362,18 +613,12 @@ elif page == "Playoff Bracket":
 elif page == "Current Series":
     if profile["status"] == "Active":
         render_matchup_header(favorite_team, first_round=False)
-        st.subheader("Before the next game: what to look for")
-        st.write(f"{favorite_team} can win the next game by leaning into its strengths and avoiding the danger areas.")
-        st.write("Key advantages:")
-        for s in profile["strengths"]:
-            st.success(s)
-        st.write("Key concerns:")
-        for c in profile["concerns"]:
-            st.warning(c)
-        if favorite_team == "New York Knicks":
-            st.subheader("Game 2 outlook")
-            st.info("If the Knicks go up 2-0 before the series shifts to Philadelphia, they would take major control of the series. The biggest things to watch are Brunson's shot creation, Towns' rebounding and spacing, avoiding foul trouble against Embiid, and whether the bench minutes hold up.")
-            st.write("If the Pistons-Cavaliers series starts leaning toward Cleveland, the Knicks would need to think ahead about Donovan Mitchell's scoring and Cleveland's rim protection. If Detroit advances, the matchup may be more athletic but less experienced.")
+        st.metric("Series Status", series_status_text(favorite_team))
+        _, current_series = series_for_team(favorite_team)
+        if current_series and current_series.get("games"):
+            st.subheader("Game Results")
+            st.dataframe(pd.DataFrame(current_series["games"]), use_container_width=True)
+        render_team_outlook(favorite_team)
     else:
         st.warning(profile["first_round_result"])
 
@@ -395,6 +640,7 @@ elif page == "Live Game Center":
         st.caption("Refreshing every 30 seconds.")
     else:
         st.warning("streamlit-autorefresh is not installed, so live auto-refresh is disabled.")
+
     if not NBA_LIVE_AVAILABLE:
         st.error("nba_api live endpoints are unavailable. Check requirements.txt.")
     else:
@@ -414,98 +660,114 @@ elif page == "Live Game Center":
             clock = live_game.get("gameClock", "")
             status_text = live_game.get("gameStatusText", "Unknown")
             game_id = live_game.get("gameId")
+
             st.write(f"### {away_name} at {home_name}")
             st.write(f"**Status:** {status_text} | **Period:** {period} | **Clock:** {clock}")
             c1, c2 = st.columns(2)
             c1.metric(away_name, away_score)
             c2.metric(home_name, home_score)
+
             team_alias = TEAM_ALIASES[favorite_team]
             is_home = home_tri == team_alias
             team_score = home_score if is_home else away_score
             opp_score = away_score if is_home else home_score
             margin = team_score - opp_score
             prob = calc_win_probability(margin, period, is_home)
+
             p1, p2, p3 = st.columns(3)
             p1.metric(f"{favorite_team} Win Probability", f"{prob}%")
             p2.metric("Score Margin", margin)
             p3.metric("Home Game", "Yes" if is_home else "No")
-            prob_df = pd.DataFrame({"Outcome":[f"{favorite_team} wins", "Opponent wins"], "Probability":[prob, 100-prob]})
+
+            prob_df = pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [prob, 100 - prob]})
             st.plotly_chart(px.pie(prob_df, names="Outcome", values="Probability", title="Current Win Probability"), use_container_width=True)
-            timeline = pd.DataFrame({"Game Segment":["Start","Q1","Q2","Q3","Now"], "Win Probability":[50,max(1,min(99,prob-12)),max(1,min(99,prob-7)),max(1,min(99,prob-3)),prob], "Margin":[0,margin-8,margin-5,margin-2,margin]})
-            st.subheader("Win Probability Timeline")
+
+            timeline = pd.DataFrame({
+                "Game Segment": ["Start", "Q1", "Q2", "Q3", "Now"],
+                "Win Probability": [50, max(1, min(99, prob-12)), max(1, min(99, prob-7)), max(1, min(99, prob-3)), prob],
+                "Margin": [0, margin-8, margin-5, margin-2, margin],
+            })
+            st.subheader("Momentum / Win Probability Timeline")
             st.plotly_chart(px.line(timeline, x="Game Segment", y="Win Probability", markers=True), use_container_width=True)
-            st.subheader("Momentum Graph")
             st.plotly_chart(px.line(timeline, x="Game Segment", y="Margin", markers=True, title="Score Margin Momentum"), use_container_width=True)
+
             box = get_live_boxscore(game_id)
             box_df = create_boxscore_dataframe(box) if box else pd.DataFrame()
             if not box_df.empty:
+                st.subheader("Live Lineup Cards")
+                render_lineup_cards(favorite_team, box_df)
+                opponent = profile.get("current_opponent")
+                if opponent:
+                    render_lineup_cards(opponent, box_df)
+
                 st.subheader("Full Live Box Score")
                 st.dataframe(box_df, use_container_width=True)
+
                 st.subheader("Player of the Game / Team MVP")
                 mvp = choose_team_mvp(box_df, team_alias)
                 if mvp is not None:
                     st.success(f"🔥 {mvp['Player']}")
-                    st.write(f"{mvp['PTS']} points, {mvp['REB']} rebounds, {mvp['AST']} assists, {mvp['+/-']} plus/minus")
-                    st.write("He leads the team MVP calculation because his scoring, rebounding, playmaking, defense, and plus/minus create the highest overall impact score.")
+                    st.write(f"{mvp['PTS']} points, {mvp['REB']} rebounds, {mvp['AST']} assists, {mvp['STL']} steals, {mvp['BLK']} blocks")
+                    st.write("MVP logic uses scoring, rebounding, assists, defensive stats, turnovers, and plus/minus.")
+
                 st.subheader("Foul Trouble Tracker")
                 foul_df = box_df[box_df["PF"].astype(float) >= 4]
                 if foul_df.empty:
                     st.success("No major foul trouble detected.")
                 else:
                     st.dataframe(foul_df[["Team", "Player", "PF", "PTS", "MIN"]], use_container_width=True)
-                st.subheader("Live Lineup Tracker")
-                lineup_df = estimate_current_lineup(box_df, team_alias)
-                if lineup_df.empty:
-                    st.info("Live on-court lineup is not available, so this estimates likely current/high-usage players from minutes.")
-                else:
-                    st.dataframe(lineup_df[["Team", "Player", "MIN", "PTS", "REB", "AST", "PF", "+/-"]], use_container_width=True)
-                st.subheader("Rotation Impact Tracker")
-                rot = box_df[box_df["Team"] == team_alias][["Player", "MIN", "+/-", "PTS", "REB", "AST"]]
-                st.dataframe(rot.sort_values("+/-", ascending=False), use_container_width=True)
+
                 st.subheader("Game Story")
                 for line in game_story(favorite_team, margin, prob, box_df):
                     st.write(f"• {line}")
+
             st.subheader("AI Game Narrator")
-            st.info(f"{favorite_team} is currently {'ahead' if margin > 0 else 'tied' if margin == 0 else 'behind'} by {abs(margin)}. The model gives them about {prob}% right now. The next possessions matter because turnovers, fouls, and three-point runs can swing playoff win probability quickly.")
-            st.subheader("Live Coaching-Style Insight: What Needs To Happen Next")
-            for step in what_next(favorite_team, margin):
-                st.write(f"• {step}")
+            if margin > 8:
+                st.success(f"{favorite_team} is controlling the game. The lead gives them room to play with patience.")
+            elif margin >= 0:
+                st.info(f"{favorite_team} is in a competitive position. The next few possessions matter.")
+            else:
+                st.warning(f"{favorite_team} needs a run. The good news is that one defensive stretch can change the win probability quickly.")
+
+            st.subheader("What Needs To Happen Next")
+            outlook = DETAILED_OUTLOOKS.get(favorite_team, DEFAULT_OUTLOOK)
+            for item in outlook["next_keys"]:
+                st.write(f"• {item}")
+
             st.subheader("What-If Simulator")
             st.dataframe(what_if_df(margin, period, is_home), use_container_width=True)
+
             actions = get_live_playbyplay(game_id)
             if actions:
                 shot_df = shot_actions_from_playbyplay(actions, team_alias)
-                st.subheader("Latest Shot Result")
-                if not shot_df.empty:
+                st.subheader("Live Shot Chart")
+                if shot_df.empty:
+                    st.info("No shot actions detected yet for the selected team.")
+                else:
                     latest = shot_df.iloc[-1]
                     if latest["Made"]:
                         st.success(f"Blue O: {latest['Player']} made a shot — {latest['Description']}")
                     else:
                         st.error(f"Red X: {latest['Player']} missed a shot — {latest['Description']}")
-                else:
-                    st.info("No shot actions detected yet for the selected team.")
-                st.subheader("Team Shot Chart")
-                if shot_df.empty:
-                    st.info("Shot chart will update when live shot events appear.")
-                else:
                     players_available = ["All players"] + sorted([p for p in shot_df["Player"].dropna().unique().tolist() if p])
                     shooter = st.selectbox("Choose shooter", players_available)
                     chart_df = shot_df if shooter == "All players" else shot_df[shot_df["Player"] == shooter]
                     st.plotly_chart(draw_shot_chart(chart_df, f"{favorite_team} Live Shot Chart — Blue O = Make, Red X = Miss"), use_container_width=True)
-                st.subheader("Smart Play-by-Play Insights")
-                recent = [a.get("description", "") for a in actions if a.get("description")]
-                for desc in recent[-10:][::-1]:
-                    st.write(f"• {desc}")
-                st.subheader("Shot Profile Breakdown")
-                if not shot_df.empty:
-                    shot_profile = shot_df.copy()
-                    shot_profile["Result"] = np.where(shot_profile["Made"], "Made", "Missed")
-                    st.plotly_chart(px.histogram(shot_profile, x="Result", title="Made vs Missed Shots"), use_container_width=True)
+
+                st.subheader("Clutch Meter")
+                if period >= 4 and abs(margin) <= 5:
+                    st.warning("Clutch-time situation: fourth quarter and within five points.")
+                elif period >= 4:
+                    st.info("Fourth quarter is active. Watch turnovers, free throws, and shot quality.")
+                else:
+                    st.info("Clutch meter becomes more important in the fourth quarter.")
+
                 st.subheader("Top Plays")
+                recent = [a.get("description", "") for a in actions if a.get("description")]
                 for play in recent[-5:][::-1]:
                     st.write(f"• {play}")
             else:
-                st.info("Live play-by-play is not available yet. Shot chart and latest shot result will appear when NBA API provides shot events.")
+                st.info("Live shot chart and clutch details will appear when play-by-play data is available.")
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team, first_round=False)
