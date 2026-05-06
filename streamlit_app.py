@@ -82,12 +82,12 @@ TEAM_ALIASES = {
 TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Philadelphia 76ers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","rebounding","physical wing defense","home-court energy"],"concerns":["bench scoring consistency","foul trouble","overreliance on Brunson late"]},
     "Philadelphia 76ers": {"seed":7,"conference":"East","status":"Active","round":"Second Round","current_opponent":"New York Knicks","first_round_opponent":"Boston Celtics","first_round_result":"Defeated Boston Celtics, 4-3","starters":["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],"subs":["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"],"strengths":["Embiid interior pressure","Maxey speed","free-throw pressure","star scoring"],"concerns":["Embiid health","transition defense","depth","turnovers"]},
-    "Detroit Pistons": {"seed":1,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"],"strengths":["Cade Cunningham creation","rebounding","young athleticism","transition pressure"],"concerns":["playoff inexperience","late-game execution","half-court droughts"]},
-    "Cleveland Cavaliers": {"seed":4,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["guard scoring","rim protection","defensive size","Mitchell shot creation"],"concerns":["offensive droughts","health","turnovers under pressure"]},
-    "Oklahoma City Thunder": {"seed":1,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Los Angeles Lakers","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","spacing","defensive length","pace"],"concerns":["playoff physicality","Lakers size","late-game pressure"]},
-    "Los Angeles Lakers": {"seed":4,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"],"strengths":["star experience","rim pressure","Anthony Davis defense","LeBron control"],"concerns":["transition defense","age","three-point consistency"]},
+    "Detroit Pistons": {"seed":1,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Isaiah Stewart","Marcus Sasser","Malik Beasley","Simone Fontecchio","Ron Holland"],"strengths":["Cade Cunningham creation","rebounding","young athleticism","transition pressure"],"concerns":["playoff inexperience","late-game execution","half-court droughts"]},
+    "Cleveland Cavaliers": {"seed":4,"conference":"East","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Sam Merrill","Georges Niang","Dean Wade"],"strengths":["guard scoring","rim protection","defensive size","Mitchell shot creation"],"concerns":["offensive droughts","health","turnovers under pressure"]},
+    "Oklahoma City Thunder": {"seed":1,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Los Angeles Lakers","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Isaiah Joe","Aaron Wiggins","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","spacing","defensive length","pace"],"concerns":["playoff physicality","Lakers size","late-game pressure"]},
+    "Los Angeles Lakers": {"seed":4,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Jaxson Hayes","Christian Wood"],"strengths":["star experience","rim pressure","Anthony Davis defense","LeBron control"],"concerns":["transition defense","age","three-point consistency"]},
     "San Antonio Spurs": {"seed":2,"conference":"West","status":"Active","round":"Second Round","current_opponent":"Minnesota Timberwolves","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["playoff inexperience","turnovers","physicality"]},
-    "Minnesota Timberwolves": {"seed":6,"conference":"West","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"],"strengths":["defense","size","Anthony Edwards scoring","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
+    "Minnesota Timberwolves": {"seed":6,"conference":"West","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Naz Reid","Rob Dillingham","Josh Minott"],"strengths":["defense","size","Anthony Edwards scoring","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
     "Atlanta Hawks": {"seed":6,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"New York Knicks","first_round_result":"Lost to New York Knicks, 4-2","starters":["Trae Young","Dyson Daniels","Zaccharie Risacher","Jalen Johnson","Onyeka Okongwu"],"subs":["Bogdan Bogdanovic","De'Andre Hunter","Clint Capela","Vit Krejci","Kobe Bufkin"],"strengths":["Trae creation","pace","pick-and-roll scoring"],"concerns":["defense","rebounding","physical matchups"]},
     "Boston Celtics": {"seed":2,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Philadelphia 76ers","first_round_result":"Lost to Philadelphia 76ers, 4-3","starters":["Jrue Holiday","Derrick White","Jaylen Brown","Jayson Tatum","Kristaps Porzingis"],"subs":["Payton Pritchard","Sam Hauser","Al Horford","Luke Kornet","Neemias Queta"],"strengths":["wing scoring","spacing","experience"],"concerns":["late-series execution","health","three-point variance"]},
     "Orlando Magic": {"seed":8,"conference":"East","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Detroit Pistons","first_round_result":"Lost to Detroit Pistons, 4-3","starters":["Jalen Suggs","Kentavious Caldwell-Pope","Franz Wagner","Paolo Banchero","Wendell Carter Jr."],"subs":["Cole Anthony","Jonathan Isaac","Anthony Black","Moritz Wagner","Gary Harris"],"strengths":["defense","size","young forwards"],"concerns":["shooting","late-game offense","spacing"]},
@@ -97,6 +97,50 @@ TEAM_PROFILES = {
     "Denver Nuggets": {"seed":3,"conference":"West","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Minnesota Timberwolves","first_round_result":"Lost to Minnesota Timberwolves, 4-2","starters":["Jamal Murray","Christian Braun","Michael Porter Jr.","Aaron Gordon","Nikola Jokic"],"subs":["Reggie Jackson","Peyton Watson","Zeke Nnaji","Julian Strawther","DeAndre Jordan"],"strengths":["Jokic offense","chemistry","half-court execution"],"concerns":["bench depth","athletic matchups","defensive speed"]},
     "Houston Rockets": {"seed":5,"conference":"West","status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":"Los Angeles Lakers","first_round_result":"Lost to Los Angeles Lakers, 4-2","starters":["Fred VanVleet","Jalen Green","Amen Thompson","Jabari Smith Jr.","Alperen Sengun"],"subs":["Dillon Brooks","Tari Eason","Cam Whitmore","Steven Adams","Reed Sheppard"],"strengths":["young athleticism","defense","pace"],"concerns":["half-court scoring","playoff experience","shot selection"]},
 }
+
+
+# Position-by-position matchup advantage analysis for active second-round series.
+# These are analyst-style summaries, not official NBA ratings.
+MATCHUP_ADVANTAGES = {
+    ("New York Knicks", "Philadelphia 76ers"): [
+        {"Position":"PG", "Advantage":"Knicks", "Why":"Jalen Brunson has the stronger half-court control and late-game shot creation. Tyrese Maxey's speed is dangerous, but Brunson is the more reliable possession-by-possession playoff engine."},
+        {"Position":"SG", "Advantage":"Knicks", "Why":"Mikal Bridges gives New York a more proven two-way wing/guard option with size, durability, and defensive versatility."},
+        {"Position":"SF", "Advantage":"Knicks", "Why":"OG Anunoby gives New York the edge because of his physical defense, strength, and ability to guard elite perimeter scorers while still spacing the floor."},
+        {"Position":"PF", "Advantage":"76ers", "Why":"Paul George has the higher scoring ceiling and shot-creation package if healthy. Josh Hart's rebounding and toughness keep it close, but George has the star-skill advantage."},
+        {"Position":"C", "Advantage":"76ers", "Why":"Joel Embiid is the most dominant interior player in the matchup. Karl-Anthony Towns gives the Knicks spacing, but Embiid's scoring, foul pressure, and rim presence are the bigger individual advantage."},
+    ],
+    ("Philadelphia 76ers", "New York Knicks"): [],
+    ("Detroit Pistons", "Cleveland Cavaliers"): [
+        {"Position":"PG", "Advantage":"Pistons", "Why":"Cade Cunningham's size and control give Detroit a matchup edge as a big initiating guard. Garland is quicker, but Cade can see over pressure and organize the offense."},
+        {"Position":"SG", "Advantage":"Cavaliers", "Why":"Donovan Mitchell is the best pure scorer in this position matchup and has the playoff shot-making advantage over Jaden Ivey."},
+        {"Position":"SF", "Advantage":"Pistons", "Why":"Ausar Thompson gives Detroit a defensive and athletic edge. Strus provides shooting, but Ausar can change possessions with pressure and transition play."},
+        {"Position":"PF", "Advantage":"Cavaliers", "Why":"Evan Mobley's defense, length, and two-way impact give Cleveland a clear frontcourt edge over Tobias Harris."},
+        {"Position":"C", "Advantage":"Cavaliers", "Why":"Jarrett Allen's experience, rim protection, and vertical finishing give Cleveland a slight edge, though Jalen Duren's rebounding keeps this matchup competitive."},
+    ],
+    ("Cleveland Cavaliers", "Detroit Pistons"): [],
+    ("Oklahoma City Thunder", "Los Angeles Lakers"): [
+        {"Position":"PG", "Advantage":"Thunder", "Why":"Shai Gilgeous-Alexander is the clear advantage because of his elite scoring, foul pressure, and late-game creation."},
+        {"Position":"SG", "Advantage":"Lakers", "Why":"Austin Reaves gives the Lakers more offensive creation than Lu Dort, though Dort's defense is a major counterweight."},
+        {"Position":"SF", "Advantage":"Lakers", "Why":"LeBron James gives Los Angeles the experience, passing, and physical control edge, even with Jalen Williams being a strong two-way player."},
+        {"Position":"PF", "Advantage":"Thunder", "Why":"Chet Holmgren's rim protection and floor spacing create a difficult matchup for Rui Hachimura."},
+        {"Position":"C", "Advantage":"Lakers", "Why":"Anthony Davis has the bigger two-way star impact at center. Hartenstein adds rebounding and screening, but Davis is the matchup advantage."},
+    ],
+    ("Los Angeles Lakers", "Oklahoma City Thunder"): [],
+    ("San Antonio Spurs", "Minnesota Timberwolves"): [
+        {"Position":"PG", "Advantage":"Timberwolves", "Why":"Mike Conley's experience and decision-making give Minnesota the steadier playoff point guard advantage over Stephon Castle."},
+        {"Position":"SG", "Advantage":"Timberwolves", "Why":"Anthony Edwards is the strongest perimeter scorer in the series and gives Minnesota a clear advantage at shooting guard."},
+        {"Position":"SF", "Advantage":"Timberwolves", "Why":"Jaden McDaniels gives Minnesota length, defense, and playoff wing versatility against Keldon Johnson."},
+        {"Position":"PF", "Advantage":"Timberwolves", "Why":"Naz Reid's scoring and shooting give Minnesota the advantage at power forward, especially if he pulls San Antonio's bigs away from the rim."},
+        {"Position":"C", "Advantage":"Spurs", "Why":"Victor Wembanyama's shot-blocking, range, and overall two-way ceiling give San Antonio the center advantage even against Rudy Gobert's defense."},
+    ],
+    ("Minnesota Timberwolves", "San Antonio Spurs"): [],
+}
+
+# Mirror matchup analysis so either selected team displays the same accurate matchup rows.
+for _k, _v in list(MATCHUP_ADVANTAGES.items()):
+    if _v:
+        a, b = _k
+        MATCHUP_ADVANTAGES[(b, a)] = _v
 
 FIRST_ROUND_SERIES = {
     "DET-ORL": {"conf":"East","a":"Detroit Pistons","b":"Orlando Magic","a_wins":4,"b_wins":3,"winner":"Detroit Pistons"},
@@ -823,14 +867,29 @@ elif page == "Matchup Lineups":
         opponent = profile["current_opponent"]
         opp_profile = TEAM_PROFILES[opponent]
         rows = []
+        advantage_rows = MATCHUP_ADVANTAGES.get((favorite_team, opponent), [])
+        advantage_by_pos = {r["Position"]: r for r in advantage_rows}
         for i, pos in enumerate(["PG", "SG", "SF", "PF", "C"]):
-            rows.append({"Position": pos, favorite_team: profile["starters"][i], opponent: opp_profile["starters"][i], "Advantage": "Depends on health, matchup, and game plan"})
-        st.subheader("Projected Starters")
+            adv = advantage_by_pos.get(pos, {"Advantage": "Even", "Why": "This matchup depends on health, usage, and game plan."})
+            rows.append({
+                "Position": pos,
+                favorite_team: profile["starters"][i],
+                opponent: opp_profile["starters"][i],
+                "Advantage": adv["Advantage"],
+                "Why": adv["Why"],
+            })
+        st.subheader("Projected Starters — Position Advantages")
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
-        bench_rows = [{"Team": favorite_team, "Player": p} for p in profile["subs"]]
-        bench_rows += [{"Team": opponent, "Player": p} for p in opp_profile["subs"]]
-        st.subheader("Main Subs")
+
+        st.subheader("Main Subs / Rotation Depth")
+        bench_rows = []
+        for n, p in enumerate(profile["subs"], start=1):
+            bench_rows.append({"Team": favorite_team, "Rotation Rank": n, "Player": p})
+        for n, p in enumerate(opp_profile["subs"], start=1):
+            bench_rows.append({"Team": opponent, "Rotation Rank": n, "Player": p})
         st.dataframe(pd.DataFrame(bench_rows), use_container_width=True)
+
+        st.info("Note: starter and bench groups are projected playoff rotations. Actual lineups can change by injury, matchup, foul trouble, and coaching decisions.")
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | Fixed Streamlit output | Live shot chart: Blue O = make, Red X = miss")
