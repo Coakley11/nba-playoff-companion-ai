@@ -729,6 +729,195 @@ def render_lineup_cards(team_name, box_df):
 # ------------------------------------------------------------------
 # Sidebar
 # ------------------------------------------------------------------
+# ==========================================================
+# AUTOMATIC SERIES / BRACKET / TOP-PLAY TRACKING
+# ==========================================================
+
+def date_range_strings(days_back=10, days_forward=2):
+    today = datetime.now().date()
+    return [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(-days_back, days_forward + 1)]
+
+@st.cache_data(ttl=900)
+def get_recent_live_scoreboard_games(days_back=10, days_forward=2):
+    games = []
+    if not NBA_LIVE_AVAILABLE:
+        return games
+    for date_str in date_range_strings(days_back, days_forward):
+        try:
+            board = scoreboard.ScoreBoard(game_date=date_str)
+            data = board.get_dict()
+            day_games = data.get("scoreboard", {}).get("games", [])
+            for g in day_games:
+                g["_scoreboard_date"] = date_str
+                games.append(g)
+        except Exception:
+            continue
+    return games
+
+def normalize_scoreboard_team_name(team_dict):
+    city = team_dict.get("teamCity", "") or ""
+    name = team_dict.get("teamName", "") or ""
+    tri = team_dict.get("teamTricode", "") or ""
+    full = f"{city} {name}".strip()
+    if full in TEAM_PROFILES:
+        return full
+    alias_to_team = {alias: team for team, alias in TEAM_ALIASES.items()}
+    return alias_to_team.get(tri, full)
+
+def is_game_final(game):
+    status = (game.get("gameStatusText") or "").lower()
+    return "final" in status or safe_int(game.get("gameStatus", 0)) == 3
+
+def completed_game_record_from_scoreboard(game):
+    home = game.get("homeTeam", {})
+    away = game.get("awayTeam", {})
+    home_team = normalize_scoreboard_team_name(home)
+    away_team = normalize_scoreboard_team_name(away)
+    home_score = safe_int(home.get("score", 0))
+    away_score = safe_int(away.get("score", 0))
+    winner = home_team if home_score > away_score else away_team if away_score > home_score else None
+    return {
+        "Game": game.get("gameLabel", "") or game.get("gameStatusText", "") or "Completed Game",
+        "Date": game.get("_scoreboard_date", ""),
+        "Matchup": f"{away_team} at {home_team}",
+        "Score": f"{away_team} {away_score}, {home_team} {home_score}",
+        "Winner": winner,
+        "GameID": game.get("gameId", ""),
+        "Home": home_team,
+        "Away": away_team,
+        "HomeScore": home_score,
+        "AwayScore": away_score,
+    }
+
+@st.cache_data(ttl=900)
+def automatic_completed_games_for_series(series_key):
+    if series_key not in SECOND_ROUND_SERIES:
+        return []
+    series = SECOND_ROUND_SERIES[series_key]
+    target_teams = {series["a"], series["b"]}
+    records = []
+    for game in get_recent_live_scoreboard_games():
+        if not is_game_final(game):
+            continue
+        rec = completed_game_record_from_scoreboard(game)
+        if {rec["Home"], rec["Away"]} == target_teams:
+            records.append(rec)
+    deduped = {}
+    for rec in records:
+        k = rec.get("GameID") or f"{rec['Date']}-{rec['Matchup']}"
+        deduped[k] = rec
+    return list(deduped.values())
+
+def build_dynamic_second_round_series():
+    dynamic = {}
+    for key, base in SECOND_ROUND_SERIES.items():
+        s = dict(base)
+        s["games"] = list(base.get("games", []))
+        auto_games = automatic_completed_games_for_series(key)
+        if auto_games:
+            s["games"] = []
+            a_wins = 0
+            b_wins = 0
+            for idx, rec in enumerate(auto_games, start=1):
+                if rec["Winner"] == s["a"]:
+                    a_wins += 1
+                elif rec["Winner"] == s["b"]:
+                    b_wins += 1
+                s["games"].append({
+                    "Game": f"Game {idx}",
+                    "Date": rec.get("Date", ""),
+                    "Score": rec.get("Score", ""),
+                    "Winner": rec.get("Winner", ""),
+                    "GameID": rec.get("GameID", ""),
+                })
+            s["a_wins"] = a_wins
+            s["b_wins"] = b_wins
+            s["winner"] = s["a"] if a_wins >= 4 else s["b"] if b_wins >= 4 else None
+        dynamic[key] = s
+    return dynamic
+
+def dynamic_series_for_team(team_name):
+    for key, s in build_dynamic_second_round_series().items():
+        if team_name in [s["a"], s["b"]]:
+            return key, s
+    return None, None
+
+def dynamic_series_status_text(team_name):
+    key, s = dynamic_series_for_team(team_name)
+    if not s:
+        return "No active series"
+    a, b = s["a"], s["b"]
+    aw, bw = s["a_wins"], s["b_wins"]
+    opp = b if team_name == a else a
+    team_wins = aw if team_name == a else bw
+    opp_wins = bw if team_name == a else aw
+    team_alias = TEAM_ALIASES.get(team_name, team_name)
+    opp_alias = TEAM_ALIASES.get(opp, opp)
+    verb = "leads" if team_wins > opp_wins else "trails" if team_wins < opp_wins else "tied"
+    return f"{team_alias} {verb} {team_wins}-{opp_wins} vs {opp_alias}"
+
+def get_latest_completed_game_for_team(team_name):
+    key, s = dynamic_series_for_team(team_name)
+    if not s or not s.get("games"):
+        return None
+    return s["games"][-1]
+
+@st.cache_data(ttl=1800)
+def get_playbyplay_for_game_id(game_id):
+    if not NBA_LIVE_AVAILABLE or not game_id:
+        return []
+    try:
+        return playbyplay.PlayByPlay(game_id).get_dict().get("game", {}).get("actions", [])
+    except Exception:
+        return []
+
+def previous_game_top_plays(team_name, limit=5):
+    latest = get_latest_completed_game_for_team(team_name)
+    team_alias = TEAM_ALIASES.get(team_name)
+    if latest and latest.get("GameID"):
+        actions = get_playbyplay_for_game_id(latest["GameID"])
+        df = generate_top_plays_from_actions(actions, team_alias, team_name, limit=limit)
+        if not df.empty:
+            df.insert(0, "Game", latest.get("Game", "Previous Game"))
+            return df
+    fallback = fallback_top_plays_for_team(team_name)
+    if latest and "Game" not in fallback.columns:
+        fallback = fallback.copy()
+        fallback.insert(0, "Game", latest.get("Game", "Previous Game"))
+    return fallback
+
+def historic_series_tracking_table(team_name):
+    key, s = dynamic_series_for_team(team_name)
+    if not s:
+        return pd.DataFrame()
+    a, b = s["a"], s["b"]
+    aw, bw = s["a_wins"], s["b_wins"]
+    team_wins = aw if team_name == a else bw
+    opp_wins = bw if team_name == a else aw
+    if team_wins == 0 and opp_wins == 0:
+        context = "Series has not started or no completed games are detected yet."
+        meaning = "Game 1 sets the first major tone of the series."
+    elif team_wins == 1 and opp_wins == 0:
+        context = "Winning Game 1 improves the series outlook, especially if it protected home court."
+        meaning = "Winning Game 2 would create a strong 2-0 position."
+    elif team_wins == 2 and opp_wins == 0:
+        context = "Teams leading 2-0 historically win the large majority of best-of-seven series."
+        meaning = "The goal becomes controlling at least one road game."
+    elif team_wins == 1 and opp_wins == 1:
+        context = "A 1-1 series is close to a reset."
+        meaning = "Game 3 becomes a major swing game."
+    elif team_wins < opp_wins:
+        context = "The team is behind in the series and needs to change momentum."
+        meaning = "The next game is high leverage."
+    else:
+        context = "The team has the series edge, but closing playoff series requires clean late-game execution."
+        meaning = "Avoid giving the opponent a reset game."
+    return pd.DataFrame([{
+        "Series Status": dynamic_series_status_text(team_name),
+        "Historical Context": context,
+        "What It Means Next": meaning,
+    }])
+
 PAGES = {
     "🏀 Home Dashboard": "Home Dashboard",
     "🏀 Playoff Bracket": "Playoff Bracket",
@@ -995,194 +1184,3 @@ elif page == "Matchup Lineups":
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | Fixed Streamlit output | Live shot chart: Blue O = make, Red X = miss")
-
-
-
-# ==========================================================
-# AUTOMATIC SERIES / BRACKET / TOP-PLAY TRACKING
-# ==========================================================
-
-def date_range_strings(days_back=10, days_forward=2):
-    today = datetime.now().date()
-    return [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(-days_back, days_forward + 1)]
-
-@st.cache_data(ttl=900)
-def get_recent_live_scoreboard_games(days_back=10, days_forward=2):
-    games = []
-    if not NBA_LIVE_AVAILABLE:
-        return games
-    for date_str in date_range_strings(days_back, days_forward):
-        try:
-            board = scoreboard.ScoreBoard(game_date=date_str)
-            data = board.get_dict()
-            day_games = data.get("scoreboard", {}).get("games", [])
-            for g in day_games:
-                g["_scoreboard_date"] = date_str
-                games.append(g)
-        except Exception:
-            continue
-    return games
-
-def normalize_scoreboard_team_name(team_dict):
-    city = team_dict.get("teamCity", "") or ""
-    name = team_dict.get("teamName", "") or ""
-    tri = team_dict.get("teamTricode", "") or ""
-    full = f"{city} {name}".strip()
-    if full in TEAM_PROFILES:
-        return full
-    alias_to_team = {alias: team for team, alias in TEAM_ALIASES.items()}
-    return alias_to_team.get(tri, full)
-
-def is_game_final(game):
-    status = (game.get("gameStatusText") or "").lower()
-    return "final" in status or safe_int(game.get("gameStatus", 0)) == 3
-
-def completed_game_record_from_scoreboard(game):
-    home = game.get("homeTeam", {})
-    away = game.get("awayTeam", {})
-    home_team = normalize_scoreboard_team_name(home)
-    away_team = normalize_scoreboard_team_name(away)
-    home_score = safe_int(home.get("score", 0))
-    away_score = safe_int(away.get("score", 0))
-    winner = home_team if home_score > away_score else away_team if away_score > home_score else None
-    return {
-        "Game": game.get("gameLabel", "") or game.get("gameStatusText", "") or "Completed Game",
-        "Date": game.get("_scoreboard_date", ""),
-        "Matchup": f"{away_team} at {home_team}",
-        "Score": f"{away_team} {away_score}, {home_team} {home_score}",
-        "Winner": winner,
-        "GameID": game.get("gameId", ""),
-        "Home": home_team,
-        "Away": away_team,
-        "HomeScore": home_score,
-        "AwayScore": away_score,
-    }
-
-@st.cache_data(ttl=900)
-def automatic_completed_games_for_series(series_key):
-    if series_key not in SECOND_ROUND_SERIES:
-        return []
-    series = SECOND_ROUND_SERIES[series_key]
-    target_teams = {series["a"], series["b"]}
-    records = []
-    for game in get_recent_live_scoreboard_games():
-        if not is_game_final(game):
-            continue
-        rec = completed_game_record_from_scoreboard(game)
-        if {rec["Home"], rec["Away"]} == target_teams:
-            records.append(rec)
-    deduped = {}
-    for rec in records:
-        k = rec.get("GameID") or f"{rec['Date']}-{rec['Matchup']}"
-        deduped[k] = rec
-    return list(deduped.values())
-
-def build_dynamic_second_round_series():
-    dynamic = {}
-    for key, base in SECOND_ROUND_SERIES.items():
-        s = dict(base)
-        s["games"] = list(base.get("games", []))
-        auto_games = automatic_completed_games_for_series(key)
-        if auto_games:
-            s["games"] = []
-            a_wins = 0
-            b_wins = 0
-            for idx, rec in enumerate(auto_games, start=1):
-                if rec["Winner"] == s["a"]:
-                    a_wins += 1
-                elif rec["Winner"] == s["b"]:
-                    b_wins += 1
-                s["games"].append({
-                    "Game": f"Game {idx}",
-                    "Date": rec.get("Date", ""),
-                    "Score": rec.get("Score", ""),
-                    "Winner": rec.get("Winner", ""),
-                    "GameID": rec.get("GameID", ""),
-                })
-            s["a_wins"] = a_wins
-            s["b_wins"] = b_wins
-            s["winner"] = s["a"] if a_wins >= 4 else s["b"] if b_wins >= 4 else None
-        dynamic[key] = s
-    return dynamic
-
-def dynamic_series_for_team(team_name):
-    for key, s in build_dynamic_second_round_series().items():
-        if team_name in [s["a"], s["b"]]:
-            return key, s
-    return None, None
-
-def dynamic_series_status_text(team_name):
-    key, s = dynamic_series_for_team(team_name)
-    if not s:
-        return "No active series"
-    a, b = s["a"], s["b"]
-    aw, bw = s["a_wins"], s["b_wins"]
-    opp = b if team_name == a else a
-    team_wins = aw if team_name == a else bw
-    opp_wins = bw if team_name == a else aw
-    team_alias = TEAM_ALIASES.get(team_name, team_name)
-    opp_alias = TEAM_ALIASES.get(opp, opp)
-    verb = "leads" if team_wins > opp_wins else "trails" if team_wins < opp_wins else "tied"
-    return f"{team_alias} {verb} {team_wins}-{opp_wins} vs {opp_alias}"
-
-def get_latest_completed_game_for_team(team_name):
-    key, s = dynamic_series_for_team(team_name)
-    if not s or not s.get("games"):
-        return None
-    return s["games"][-1]
-
-@st.cache_data(ttl=1800)
-def get_playbyplay_for_game_id(game_id):
-    if not NBA_LIVE_AVAILABLE or not game_id:
-        return []
-    try:
-        return playbyplay.PlayByPlay(game_id).get_dict().get("game", {}).get("actions", [])
-    except Exception:
-        return []
-
-def previous_game_top_plays(team_name, limit=5):
-    latest = get_latest_completed_game_for_team(team_name)
-    team_alias = TEAM_ALIASES.get(team_name)
-    if latest and latest.get("GameID"):
-        actions = get_playbyplay_for_game_id(latest["GameID"])
-        df = generate_top_plays_from_actions(actions, team_alias, team_name, limit=limit)
-        if not df.empty:
-            df.insert(0, "Game", latest.get("Game", "Previous Game"))
-            return df
-    fallback = fallback_top_plays_for_team(team_name)
-    if latest and "Game" not in fallback.columns:
-        fallback = fallback.copy()
-        fallback.insert(0, "Game", latest.get("Game", "Previous Game"))
-    return fallback
-
-def historic_series_tracking_table(team_name):
-    key, s = dynamic_series_for_team(team_name)
-    if not s:
-        return pd.DataFrame()
-    a, b = s["a"], s["b"]
-    aw, bw = s["a_wins"], s["b_wins"]
-    team_wins = aw if team_name == a else bw
-    opp_wins = bw if team_name == a else aw
-    if team_wins == 0 and opp_wins == 0:
-        context = "Series has not started or no completed games are detected yet."
-        meaning = "Game 1 sets the first major tone of the series."
-    elif team_wins == 1 and opp_wins == 0:
-        context = "Winning Game 1 improves the series outlook, especially if it protected home court."
-        meaning = "Winning Game 2 would create a strong 2-0 position."
-    elif team_wins == 2 and opp_wins == 0:
-        context = "Teams leading 2-0 historically win the large majority of best-of-seven series."
-        meaning = "The goal becomes controlling at least one road game."
-    elif team_wins == 1 and opp_wins == 1:
-        context = "A 1-1 series is close to a reset."
-        meaning = "Game 3 becomes a major swing game."
-    elif team_wins < opp_wins:
-        context = "The team is behind in the series and needs to change momentum."
-        meaning = "The next game is high leverage."
-    else:
-        context = "The team has the series edge, but closing playoff series requires clean late-game execution."
-        meaning = "Avoid giving the opponent a reset game."
-    return pd.DataFrame([{
-        "Series Status": dynamic_series_status_text(team_name),
-        "Historical Context": context,
-        "What It Means Next": meaning,
-    }])
