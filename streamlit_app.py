@@ -108,13 +108,37 @@ FIRST_ROUND_SERIES = {
     "LAL-HOU": {"conf":"West","a":"Los Angeles Lakers","b":"Houston Rockets","a_wins":4,"b_wins":2,"winner":"Los Angeles Lakers"},
 }
 
-# Fallback second-round state. API results override/supplement these when available.
-SECOND_ROUND_SERIES_FALLBACK = {
-    "DET-CLE": {"conf":"East","a":"Detroit Pistons","b":"Cleveland Cavaliers","a_wins":1,"b_wins":0,"winner":None,"games":[{"Game":"Game 1","Date":"","Score":"Pistons 111, Cavaliers 101","Winner":"Detroit Pistons","GameID":""}]},
-    "NYK-PHI": {"conf":"East","a":"New York Knicks","b":"Philadelphia 76ers","a_wins":1,"b_wins":0,"winner":None,"games":[{"Game":"Game 1","Date":"","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks","GameID":""}]},
-    "OKC-LAL": {"conf":"West","a":"Oklahoma City Thunder","b":"Los Angeles Lakers","a_wins":0,"b_wins":0,"winner":None,"games":[]},
-    "SAS-MIN": {"conf":"West","a":"San Antonio Spurs","b":"Minnesota Timberwolves","a_wins":0,"b_wins":1,"winner":None,"games":[{"Game":"Game 1","Date":"","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves","GameID":""}]},
+# ==========================================================
+# Automatic playoff series templates
+# ==========================================================
+# These are matchup shells, not score data. The app should get scores from the
+# NBA API first. Demo/fallback scores are only used when the API is unavailable
+# or when you intentionally turn on demo backup in the sidebar.
+SECOND_ROUND_SERIES_TEMPLATE = {
+    "DET-CLE": {"conf":"East","round":"Second Round","a":"Detroit Pistons","b":"Cleveland Cavaliers"},
+    "NYK-PHI": {"conf":"East","round":"Second Round","a":"New York Knicks","b":"Philadelphia 76ers"},
+    "OKC-LAL": {"conf":"West","round":"Second Round","a":"Oklahoma City Thunder","b":"Los Angeles Lakers"},
+    "SAS-MIN": {"conf":"West","round":"Second Round","a":"San Antonio Spurs","b":"Minnesota Timberwolves"},
 }
+
+# Emergency/demo backup only. Do not use these as the normal truth source.
+SECOND_ROUND_DEMO_BACKUP = {
+    "DET-CLE": {"games":[
+        {"Game":"Game 1","Date":"May 4","Score":"Pistons 111, Cavaliers 101","Winner":"Detroit Pistons","GameID":"demo-det-cle-g1"},
+        {"Game":"Game 2","Date":"May 6","Score":"Pistons 105, Cavaliers 97","Winner":"Detroit Pistons","GameID":"demo-det-cle-g2"},
+    ]},
+    "NYK-PHI": {"games":[
+        {"Game":"Game 1","Date":"May 4","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks","GameID":"demo-nyk-phi-g1"},
+        {"Game":"Game 2","Date":"May 6","Score":"Knicks 108, 76ers 102","Winner":"New York Knicks","GameID":"demo-nyk-phi-g2"},
+    ]},
+    "OKC-LAL": {"games":[]},
+    "SAS-MIN": {"games":[
+        {"Game":"Game 1","Date":"May 5","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g1"},
+    ]},
+}
+
+PLAYOFF_START_DATE = "2026-04-18"
+PLAYOFF_END_DATE = "2026-06-30"
 
 FIRST_ROUND_GAME_SCORES = {
     "Detroit Pistons": [
@@ -187,9 +211,9 @@ for mirror, source in [("Orlando Magic","Detroit Pistons"),("Toronto Raptors","C
 
 FALLBACK_TOP_PLAYS = {
     "New York Knicks": [
-        {"Game":"Game 1 vs 76ers","Top Play":"Jalen Brunson controlled the half court early and repeatedly got New York into high-quality possessions.","Why it mattered":"It gave the Knicks control of the game and forced Philadelphia to chase."},
-        {"Game":"Game 1 vs 76ers","Top Play":"OG Anunoby and Mikal Bridges pressured Philadelphia's wings and disrupted clean perimeter rhythm.","Why it mattered":"It helped the Knicks turn defensive possessions into control of the game."},
-        {"Game":"Game 1 vs 76ers","Top Play":"Karl-Anthony Towns' spacing pulled size away from the rim and opened driving lanes.","Why it mattered":"It made the Knicks offense harder to load up against."},
+        {"Game":"Game 2 vs 76ers","Top Play":"New York closed out a 108-102 win and moved the series lead to 2-0.","Why it mattered":"The most recent completed game now drives the dashboard, bracket, and team outlook instead of stale Game 1 data."},
+        {"Game":"Game 2 vs 76ers","Top Play":"The Knicks protected the late-game margin and finished the fourth quarter with better control.","Why it mattered":"That is the type of playoff possession management that turns a 1-0 lead into a 2-0 series edge."},
+        {"Game":"Game 2 vs 76ers","Top Play":"New York held Philadelphia to 102 points.","Why it mattered":"The defensive floor is becoming a major part of the series story."},
     ],
     "Minnesota Timberwolves": [
         {"Game":"Game 1 vs Spurs","Top Play":"Anthony Edwards delivered late-game shot creation in a tight finish.","Why it mattered":"It gave Minnesota a reliable option when the game tightened."},
@@ -209,87 +233,176 @@ def safe_float(x, default=0.0):
     try: return float(x or default)
     except Exception: return default
 
-@st.cache_data(ttl=900)
-def fetch_completed_games_recent(days_back=14, days_forward=1):
-    """Attempts to pull recent completed NBA games from scoreboardv2. Falls back safely if unavailable."""
+@st.cache_data(ttl=300)
+def fetch_completed_games_recent(days_back=90, days_forward=1):
+    """Pull completed NBA games from the API over a rolling playoff window.
+
+    This is the main score source. It runs again automatically when Streamlit
+    reruns and the cache expires. During live games the live endpoint handles
+    current status; once a game is final, this scoreboardv2 pull records it.
+    """
     if not NBA_STATS_AVAILABLE:
         return []
     records = []
     today = datetime.now().date()
-    for i in range(-days_back, days_forward + 1):
-        d = today + timedelta(days=i)
+    start_date = max(datetime.fromisoformat(PLAYOFF_START_DATE).date(), today - timedelta(days=days_back))
+    end_date = min(datetime.fromisoformat(PLAYOFF_END_DATE).date(), today + timedelta(days=days_forward))
+    d = start_date
+    while d <= end_date:
         date_str = d.strftime("%m/%d/%Y")
         try:
-            df = scoreboardv2.ScoreboardV2(game_date=date_str).get_data_frames()[0]
+            df = scoreboardv2.ScoreboardV2(game_date=date_str, timeout=20).get_data_frames()[0]
         except Exception:
+            d += timedelta(days=1)
             continue
-        if df.empty:
-            continue
-        for _, r in df.iterrows():
-            status = str(r.get("GAME_STATUS_TEXT", ""))
-            if "Final" not in status:
-                continue
-            home_id = safe_int(r.get("HOME_TEAM_ID"))
-            away_id = safe_int(r.get("VISITOR_TEAM_ID"))
-            home = ID_TO_TEAM.get(home_id)
-            away = ID_TO_TEAM.get(away_id)
-            if not home or not away:
-                continue
-            home_pts = safe_int(r.get("PTS_HOME"))
-            away_pts = safe_int(r.get("PTS_AWAY"))
-            winner = home if home_pts > away_pts else away if away_pts > home_pts else None
-            records.append({
-                "GameID": str(r.get("GAME_ID", "")),
-                "Date": d.strftime("%b %-d") if hasattr(d, 'strftime') else str(d),
-                "Home": home, "Away": away,
-                "HomeScore": home_pts, "AwayScore": away_pts,
-                "Winner": winner,
-                "Score": f"{away} {away_pts}, {home} {home_pts}",
-                "Matchup": f"{away} at {home}",
-            })
+        if not df.empty:
+            for _, r in df.iterrows():
+                status = str(r.get("GAME_STATUS_TEXT", ""))
+                if "Final" not in status:
+                    continue
+                home_id = safe_int(r.get("HOME_TEAM_ID"))
+                away_id = safe_int(r.get("VISITOR_TEAM_ID"))
+                home = ID_TO_TEAM.get(home_id)
+                away = ID_TO_TEAM.get(away_id)
+                if not home or not away:
+                    continue
+                home_pts = safe_int(r.get("PTS_HOME"))
+                away_pts = safe_int(r.get("PTS_AWAY"))
+                winner = home if home_pts > away_pts else away if away_pts > home_pts else None
+                records.append({
+                    "GameID": str(r.get("GAME_ID", "")),
+                    "GameDate": d.isoformat(),
+                    "Date": d.strftime("%b %d").replace(" 0", " "),
+                    "Home": home,
+                    "Away": away,
+                    "HomeScore": home_pts,
+                    "AwayScore": away_pts,
+                    "Winner": winner,
+                    "Score": f"{away} {away_pts}, {home} {home_pts}",
+                    "Matchup": f"{away} at {home}",
+                    "Source": "NBA API",
+                })
+        d += timedelta(days=1)
     return records
 
-def series_key_for_pair(t1, t2):
+def series_key_for_pair(t1, t2, templates=None):
     pair = {t1, t2}
-    for key, s in SECOND_ROUND_SERIES_FALLBACK.items():
+    templates = templates or SECOND_ROUND_SERIES_TEMPLATE
+    for key, s in templates.items():
         if {s["a"], s["b"]} == pair:
             return key
     return None
 
-@st.cache_data(ttl=300)
-def build_second_round_series():
-    """Builds current second-round state from API completed games when possible, with fallback data if API fails."""
-    dynamic = {k: {**v, "games": list(v.get("games", []))} for k, v in SECOND_ROUND_SERIES_FALLBACK.items()}
-    api_games = fetch_completed_games_recent()
-    grouped = {k: [] for k in dynamic}
-    for g in api_games:
-        key = series_key_for_pair(g["Home"], g["Away"])
-        if key:
-            grouped[key].append(g)
-    for key, games in grouped.items():
-        if not games:
-            continue
-        # Sort by date text not perfect; keep API order by query date and de-dupe by GameID.
-        seen = set(); clean = []
-        for g in games:
-            ident = g.get("GameID") or (g["Date"] + g["Matchup"])
-            if ident in seen: continue
-            seen.add(ident); clean.append(g)
-        s = dynamic[key]
+def clean_and_recount_series(series):
+    """De-dupe, sort, label Game 1/Game 2/etc., and recalculate wins."""
+    for key, s in series.items():
         a, b = s["a"], s["b"]
-        a_wins = sum(1 for g in clean if g["Winner"] == a)
-        b_wins = sum(1 for g in clean if g["Winner"] == b)
-        s["a_wins"], s["b_wins"] = a_wins, b_wins
-        s["winner"] = a if a_wins >= 4 else b if b_wins >= 4 else None
-        s["games"] = []
-        for idx, g in enumerate(clean, start=1):
-            s["games"].append({"Game": f"Game {idx}", "Date": g.get("Date",""), "Score": g["Score"], "Winner": g["Winner"], "GameID": g.get("GameID","")})
-    return dynamic
+        cleaned, seen = [], set()
+        for g in s.get("games", []):
+            ident = g.get("GameID") or f"{g.get('GameDate','')}|{g.get('Score','')}|{g.get('Winner','')}"
+            if ident in seen:
+                continue
+            seen.add(ident)
+            cleaned.append(dict(g))
+
+        def sort_key(g):
+            gd = g.get("GameDate", "")
+            if gd:
+                return gd
+            try:
+                return datetime.strptime(g.get("Date", "") + " 2026", "%b %d %Y").date().isoformat()
+            except Exception:
+                return "9999-12-31"
+
+        cleaned = sorted(cleaned, key=sort_key)
+        for idx, g in enumerate(cleaned, start=1):
+            g["Game"] = f"Game {idx}"
+            g.pop("GameDate", None)
+        s["games"] = cleaned
+        s["a_wins"] = sum(1 for g in cleaned if g.get("Winner") == a)
+        s["b_wins"] = sum(1 for g in cleaned if g.get("Winner") == b)
+        s["winner"] = a if s["a_wins"] >= 4 else b if s["b_wins"] >= 4 else None
+        s["source"] = "NBA API" if any(g.get("Source") == "NBA API" for g in cleaned) else ("Demo backup" if cleaned else "Waiting for API games")
+    return series
+
+@st.cache_data(ttl=300)
+def build_second_round_series_cached(use_demo_backup=False):
+    """Build second-round series automatically from NBA API data.
+
+    If use_demo_backup=False, no scores are hard-coded for the current round.
+    The bracket waits for the API to report completed games.
+    """
+    dynamic = {k: {**v, "a_wins":0, "b_wins":0, "winner":None, "games":[]} for k, v in SECOND_ROUND_SERIES_TEMPLATE.items()}
+
+    api_games = fetch_completed_games_recent()
+    for g in api_games:
+        key = series_key_for_pair(g.get("Home"), g.get("Away"), SECOND_ROUND_SERIES_TEMPLATE)
+        if not key:
+            continue
+        dynamic[key].setdefault("games", []).append({
+            "Game": "",
+            "Date": g.get("Date", ""),
+            "GameDate": g.get("GameDate", ""),
+            "Score": g.get("Score", ""),
+            "Winner": g.get("Winner", ""),
+            "GameID": g.get("GameID", ""),
+            "Source": "NBA API",
+        })
+
+    # Optional demo backup only if the API has not produced any games for that series.
+    if use_demo_backup:
+        for key, backup in SECOND_ROUND_DEMO_BACKUP.items():
+            if key in dynamic and not dynamic[key].get("games"):
+                dynamic[key]["games"] = [dict(g, Source="Demo backup") for g in backup.get("games", [])]
+
+    return clean_and_recount_series(dynamic)
+
+def build_second_round_series():
+    # The sidebar variable is created later; default is strict API mode.
+    return build_second_round_series_cached(globals().get("USE_DEMO_BACKUP", False))
+
+def infer_next_round_series(round_name, conf=None):
+    """Infer Conference Finals/Finals once API games between winners appear.
+
+    This avoids hard-coding future scores. Once second-round winners are known,
+    games between those winners are grouped automatically. Finals are inferred
+    once East and West winners have NBA API games against each other.
+    """
+    second = build_second_round_series()
+    east_winners = [s.get("winner") for s in second.values() if s.get("conf") == "East" and s.get("winner")]
+    west_winners = [s.get("winner") for s in second.values() if s.get("conf") == "West" and s.get("winner")]
+
+    if round_name == "Conference Finals":
+        teams = east_winners if conf == "East" else west_winners
+        if len(teams) != 2:
+            return None
+        templates = {f"{TEAM_ALIASES[teams[0]]}-{TEAM_ALIASES[teams[1]]}": {"conf":conf,"round":"Conference Finals","a":teams[0],"b":teams[1]}}
+    else:
+        if len(east_winners) != 1 or len(west_winners) != 1:
+            return None
+        templates = {f"{TEAM_ALIASES[east_winners[0]]}-{TEAM_ALIASES[west_winners[0]]}": {"conf":"NBA Finals","round":"NBA Finals","a":east_winners[0],"b":west_winners[0]}}
+
+    dynamic = {k: {**v, "a_wins":0, "b_wins":0, "winner":None, "games":[]} for k, v in templates.items()}
+    for g in fetch_completed_games_recent():
+        key = series_key_for_pair(g.get("Home"), g.get("Away"), templates)
+        if key:
+            dynamic[key]["games"].append({
+                "Game":"", "Date":g.get("Date",""), "GameDate":g.get("GameDate",""),
+                "Score":g.get("Score",""), "Winner":g.get("Winner",""),
+                "GameID":g.get("GameID",""), "Source":"NBA API"
+            })
+    return clean_and_recount_series(dynamic)
 
 def series_for_team(team_name):
     for key, s in build_second_round_series().items():
         if team_name in [s["a"], s["b"]]:
             return key, s
+    # Future rounds, if already generated by API results.
+    for collection in [infer_next_round_series("Conference Finals", "East"), infer_next_round_series("Conference Finals", "West"), infer_next_round_series("NBA Finals")]:
+        if collection:
+            for key, s in collection.items():
+                if team_name in [s["a"], s["b"]]:
+                    return key, s
     return None, None
 
 def series_status_text(team_name):
@@ -301,7 +414,8 @@ def series_status_text(team_name):
     opp = b if team_name == a else a
     opp_w = bw if team_name == a else aw
     verb = "leads" if team_w > opp_w else "trails" if team_w < opp_w else "tied"
-    return f"{TEAM_ALIASES[team_name]} {verb} {team_w}-{opp_w} vs {TEAM_ALIASES[opp]}"
+    source_note = "" if s.get("source") == "NBA API" else f" ({s.get('source','')})"
+    return f"{TEAM_ALIASES[team_name]} {verb} {team_w}-{opp_w} vs {TEAM_ALIASES[opp]}{source_note}"
 
 def historic_series_context(team_name):
     _, s = series_for_team(team_name)
@@ -309,6 +423,8 @@ def historic_series_context(team_name):
     a, b = s["a"], s["b"]
     tw = s["a_wins"] if team_name == a else s["b_wins"]
     ow = s["b_wins"] if team_name == a else s["a_wins"]
+    last = s.get("games", [])[-1] if s.get("games") else None
+    latest_note = f" Most recent completed game: {last.get('Game')} on {last.get('Date')}: {last.get('Score')}." if last else " No completed API game has been loaded yet."
     if tw == 1 and ow == 0:
         note = "Winning Game 1 improves the series outlook; Game 2 can create a major 2-0 advantage."
     elif tw == 2 and ow == 0:
@@ -318,10 +434,10 @@ def historic_series_context(team_name):
     elif tw < ow:
         note = "The team is trailing and needs to change the series momentum quickly."
     elif tw == 0 and ow == 0:
-        note = "No completed second-round game detected yet. Game 1 sets the tone."
+        note = "No completed game detected yet. Game 1 sets the tone."
     else:
         note = "The team has the series edge, but must keep winning possession battles to close it out."
-    return pd.DataFrame([{"Series Status": series_status_text(team_name), "Historical Context": note}])
+    return pd.DataFrame([{"Series Status": series_status_text(team_name), "Data Source": s.get("source",""), "Historical Context": note + latest_note}])
 
 @st.cache_data(ttl=30)
 def get_live_games():
@@ -546,6 +662,9 @@ def render_bracket():
     second=build_second_round_series()
     east_fr=[s for s in FIRST_ROUND_SERIES.values() if s["conf"]=="East"]; west_fr=[s for s in FIRST_ROUND_SERIES.values() if s["conf"]=="West"]
     east_sr=[s for s in second.values() if s["conf"]=="East"]; west_sr=[s for s in second.values() if s["conf"]=="West"]
+    east_conf = infer_next_round_series("Conference Finals", "East")
+    west_conf = infer_next_round_series("Conference Finals", "West")
+    finals = infer_next_round_series("NBA Finals")
     east_cf=[s.get("winner") or "TBD" for s in east_sr]; west_cf=[s.get("winner") or "TBD" for s in west_sr]
     html=f"""
     <div class='bracket-wrap'><div class='bracket-title'>2026 NBA PLAYOFF BRACKET</div><div class='bracket-sub'>Auto-refreshing bracket view · API scores override fallback data when available</div>
@@ -558,10 +677,19 @@ def render_bracket():
     </div></div>"""
     st.markdown(html, unsafe_allow_html=True)
 
+def latest_game_note(team):
+    _, s = series_for_team(team)
+    if not s or not s.get("games"):
+        return "No completed current-series game has been detected yet."
+    last = s["games"][-1]
+    result = "won" if last.get("Winner") == team else "lost"
+    return f"Most recent game: {last.get('Game','Previous Game')} on {last.get('Date','recently')} — {last.get('Score','score unavailable')}. {team} {result} that game."
+
 def render_team_outlook(team):
     p=TEAM_PROFILES[team]
     st.subheader("Team Outlook")
     st.markdown(f"<div class='big-status'>{series_status_text(team)}</div>", unsafe_allow_html=True)
+    st.info(latest_game_note(team))
     st.markdown("### What is going well")
     for s in p["strengths"]:
         if team == "New York Knicks" and "Towns" in s:
@@ -629,6 +757,11 @@ PAGES={
     "🏀 Matchup Lineups":"Matchup Lineups",
 }
 favorite_team=st.sidebar.selectbox("Choose your 2026 NBA playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
+USE_DEMO_BACKUP = st.sidebar.toggle(
+    "Use demo backup scores only if NBA API has no game data",
+    value=False,
+    help="Leave this OFF for true automatic tracking. Turn it ON only when testing or when nba_api is unavailable."
+)
 profile=TEAM_PROFILES[favorite_team]
 labels=list(PAGES.keys())
 def_label=st.session_state.pop("page_override", "🏀 Home Dashboard")
@@ -647,6 +780,7 @@ if page == "Home Dashboard":
     render_game_countdown(favorite_team)
     _, s=series_for_team(favorite_team)
     if s and s.get("games"):
+        st.caption(f"Auto-updated from completed games/fallback data · Last app refresh: {datetime.now().strftime('%b %d, %Y %I:%M %p')}")
         st.subheader("Current Series Scores")
         st.dataframe(pd.DataFrame(s["games"]), use_container_width=True)
         st.subheader("Previous Game Top Plays")
