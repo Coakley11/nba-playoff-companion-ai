@@ -665,77 +665,225 @@ def summarize_playoff_logs(logs):
         out[c] = round(float(vals.mean()), 3) if len(vals) else 0.0
     return out
 
-def player_legacy_archetype(player_name):
-    n = player_name.lower()
-    if "brunson" in n: return "lead guard", ["Walt Frazier", "Earl Monroe", "Mark Jackson", "Allan Houston", "Chauncey Billups", "Damian Lillard"]
-    if "towns" in n: return "scoring big", ["Patrick Ewing", "Willis Reed", "Dirk Nowitzki", "Chris Bosh", "Anthony Davis", "Nikola Jokic"]
-    if "anunoby" in n or "bridges" in n: return "two-way wing", ["Dave DeBusschere", "Latrell Sprewell", "Kawhi Leonard", "Andre Iguodala", "Scottie Pippen", "Jimmy Butler"]
-    if "hart" in n: return "winning role star", ["Charles Oakley", "Anthony Mason", "Draymond Green", "Shane Battier", "Andre Iguodala", "Marcus Smart"]
-    if "cunningham" in n: return "franchise guard", ["Isiah Thomas", "Joe Dumars", "Chauncey Billups", "Grant Hill", "Luka Doncic", "Shai Gilgeous-Alexander"]
-    if "mitchell" in n or "garland" in n or "maxey" in n: return "explosive guard", ["Kyrie Irving", "Mark Price", "Allen Iverson", "Dwyane Wade", "Donovan Mitchell", "Damian Lillard"]
-    if "embiid" in n: return "MVP center", ["Wilt Chamberlain", "Moses Malone", "Hakeem Olajuwon", "Shaquille O'Neal", "Nikola Jokic", "Patrick Ewing"]
-    if "james" in n or "lebron" in n: return "all-time legend", ["Michael Jordan", "Kareem Abdul-Jabbar", "Magic Johnson", "Larry Bird", "Kobe Bryant", "Tim Duncan"]
-    if "davis" in n or "wembanyama" in n or "gobert" in n or "chet" in n: return "defensive big", ["Bill Russell", "Hakeem Olajuwon", "David Robinson", "Kevin Garnett", "Anthony Davis", "Rudy Gobert"]
-    if "edwards" in n or "shai" in n or "gilgeous" in n: return "elite scoring creator", ["Kobe Bryant", "Dwyane Wade", "Kevin Durant", "James Harden", "Allen Iverson", "Tracy McGrady"]
-    return "playoff contributor", ["Robert Horry", "Andre Iguodala", "Chauncey Billups", "Jimmy Butler", "Kyle Lowry", "Shane Battier"]
+def _name_tokens(name):
+    return {tok for tok in str(name).lower().replace(".", " ").replace("-", " ").split() if len(tok) >= 3}
 
-def legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds_won, title_won=False):
-    scoring = pts * 0.85
-    all_around = reb * 0.45 + ast * 0.60 + stl * 1.20 + blk * 1.00
-    efficiency = max(0, (fg - 0.42) * 55) + max(0, (three - 0.33) * 25)
-    impact = plus_minus * 0.45
-    winning = rounds_won * 9 + (18 if title_won else 0)
-    return round(max(0, min(100, 28 + scoring + all_around + efficiency + impact + winning)), 1)
+def _remove_self_comparisons(player_name, comps):
+    """Never compare a player to himself. Also removes near matches by last/name token overlap."""
+    player_tokens = _name_tokens(player_name)
+    clean = []
+    for comp in comps:
+        comp_tokens = _name_tokens(comp)
+        if str(comp).lower() == str(player_name).lower():
+            continue
+        # Avoid things like selected Donovan Mitchell being compared to Donovan Mitchell.
+        if player_tokens and comp_tokens and player_tokens.issubset(comp_tokens):
+            continue
+        if comp not in clean:
+            clean.append(comp)
+    backup = ["Walt Frazier", "Isiah Thomas", "Dwyane Wade", "Kawhi Leonard", "Dirk Nowitzki", "Kevin Garnett", "Jimmy Butler", "Chauncey Billups", "Robert Horry", "Shane Battier"]
+    for b in backup:
+        if b not in clean and not (_name_tokens(player_name) and _name_tokens(player_name).issubset(_name_tokens(b))):
+            clean.append(b)
+        if len(clean) >= 6:
+            break
+    return clean[:6]
+
+
+def player_resume_profile(player_name, team_name=""):
+    """Career/resume starting point before this playoff run.
+    Higher baselines reflect already-established NBA/team legacy.
+    """
+    n = player_name.lower()
+    team = str(team_name)
+
+    profiles = {
+        "lebron": {
+            "baseline": 94, "ceiling": 100, "role": "all-time legend",
+            "tier_name": "all-time NBA-history tier",
+            "resume": "LeBron already starts near the top because his résumé includes multiple championships, MVP-level longevity, Finals runs, and a long-standing place in the GOAT conversation.",
+            "team_context": "For the Lakers, another title would add another late-career championship chapter rather than create his legacy from scratch.",
+            "comps": ["Michael Jordan", "Kareem Abdul-Jabbar", "Magic Johnson", "Larry Bird", "Kobe Bryant", "Tim Duncan"]
+        },
+        "brunson": {
+            "baseline": 68, "ceiling": 96, "role": "lead guard",
+            "tier_name": "Knicks lead-guard tier",
+            "resume": "Brunson already starts high for a Knick because he has become the offense's identity, the late-game creator, and the player most associated with this Knicks era.",
+            "team_context": "A deeper run would push him closer to the Knicks guard lineage of Walt Frazier, Earl Monroe, and the most memorable modern Madison Square Garden playoff stars.",
+            "comps": ["Walt Frazier", "Earl Monroe", "Chauncey Billups", "Damian Lillard", "Isiah Thomas", "Allen Iverson"]
+        },
+        "towns": {
+            "baseline": 61, "ceiling": 91, "role": "scoring big",
+            "tier_name": "star big-man tier",
+            "resume": "Karl-Anthony Towns starts above normal starters because he entered this run as an established All-Star caliber offensive big with major scoring and spacing value.",
+            "team_context": "For the Knicks, a title-level run would connect him to the franchise's historic big-man tradition, though he would still need signature playoff moments to approach Ewing/Reed territory.",
+            "comps": ["Patrick Ewing", "Willis Reed", "Chris Bosh", "Dirk Nowitzki", "Anthony Davis", "Pau Gasol"]
+        },
+        "anunoby": {
+            "baseline": 50, "ceiling": 82, "role": "two-way wing",
+            "tier_name": "elite two-way wing tier",
+            "resume": "OG Anunoby starts with a strong defender's résumé and championship-role credibility, but his legacy ceiling depends on visible two-way impact in big series.",
+            "team_context": "For the Knicks, his path is about becoming a remembered defensive stopper and wing connector in a deep playoff run.",
+            "comps": ["Kawhi Leonard", "Andre Iguodala", "Tayshaun Prince", "Shane Battier", "Scottie Pippen", "Bruce Bowen"]
+        },
+        "bridges": {
+            "baseline": 48, "ceiling": 82, "role": "two-way wing",
+            "tier_name": "two-way ironman wing tier",
+            "resume": "Mikal Bridges starts with strong defensive reputation, durability, and high-end role-player/star-adjacent value, but needs a major playoff run to jump tiers.",
+            "team_context": "For the Knicks, his legacy grows most if he becomes the wing who guards stars while also hitting timely shots.",
+            "comps": ["Andre Iguodala", "Tayshaun Prince", "Shane Battier", "Khris Middleton", "Jimmy Butler", "Kawhi Leonard"]
+        },
+        "hart": {
+            "baseline": 44, "ceiling": 76, "role": "winning role star",
+            "tier_name": "Knicks glue-guy tier",
+            "resume": "Josh Hart starts with a real fan-legacy base because his rebounding, toughness, and energy already define part of the Knicks identity.",
+            "team_context": "His Knicks legacy rises through winning possessions, huge rebounds, and fourth-quarter plays more than superstar scoring numbers.",
+            "comps": ["Charles Oakley", "Anthony Mason", "Draymond Green", "Shane Battier", "Marcus Smart", "Andre Iguodala"]
+        },
+        "cunningham": {
+            "baseline": 56, "ceiling": 95, "role": "franchise guard",
+            "tier_name": "Pistons franchise-guard tier",
+            "resume": "Cade Cunningham starts with a meaningful but still-building résumé as Detroit's primary creator and franchise centerpiece.",
+            "team_context": "For Detroit, each round matters because he is trying to move from promising centerpiece to a guard remembered with Isiah Thomas, Joe Dumars, and Chauncey Billups references.",
+            "comps": ["Isiah Thomas", "Joe Dumars", "Chauncey Billups", "Grant Hill", "Luka Doncic", "Shai Gilgeous-Alexander"]
+        },
+        "embiid": {
+            "baseline": 76, "ceiling": 98, "role": "MVP center",
+            "tier_name": "MVP-center tier",
+            "resume": "Joel Embiid starts very high because he already has MVP-level peak value and years as a dominant regular-season centerpiece.",
+            "team_context": "His legacy jumps most from deep playoff advancement because that is the missing piece people use against his résumé.",
+            "comps": ["Moses Malone", "Hakeem Olajuwon", "Shaquille O'Neal", "Nikola Jokic", "Patrick Ewing", "David Robinson"]
+        },
+        "davis": {
+            "baseline": 78, "ceiling": 96, "role": "championship defensive big",
+            "tier_name": "championship big-man tier",
+            "resume": "Anthony Davis starts very high because he already has a championship, elite defensive peak, and All-NBA level two-way résumé.",
+            "team_context": "Another Lakers run would strengthen his case as one of the great two-way bigs of his era.",
+            "comps": ["Kevin Garnett", "David Robinson", "Hakeem Olajuwon", "Tim Duncan", "Dwight Howard", "Pau Gasol"]
+        },
+    }
+
+    for key, prof in profiles.items():
+        if key in n:
+            return prof
+
+    # General named stars / high baselines
+    if any(x in n for x in ["mitchell", "tatum", "brown", "durant", "booker", "george", "shai", "gilgeous", "edwards", "jokic", "giannis", "luka", "doncic"]):
+        return {"baseline": 66, "ceiling": 95, "role": "established star", "tier_name": "established NBA-star tier",
+                "resume": f"{player_name} starts above normal starters because he already has a star résumé before this playoff run.",
+                "team_context": f"For {team}, the run matters most if he is one of the main reasons the team keeps advancing.",
+                "comps": ["Dwyane Wade", "Kevin Durant", "Kawhi Leonard", "James Harden", "Damian Lillard", "Jimmy Butler"]}
+    if any(x in n for x in ["maxey", "garland", "mobley", "holmgren", "wembanyama", "reaves", "gobert"]):
+        return {"baseline": 54, "ceiling": 89, "role": "high-impact core player", "tier_name": "core playoff-piece tier",
+                "resume": f"{player_name} starts with a meaningful current-era résumé, but still has room to define his playoff reputation.",
+                "team_context": f"For {team}, the run can turn him from important core player into a player tied to a specific playoff breakthrough.",
+                "comps": ["Kyrie Irving", "Klay Thompson", "Pau Gasol", "Draymond Green", "Ben Wallace", "Jrue Holiday"]}
+    if any(x in n for x in ["mcbride", "robinson", "clarkson", "shamet", "alvarado", "lowry", "drummond", "sasser", "stewart", "strus", "okoro", "conley", "divincenzo", "dort", "wallace", "hartenstein"]):
+        return {"baseline": 34, "ceiling": 73, "role": "rotation playoff contributor", "tier_name": "role-player playoff-memory tier",
+                "resume": f"{player_name} starts with a role-player résumé, so his legacy movement comes from specific playoff moments, defense, shooting, rebounding, or stabilizing minutes.",
+                "team_context": f"For {team}, his path is becoming the player fans remember for a key series, not passing the team's all-time stars.",
+                "comps": ["Robert Horry", "Shane Battier", "Derek Fisher", "Bruce Bowen", "Steve Kerr", "Andre Iguodala"]}
+    return {"baseline": 40, "ceiling": 78, "role": "playoff contributor", "tier_name": "team-playoff contributor tier",
+            "resume": f"{player_name} starts from a modest legacy base and needs visible playoff impact to move up.",
+            "team_context": f"For {team}, the run matters if his production becomes tied to a winning series.",
+            "comps": ["Robert Horry", "Andre Iguodala", "Chauncey Billups", "Jimmy Butler", "Kyle Lowry", "Shane Battier"]}
+
+def player_legacy_archetype(player_name):
+    prof = player_resume_profile(player_name)
+    return prof["role"], _remove_self_comparisons(player_name, prof["comps"])
+
+def player_legacy_ceiling(player_name, team_name=""):
+    return player_resume_profile(player_name, team_name)["ceiling"]
+
+def player_legacy_floor(player_name):
+    return player_resume_profile(player_name)["baseline"]
+
+def player_specific_tier(score, player_name, team_name=""):
+    prof = player_resume_profile(player_name, team_name)
+    baseline = prof["baseline"]
+    ceiling = prof["ceiling"]
+    span = max(1, ceiling - baseline)
+    pct = (score - baseline) / span
+    if pct >= .88:
+        return f"{player_name} peak {prof['tier_name']}"
+    if pct >= .68:
+        return f"{player_name} major leap"
+    if pct >= .45:
+        return f"{player_name} clear playoff boost"
+    if pct >= .22:
+        return f"{player_name} modest rise"
+    return f"{player_name} résumé mostly unchanged"
+
+def legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds_won, title_won=False, player_name="", team_name=""):
+    prof = player_resume_profile(player_name, team_name)
+    baseline = prof["baseline"]
+    ceiling = prof["ceiling"]
+    # This is intentionally an incremental playoff-run score on top of career résumé.
+    scoring = pts * 0.42
+    all_around = reb * 0.22 + ast * 0.30 + stl * 0.70 + blk * 0.55
+    efficiency = max(0, (fg - 0.43) * 24) + max(0, (three - 0.34) * 10)
+    impact = plus_minus * 0.22
+    winning = rounds_won * 4.2 + (7.0 if title_won else 0)
+    raw = baseline + scoring + all_around + efficiency + impact + winning
+    return round(max(0, min(ceiling, raw)), 1)
 
 def legacy_tier(score):
-    if score >= 92: return "franchise-changing / NBA-history run"
-    if score >= 82: return "major franchise-history run"
-    if score >= 72: return "clear playoff star run"
-    if score >= 60: return "strong winning contributor run"
-    if score >= 48: return "solid playoff contributor"
-    return "limited legacy movement so far"
+    # Kept for old code compatibility, but the UI now uses player_specific_tier().
+    if score >= 92: return "top personal legacy tier"
+    if score >= 82: return "major personal legacy tier"
+    if score >= 72: return "strong personal legacy tier"
+    if score >= 60: return "meaningful personal legacy tier"
+    if score >= 48: return "modest personal legacy tier"
+    return "limited movement"
+
+def _scenario_meaning(player, team, score, scenario_label, rounds, title):
+    prof = player_resume_profile(player, team)
+    comps = _remove_self_comparisons(player, prof["comps"])
+    tier = player_specific_tier(score, player, team)
+    if title:
+        team_hist = f"For {team}, {player}'s title version would be judged against names like {comps[0]} and {comps[1]} because the championship would attach his stat line to a specific banner-level run."
+        nba_hist = f"NBA-wide, this would not erase the old résumé; it would add a new chapter to his existing {prof['role']} case and move him toward the {tier} range."
+    elif rounds >= 3:
+        team_hist = f"A Finals trip would make {player}'s run a remembered {team} chapter, especially if his averages stay near these slider settings."
+        nba_hist = f"NBA-wide, the reference range becomes players such as {comps[1]} and {comps[2]}: not because the careers are identical, but because the playoff role would feel comparable."
+    elif rounds >= 2:
+        team_hist = f"A conference-finals trip would give {player} a much stronger {team} playoff case, above ordinary good-season memories."
+        nba_hist = f"NBA-wide, the conversation would start using comparison names like {comps[2]} and {comps[3]} as role/impact reference points."
+    elif rounds >= 1:
+        team_hist = f"Winning this round would make {player}'s current production part of the {team} series story, not just an individual box-score stretch."
+        nba_hist = f"NBA-wide, this is still mostly a team-advancement boost unless his stat line stays strong enough to resemble {comps[3]} or {comps[4]} in role."
+    else:
+        team_hist = prof["team_context"]
+        nba_hist = prof["resume"]
+    return team_hist, nba_hist
 
 def build_legacy_path(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
-    archetype, comps = player_legacy_archetype(player)
     steps = [
-        ("Current run", 0, False, f"Current snapshot: judged mainly by production, efficiency, and whether {team} is advancing."),
-        ("Win current round", 1, False, f"Moves {player} from a good series story toward a serious {team} playoff-memory moment."),
-        ("Reach Conference Finals", 2, False, f"Now the run starts getting compared with deeper franchise runs and bigger NBA playoff names."),
-        ("Reach NBA Finals", 3, False, f"Finals appearance pushes the conversation from team-season story to leaguewide legacy story."),
-        ("Win championship", 4, True, f"A title would permanently attach this run to {team} history and NBA history."),
+        ("Current résumé + current run", 0, False),
+        ("Win current round", 1, False),
+        ("Reach Conference Finals", 2, False),
+        ("Reach NBA Finals", 3, False),
+        ("Win championship", 4, True),
     ]
     rows=[]
-    for label, rounds, title in [(x[0],x[1],x[2]) for x in steps]:
-        sc = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds, title)
-        if rounds == 0:
-            team_hist = f"Within {team} history, this is currently a {legacy_tier(sc)}."
-            nba_hist = f"NBA-wide, this is best viewed as a {archetype} playoff sample unless the team keeps advancing."
-        elif rounds == 1:
-            team_hist = f"A round win makes {player}'s run much more memorable to {team} fans, especially if he is a top-2 reason they advance."
-            nba_hist = f"NBA-wide comparison tier: starts to resemble strong round-winning guards/wings/bigs such as {comps[2]} or {comps[3]}, depending on role."
-        elif rounds == 2:
-            team_hist = f"A conference-finals trip can move {player} into real franchise-playoff conversation, below icons unless the stats are elite."
-            nba_hist = f"NBA-wide comparison tier: meaningful postseason run, with reference points like {comps[3]} and {comps[4]}."
-        elif rounds == 3:
-            team_hist = f"A Finals trip would make this one of the major modern {team} runs. Fans would remember the stat line and signature games."
-            nba_hist = f"NBA-wide comparison tier: Finals-level centerpiece/contributor conversation, with reference points like {comps[4]} and {comps[5]}."
-        else:
-            team_hist = f"A championship would make {player} part of permanent {team} history, not just a hot playoff run."
-            nba_hist = f"NBA-wide comparison tier: title-winning run; reference names become champions such as {comps[0]}, {comps[1]}, and {comps[5]}."
-        rows.append({"Scenario":label,"Projected Legacy Score":sc,"Tier":legacy_tier(sc),"Team History Meaning":team_hist,"NBA History Meaning":nba_hist})
+    for label, rounds, title in steps:
+        sc = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds, title, player, team)
+        tier = player_specific_tier(sc, player, team)
+        team_hist, nba_hist = _scenario_meaning(player, team, sc, label, rounds, title)
+        rows.append({"Scenario":label,"Projected Legacy Score":sc,"Player-Specific Tier":tier,"Team History Meaning":team_hist,"NBA History Meaning":nba_hist})
     return pd.DataFrame(rows)
 
 def legacy_takeaways(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
+    prof = player_resume_profile(player, team)
     archetype, comps = player_legacy_archetype(player)
-    base = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 0, False)
-    title = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 4, True)
+    base = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 0, False, player, team)
+    title = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 4, True, player, team)
     return [
-        f"{player} is being treated as a {archetype} for comparison purposes.",
-        f"Current comparison references: {', '.join(comps[:4])}.",
-        f"With these slider settings, the run grades as {legacy_tier(base)} right now and could become {legacy_tier(title)} with a championship.",
-        "The sliders matter because playoff legacy is not just points; efficiency, all-around impact, plus-minus, and team advancement change the story."
+        prof["resume"],
+        prof["team_context"],
+        f"Comparison references for this player: {', '.join(comps[:4])}.",
+        f"With these slider settings, {player} moves from {player_specific_tier(base, player, team)} to {player_specific_tier(title, player, team)} if the run ends in a championship."
     ]
-
 # ==========================================================
 # Analysis / visualization helpers
 # ==========================================================
@@ -1178,19 +1326,21 @@ elif page == "Legacy Tracker":
     current_score = float(path.iloc[0]["Projected Legacy Score"])
     title_score = float(path.iloc[-1]["Projected Legacy Score"])
 
-    a,b,c = st.columns(3)
+    a,b,c,d = st.columns(4)
     a.metric("Current Legacy Score", current_score)
-    b.metric("Championship Ceiling", title_score)
+    b.metric("Championship Scenario Score", title_score)
     c.metric("Possible Gain", round(title_score-current_score,1))
+    d.metric("Player-Specific Max", player_legacy_ceiling(player, favorite_team))
+    st.caption("The score now starts with the player’s existing career résumé and previous success. LeBron begins near the top already; Brunson and Towns begin above normal Knicks role players; each player has his own ceiling and tier labels.")
 
-    st.plotly_chart(px.bar(path, x="Scenario", y="Projected Legacy Score", color="Tier", title=f"{player} legacy path if {favorite_team} keeps advancing"), use_container_width=True)
+    st.plotly_chart(px.bar(path, x="Scenario", y="Projected Legacy Score", color="Player-Specific Tier", title=f"{player} legacy path if {favorite_team} keeps advancing"), use_container_width=True)
     st.dataframe(path, use_container_width=True)
 
     st.markdown("### Interpretation")
     for line in legacy_takeaways(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus):
         st.write(f"• {line}")
 
-    st.info("This is an analytical legacy model, not an official ranking. It combines current playoff production, efficiency, plus/minus, and how far the team advances. Actual historical legacy also depends on signature games, opponent quality, injuries, media narrative, and championships.")
+    st.info("This is an analytical legacy model, not an official ranking. It now combines existing career résumé, current playoff production, efficiency, plus/minus, and round advancement. Actual legacy also depends on signature games, opponent quality, injuries, media narrative, and championships.")
 
 elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
