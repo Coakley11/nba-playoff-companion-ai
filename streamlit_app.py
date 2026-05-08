@@ -23,7 +23,7 @@ except Exception:
 
 try:
     from nba_api.stats.static import players as nba_players
-    from nba_api.stats.endpoints import playergamelog, playercareerstats, scoreboardv2, leaguegamefinder
+    from nba_api.stats.endpoints import playergamelog, playercareerstats, scoreboardv2, leaguegamefinder, commonteamroster, leaguedashplayerstats
     NBA_STATS_AVAILABLE = True
 except Exception:
     NBA_STATS_AVAILABLE = False
@@ -72,6 +72,10 @@ TEAM_ALIASES = {
 ALIAS_TO_TEAM = {v: k for k, v in TEAM_ALIASES.items()}
 
 TEAM_LOGOS = {team: f"https://cdn.nba.com/logos/nba/{tid}/primary/L/logo.svg" for team, tid in TEAM_IDS.items()}
+
+# Current season used for live roster / rotation lookups.
+# Change this once the next NBA season starts.
+CURRENT_NBA_SEASON = "2025-26"
 
 TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Philadelphia 76ers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
@@ -537,6 +541,77 @@ def get_live_playbyplay(game_id):
 def get_playbyplay_by_game_id(game_id):
     return get_live_playbyplay(game_id)
 
+
+@st.cache_data(ttl=21600)
+def fetch_current_roster(team_name, season=CURRENT_NBA_SEASON):
+    """Return current NBA.com roster for a team. Falls back safely if NBA API is unavailable."""
+    if not NBA_STATS_AVAILABLE:
+        return pd.DataFrame()
+    tid = TEAM_IDS.get(team_name)
+    if not tid:
+        return pd.DataFrame()
+    try:
+        df = commonteamroster.CommonTeamRoster(team_id=tid, season=season, timeout=20).get_data_frames()[0]
+        if df.empty:
+            return pd.DataFrame()
+        # CommonTeamRoster columns usually include PLAYER, NUM, POSITION, HEIGHT, WEIGHT, AGE, EXP, SCHOOL, PLAYER_ID
+        rename = {"PLAYER": "Player", "POSITION": "Position", "NUM": "Number", "PLAYER_ID": "PlayerID"}
+        df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+        keep = [c for c in ["Player", "Position", "Number", "PlayerID", "AGE", "EXP", "SCHOOL"] if c in df.columns]
+        return df[keep].drop_duplicates(subset=["Player"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=21600)
+def fetch_team_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
+    """Use current-season NBA.com player stats to estimate the active rotation by total minutes."""
+    if not NBA_STATS_AVAILABLE:
+        return pd.DataFrame()
+    tid = TEAM_IDS.get(team_name)
+    if not tid:
+        return pd.DataFrame()
+    try:
+        df = leaguedashplayerstats.LeagueDashPlayerStats(
+            season=season,
+            season_type_all_star="Regular Season",
+            team_id_nullable=tid,
+            per_mode_detailed="Totals",
+            timeout=25,
+        ).get_data_frames()[0]
+        if df.empty:
+            return pd.DataFrame()
+        # Common columns: PLAYER_NAME, TEAM_ABBREVIATION, GP, MIN, PTS, REB, AST, PLAYER_ID
+        cols = [c for c in ["PLAYER_NAME", "PLAYER_ID", "GP", "MIN", "PTS", "REB", "AST", "STL", "BLK"] if c in df.columns]
+        out = df[cols].copy()
+        out = out.rename(columns={"PLAYER_NAME":"Player", "PLAYER_ID":"PlayerID"})
+        if "MIN" in out.columns:
+            out["MIN_SORT"] = pd.to_numeric(out["MIN"], errors="coerce").fillna(0)
+            out = out.sort_values("MIN_SORT", ascending=False)
+        return out.drop_duplicates(subset=["Player"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+def current_roster_names(team_name, limit=None):
+    """Current roster names from NBA API, with hard-coded profile only as backup."""
+    rot = fetch_team_rotation_by_minutes(team_name)
+    if not rot.empty and "Player" in rot.columns:
+        names = rot["Player"].dropna().astype(str).tolist()
+        return names[:limit] if limit else names
+    roster = fetch_current_roster(team_name)
+    if not roster.empty and "Player" in roster.columns:
+        names = roster["Player"].dropna().astype(str).tolist()
+        return names[:limit] if limit else names
+    names = TEAM_PROFILES[team_name].get("starters", []) + TEAM_PROFILES[team_name].get("subs", [])
+    return names[:limit] if limit else names
+
+def estimated_starters_from_api(team_name):
+    """Best available estimate: top 5 by current-season minutes, otherwise fallback profile starters."""
+    return current_roster_names(team_name, limit=5)
+
+def estimated_bench_from_api(team_name, start=5, end=12):
+    names = current_roster_names(team_name, limit=end)
+    return names[start:end] if len(names) > start else TEAM_PROFILES[team_name].get("subs", [])
+
 @st.cache_data(ttl=3600)
 def get_player_id(name):
     if not NBA_STATS_AVAILABLE: return None
@@ -559,6 +634,107 @@ def season_averages(name):
 def headshot(name):
     pid = get_player_id(name)
     return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png" if pid else "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
+
+
+@st.cache_data(ttl=1800)
+def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
+    """Return current playoff game logs for selected player from NBA API."""
+    pid = get_player_id(name)
+    if not pid or not NBA_STATS_AVAILABLE:
+        return pd.DataFrame()
+    try:
+        df = playergamelog.PlayerGameLog(
+            player_id=pid,
+            season=season,
+            season_type_all_star="Playoffs",
+            timeout=25,
+        ).get_data_frames()[0]
+        return df if df is not None else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+def summarize_playoff_logs(logs):
+    """Create per-game playoff summary stats from NBA API game logs."""
+    if logs is None or logs.empty:
+        return {"GP":0,"PTS":0.0,"REB":0.0,"AST":0.0,"STL":0.0,"BLK":0.0,"TOV":0.0,"FG_PCT":0.0,"FG3_PCT":0.0,"FT_PCT":0.0,"PLUS_MINUS":0.0}
+    out = {"GP": len(logs)}
+    for c in ["PTS","REB","AST","STL","BLK","TOV","PLUS_MINUS"]:
+        out[c] = round(pd.to_numeric(logs.get(c, pd.Series(dtype=float)), errors="coerce").fillna(0).mean(), 1)
+    for c in ["FG_PCT","FG3_PCT","FT_PCT"]:
+        vals = pd.to_numeric(logs.get(c, pd.Series(dtype=float)), errors="coerce").dropna()
+        out[c] = round(float(vals.mean()), 3) if len(vals) else 0.0
+    return out
+
+def player_legacy_archetype(player_name):
+    n = player_name.lower()
+    if "brunson" in n: return "lead guard", ["Walt Frazier", "Earl Monroe", "Mark Jackson", "Allan Houston", "Chauncey Billups", "Damian Lillard"]
+    if "towns" in n: return "scoring big", ["Patrick Ewing", "Willis Reed", "Dirk Nowitzki", "Chris Bosh", "Anthony Davis", "Nikola Jokic"]
+    if "anunoby" in n or "bridges" in n: return "two-way wing", ["Dave DeBusschere", "Latrell Sprewell", "Kawhi Leonard", "Andre Iguodala", "Scottie Pippen", "Jimmy Butler"]
+    if "hart" in n: return "winning role star", ["Charles Oakley", "Anthony Mason", "Draymond Green", "Shane Battier", "Andre Iguodala", "Marcus Smart"]
+    if "cunningham" in n: return "franchise guard", ["Isiah Thomas", "Joe Dumars", "Chauncey Billups", "Grant Hill", "Luka Doncic", "Shai Gilgeous-Alexander"]
+    if "mitchell" in n or "garland" in n or "maxey" in n: return "explosive guard", ["Kyrie Irving", "Mark Price", "Allen Iverson", "Dwyane Wade", "Donovan Mitchell", "Damian Lillard"]
+    if "embiid" in n: return "MVP center", ["Wilt Chamberlain", "Moses Malone", "Hakeem Olajuwon", "Shaquille O'Neal", "Nikola Jokic", "Patrick Ewing"]
+    if "james" in n or "lebron" in n: return "all-time legend", ["Michael Jordan", "Kareem Abdul-Jabbar", "Magic Johnson", "Larry Bird", "Kobe Bryant", "Tim Duncan"]
+    if "davis" in n or "wembanyama" in n or "gobert" in n or "chet" in n: return "defensive big", ["Bill Russell", "Hakeem Olajuwon", "David Robinson", "Kevin Garnett", "Anthony Davis", "Rudy Gobert"]
+    if "edwards" in n or "shai" in n or "gilgeous" in n: return "elite scoring creator", ["Kobe Bryant", "Dwyane Wade", "Kevin Durant", "James Harden", "Allen Iverson", "Tracy McGrady"]
+    return "playoff contributor", ["Robert Horry", "Andre Iguodala", "Chauncey Billups", "Jimmy Butler", "Kyle Lowry", "Shane Battier"]
+
+def legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds_won, title_won=False):
+    scoring = pts * 0.85
+    all_around = reb * 0.45 + ast * 0.60 + stl * 1.20 + blk * 1.00
+    efficiency = max(0, (fg - 0.42) * 55) + max(0, (three - 0.33) * 25)
+    impact = plus_minus * 0.45
+    winning = rounds_won * 9 + (18 if title_won else 0)
+    return round(max(0, min(100, 28 + scoring + all_around + efficiency + impact + winning)), 1)
+
+def legacy_tier(score):
+    if score >= 92: return "franchise-changing / NBA-history run"
+    if score >= 82: return "major franchise-history run"
+    if score >= 72: return "clear playoff star run"
+    if score >= 60: return "strong winning contributor run"
+    if score >= 48: return "solid playoff contributor"
+    return "limited legacy movement so far"
+
+def build_legacy_path(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
+    archetype, comps = player_legacy_archetype(player)
+    steps = [
+        ("Current run", 0, False, f"Current snapshot: judged mainly by production, efficiency, and whether {team} is advancing."),
+        ("Win current round", 1, False, f"Moves {player} from a good series story toward a serious {team} playoff-memory moment."),
+        ("Reach Conference Finals", 2, False, f"Now the run starts getting compared with deeper franchise runs and bigger NBA playoff names."),
+        ("Reach NBA Finals", 3, False, f"Finals appearance pushes the conversation from team-season story to leaguewide legacy story."),
+        ("Win championship", 4, True, f"A title would permanently attach this run to {team} history and NBA history."),
+    ]
+    rows=[]
+    for label, rounds, title in [(x[0],x[1],x[2]) for x in steps]:
+        sc = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds, title)
+        if rounds == 0:
+            team_hist = f"Within {team} history, this is currently a {legacy_tier(sc)}."
+            nba_hist = f"NBA-wide, this is best viewed as a {archetype} playoff sample unless the team keeps advancing."
+        elif rounds == 1:
+            team_hist = f"A round win makes {player}'s run much more memorable to {team} fans, especially if he is a top-2 reason they advance."
+            nba_hist = f"NBA-wide comparison tier: starts to resemble strong round-winning guards/wings/bigs such as {comps[2]} or {comps[3]}, depending on role."
+        elif rounds == 2:
+            team_hist = f"A conference-finals trip can move {player} into real franchise-playoff conversation, below icons unless the stats are elite."
+            nba_hist = f"NBA-wide comparison tier: meaningful postseason run, with reference points like {comps[3]} and {comps[4]}."
+        elif rounds == 3:
+            team_hist = f"A Finals trip would make this one of the major modern {team} runs. Fans would remember the stat line and signature games."
+            nba_hist = f"NBA-wide comparison tier: Finals-level centerpiece/contributor conversation, with reference points like {comps[4]} and {comps[5]}."
+        else:
+            team_hist = f"A championship would make {player} part of permanent {team} history, not just a hot playoff run."
+            nba_hist = f"NBA-wide comparison tier: title-winning run; reference names become champions such as {comps[0]}, {comps[1]}, and {comps[5]}."
+        rows.append({"Scenario":label,"Projected Legacy Score":sc,"Tier":legacy_tier(sc),"Team History Meaning":team_hist,"NBA History Meaning":nba_hist})
+    return pd.DataFrame(rows)
+
+def legacy_takeaways(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
+    archetype, comps = player_legacy_archetype(player)
+    base = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 0, False)
+    title = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 4, True)
+    return [
+        f"{player} is being treated as a {archetype} for comparison purposes.",
+        f"Current comparison references: {', '.join(comps[:4])}.",
+        f"With these slider settings, the run grades as {legacy_tier(base)} right now and could become {legacy_tier(title)} with a championship.",
+        "The sliders matter because playoff legacy is not just points; efficiency, all-around impact, plus-minus, and team advancement change the story."
+    ]
 
 # ==========================================================
 # Analysis / visualization helpers
@@ -583,7 +759,8 @@ def min_to_float(v):
 def estimated_lineup(box_df, alias, team_name):
     df = box_df[box_df["Team"] == alias].copy() if not box_df.empty else pd.DataFrame()
     if df.empty:
-        return pd.DataFrame([{"Team":alias,"Player":p,"MIN":"0:00","PTS":0,"REB":0,"AST":0,"STL":0,"BLK":0,"PF":0,"FGM":0,"FGA":0} for p in TEAM_PROFILES[team_name]["starters"]])
+        names = estimated_starters_from_api(team_name)
+        return pd.DataFrame([{"Team":alias,"Player":p,"MIN":"0:00","PTS":0,"REB":0,"AST":0,"STL":0,"BLK":0,"PF":0,"FGM":0,"FGA":0} for p in names])
     df["MIN_FLOAT"] = df["MIN"].apply(min_to_float)
     return df.sort_values("MIN_FLOAT", ascending=False).head(5)
 
@@ -676,19 +853,24 @@ def game_story(team_name, margin, prob, box_df):
     return lines
 
 def matchup_advantages(team, opp):
-    t=TEAM_PROFILES[team]; o=TEAM_PROFILES[opp]
+    t_starters = estimated_starters_from_api(team)
+    o_starters = estimated_starters_from_api(opp)
     positions=["PG","SG","SF","PF","C"]
     rows=[]
     for i,pos in enumerate(positions):
-        tp=t["starters"][i]; op=o["starters"][i]
-        if "Brunson" in tp or "Mitchell" in tp or "Shai" in tp or "Edwards" in tp or "LeBron" in tp or "Embiid" in tp or "Wembanyama" in tp:
-            adv=team; why=f"{tp} is a primary playoff creator/anchor in this matchup."
-        elif "Embiid" in op or "Mitchell" in op or "Shai" in op or "Edwards" in op or "LeBron" in op or "Wembanyama" in op:
-            adv=opp; why=f"{op} has the bigger star-impact edge at this spot."
+        tp=t_starters[i] if i < len(t_starters) else "TBD"
+        op=o_starters[i] if i < len(o_starters) else "TBD"
+        if "TBD" in [tp, op]:
+            adv="TBD"; why="NBA API roster data was incomplete for this position."
+        elif any(x in tp for x in ["Brunson","Mitchell","Shai","Edwards","LeBron","Embiid","Wembanyama","Cunningham","Maxey","Towns","Davis"]):
+            adv=team; why=f"{tp} grades as one of the higher-impact current rotation players in this matchup."
+        elif any(x in op for x in ["Brunson","Mitchell","Shai","Edwards","LeBron","Embiid","Wembanyama","Cunningham","Maxey","Towns","Davis"]):
+            adv=opp; why=f"{op} gives {opp} the bigger star-impact edge at this spot."
         else:
-            adv="Close"; why="This position depends on shooting, defense, foul trouble, and role-player consistency."
+            adv="Close"; why="This spot depends on current form, shooting, defense, matchup choices, and foul trouble."
         rows.append({"Position":pos, team:tp, opp:op, "Advantage":adv, "Why":why})
     return pd.DataFrame(rows)
+
 
 # ==========================================================
 # Rendering helpers
@@ -817,7 +999,6 @@ def render_lineup_cards(team, box_df):
 PAGES={
     "🏀 Home Dashboard":"Home Dashboard",
     "🏀 Playoff Bracket":"Playoff Bracket",
-    "🏀 Current Series":"Current Series",
     "🏀 Previous Rounds":"Previous Rounds",
     "🏀 Live Game Center":"Live Game Center",
     "🏀 Player Playoff Tracker":"Player Playoff Tracker",
@@ -859,22 +1040,6 @@ if page == "Home Dashboard":
 
 elif page == "Playoff Bracket":
     render_bracket()
-
-elif page == "Current Series":
-    if profile["status"] == "Active":
-        render_matchup_header(favorite_team)
-        st.markdown(f"<div class='big-status'>{series_status_text(favorite_team)}</div>", unsafe_allow_html=True)
-        _, s=series_for_team(favorite_team)
-        if s and s.get("games"):
-            st.subheader("Game Results")
-            st.dataframe(pd.DataFrame(s["games"]), use_container_width=True)
-            st.subheader("Previous Game Top Plays")
-            st.dataframe(previous_game_top_plays(favorite_team), use_container_width=True)
-            st.subheader("Historical Series Tracking")
-            st.dataframe(historic_series_context(favorite_team), use_container_width=True)
-        render_team_outlook(favorite_team)
-    else:
-        st.warning(profile["first_round_result"])
 
 elif page == "Previous Rounds":
     st.header(f"{profile['conference']} Previous Rounds")
@@ -951,8 +1116,9 @@ elif page == "Live Game Center":
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team)
-    plist=profile["starters"]+profile["subs"]
-    player=st.selectbox("Choose player", plist); season=st.selectbox("Season", ["2025-26","2024-25","2023-24"], index=0)
+    plist=current_roster_names(favorite_team)
+    st.caption("Player list is pulled from NBA API current roster/rotation when available. Hard-coded names are used only as backup.")
+    player=st.selectbox("Choose player", plist); season=st.selectbox("Season", [CURRENT_NBA_SEASON,"2024-25","2023-24"], index=0)
     if not NBA_STATS_AVAILABLE: st.error("nba_api stats endpoints unavailable.")
     else:
         pid=get_player_id(player)
@@ -970,10 +1136,61 @@ elif page == "Player Playoff Tracker":
 
 elif page == "Legacy Tracker":
     render_matchup_header(favorite_team)
-    player=st.selectbox("Choose starter", profile["starters"])
-    pts=st.slider("Playoff scoring average",0,45,20); reb=st.slider("Playoff rebounding average",0,20,6); ast=st.slider("Playoff assists average",0,15,4); wins=st.slider("Series wins this run",0,4,1 if profile["status"]=="Active" else 0)
-    score=min(100, round(50+pts*.5+reb*.6+ast*.5+wins*10,1)); st.metric(f"{player} Legacy Impact Score", score)
-    st.plotly_chart(px.bar(pd.DataFrame({"Outcome":["Current","Win Second Round","Reach Conference Finals","Reach NBA Finals","Win Championship"],"Legacy Score":[50,65,78,90,100]}), x="Outcome", y="Legacy Score", title=f"{player} Legacy Path"), use_container_width=True)
+    st.subheader("Legacy Tracker: Current Playoff Stats + What-If Legacy Simulator")
+
+    player_pool = current_roster_names(favorite_team, limit=15)
+    player = st.selectbox("Choose player", player_pool)
+    logs = playoff_game_logs_for_player(player)
+    current = summarize_playoff_logs(logs)
+
+    if logs.empty:
+        st.warning("NBA API did not return current playoff game logs for this player. The sliders still work, but the starting values come from safe defaults.")
+    else:
+        st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
+        show_cols = [c for c in ["GAME_DATE","MATCHUP","WL","MIN","PTS","REB","AST","STL","BLK","TOV","FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"] if c in logs.columns]
+        st.dataframe(logs[show_cols], use_container_width=True)
+
+    st.markdown("### Current playoff averages")
+    m1,m2,m3,m4,m5,m6 = st.columns(6)
+    m1.metric("Games", current.get("GP",0))
+    m2.metric("PTS", current.get("PTS",0))
+    m3.metric("REB", current.get("REB",0))
+    m4.metric("AST", current.get("AST",0))
+    m5.metric("STL", current.get("STL",0))
+    m6.metric("BLK", current.get("BLK",0))
+
+    st.markdown("### Change the stat line to test legacy scenarios")
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        pts = st.slider("Playoff PPG", 0.0, 45.0, float(current.get("PTS", 20.0) or 20.0), 0.5)
+        reb = st.slider("Playoff RPG", 0.0, 20.0, float(current.get("REB", 6.0) or 6.0), 0.5)
+        ast = st.slider("Playoff APG", 0.0, 15.0, float(current.get("AST", 4.0) or 4.0), 0.5)
+    with c2:
+        stl = st.slider("Playoff steals per game", 0.0, 4.0, float(current.get("STL", 1.0) or 1.0), 0.1)
+        blk = st.slider("Playoff blocks per game", 0.0, 5.0, float(current.get("BLK", 0.5) or 0.5), 0.1)
+        plus_minus = st.slider("Average plus/minus", -20.0, 20.0, float(current.get("PLUS_MINUS", 0.0) or 0.0), 0.5)
+    with c3:
+        fg = st.slider("FG%", 0.300, 0.700, float(current.get("FG_PCT", 0.460) or 0.460), 0.005)
+        three = st.slider("3PT%", 0.200, 0.550, float(current.get("FG3_PCT", 0.360) or 0.360), 0.005)
+        ft = st.slider("FT%", 0.500, 1.000, float(current.get("FT_PCT", 0.800) or 0.800), 0.005)
+
+    path = build_legacy_path(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus)
+    current_score = float(path.iloc[0]["Projected Legacy Score"])
+    title_score = float(path.iloc[-1]["Projected Legacy Score"])
+
+    a,b,c = st.columns(3)
+    a.metric("Current Legacy Score", current_score)
+    b.metric("Championship Ceiling", title_score)
+    c.metric("Possible Gain", round(title_score-current_score,1))
+
+    st.plotly_chart(px.bar(path, x="Scenario", y="Projected Legacy Score", color="Tier", title=f"{player} legacy path if {favorite_team} keeps advancing"), use_container_width=True)
+    st.dataframe(path, use_container_width=True)
+
+    st.markdown("### Interpretation")
+    for line in legacy_takeaways(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus):
+        st.write(f"• {line}")
+
+    st.info("This is an analytical legacy model, not an official ranking. It combines current playoff production, efficiency, plus/minus, and how far the team advances. Actual historical legacy also depends on signature games, opponent quality, injuries, media narrative, and championships.")
 
 elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
@@ -981,10 +1198,36 @@ elif page == "Matchup Lineups":
     else:
         opp=profile["current_opponent"]
         st.subheader("Projected Starter Matchups")
+        st.caption("Starter/rotation estimates use NBA API current-season minutes when available. Actual playoff starters can still change by injury, matchup choice, or coaching decision.")
         st.dataframe(matchup_advantages(favorite_team, opp), use_container_width=True)
-        st.caption("Lineups can change because of injuries, foul trouble, matchup choices, and coaching decisions.")
+
+        st.subheader("Current Rosters from NBA API")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"**{favorite_team} current roster / rotation**")
+            roster = fetch_current_roster(favorite_team)
+            rotation = fetch_team_rotation_by_minutes(favorite_team)
+            if not rotation.empty:
+                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True)
+            elif not roster.empty:
+                st.dataframe(roster, use_container_width=True)
+            else:
+                st.warning("NBA API roster lookup failed. Showing backup saved names.")
+                st.dataframe(pd.DataFrame({"Player": current_roster_names(favorite_team)}), use_container_width=True)
+        with c2:
+            st.markdown(f"**{opp} current roster / rotation**")
+            roster = fetch_current_roster(opp)
+            rotation = fetch_team_rotation_by_minutes(opp)
+            if not rotation.empty:
+                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True)
+            elif not roster.empty:
+                st.dataframe(roster, use_container_width=True)
+            else:
+                st.warning("NBA API roster lookup failed. Showing backup saved names.")
+                st.dataframe(pd.DataFrame({"Player": current_roster_names(opp)}), use_container_width=True)
+
         st.subheader("Top Bench / Rotation Players")
-        bench=[{"Team":favorite_team,"Player":p} for p in profile["subs"]]+[{"Team":opp,"Player":p} for p in TEAM_PROFILES[opp]["subs"]]
+        bench=[{"Team":favorite_team,"Player":p} for p in estimated_bench_from_api(favorite_team)]+[{"Team":opp,"Player":p} for p in estimated_bench_from_api(opp)]
         st.dataframe(pd.DataFrame(bench), use_container_width=True)
 
 st.divider()
