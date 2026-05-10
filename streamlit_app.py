@@ -28,6 +28,19 @@ try:
 except Exception:
     NBA_STATS_AVAILABLE = False
 
+
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except Exception:
+    REQUESTS_AVAILABLE = False
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except Exception:
+    BS4_AVAILABLE = False
+
 # ==========================================================
 # Page setup
 # ==========================================================
@@ -47,6 +60,9 @@ div[role="radiogroup"] label { padding: 9px 8px !important; border-radius: 12px 
 div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !important; }
 .player-card { text-align:center; border-radius:16px; padding:8px; border:1px solid rgba(0,0,0,.12); background:rgba(255,255,255,.75); }
 .big-status { font-size: 20px; font-weight: 800; padding: 10px 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fed7aa; }
+.injury-card { border:1px solid rgba(0,0,0,.12); border-radius:16px; padding:10px; background:rgba(255,255,255,.85); margin-bottom:10px; min-height:135px; }
+.injury-status { font-weight:900; padding:4px 8px; border-radius:999px; display:inline-block; background:#fee2e2; color:#991b1b; }
+.injury-note { font-size:13px; color:#374151; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,6 +86,40 @@ TEAM_ALIASES = {
     "Denver Nuggets": "DEN", "Minnesota Timberwolves": "MIN", "Los Angeles Lakers": "LAL", "Houston Rockets": "HOU",
 }
 ALIAS_TO_TEAM = {v: k for k, v in TEAM_ALIASES.items()}
+
+# ESPN team slugs are used for injury reports because nba_api does not expose a
+# reliable official injury-report endpoint. This is automatic when ESPN is reachable.
+ESPN_INJURY_SLUGS = {
+    "Atlanta Hawks": "atl/atlanta-hawks",
+    "Boston Celtics": "bos/boston-celtics",
+    "Cleveland Cavaliers": "cle/cleveland-cavaliers",
+    "Denver Nuggets": "den/denver-nuggets",
+    "Houston Rockets": "hou/houston-rockets",
+    "Los Angeles Lakers": "lal/los-angeles-lakers",
+    "Minnesota Timberwolves": "min/minnesota-timberwolves",
+    "New York Knicks": "ny/new-york-knicks",
+    "Orlando Magic": "orl/orlando-magic",
+    "Philadelphia 76ers": "phi/philadelphia-76ers",
+    "Phoenix Suns": "phx/phoenix-suns",
+    "Portland Trail Blazers": "por/portland-trail-blazers",
+    "San Antonio Spurs": "sa/san-antonio-spurs",
+    "Oklahoma City Thunder": "okc/oklahoma-city-thunder",
+    "Toronto Raptors": "tor/toronto-raptors",
+    "Detroit Pistons": "det/detroit-pistons",
+}
+
+FALLBACK_INJURY_REPORT = {
+    "New York Knicks": [
+        {"Player":"Mitchell Robinson","Status":"Monitor","Injury":"Availability/conditioning","Latest Update":"Check pregame status before tipoff.","Impact":"If limited, rim protection and offensive rebounding become more dependent on the starting frontcourt."},
+    ],
+    "Philadelphia 76ers": [
+        {"Player":"Joel Embiid","Status":"Monitor","Injury":"Health management","Latest Update":"Check official pregame report before tipoff.","Impact":"If limited or out, Philadelphia loses its main half-court pressure point."},
+    ],
+    "Los Angeles Lakers": [
+        {"Player":"LeBron James","Status":"Monitor","Injury":"Veteran workload/health status","Latest Update":"Check pregame status before tipoff.","Impact":"If limited, the Lakers lose late-game organization and matchup control."},
+        {"Player":"Anthony Davis","Status":"Monitor","Injury":"Health status","Latest Update":"Check pregame status before tipoff.","Impact":"If limited, the Lakers lose rim protection and interior scoring."},
+    ],
+}
 
 TEAM_LOGOS = {team: f"https://cdn.nba.com/logos/nba/{tid}/primary/L/logo.svg" for team, tid in TEAM_IDS.items()}
 
@@ -635,6 +685,145 @@ def headshot(name):
     pid = get_player_id(name)
     return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png" if pid else "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
 
+@st.cache_data(ttl=1800)
+def fetch_espn_injury_report(team_name):
+    """Fetch current injury report from ESPN team injury page.
+
+    nba_api does not provide a dependable injury-report endpoint, so this uses
+    ESPN as the live injury source when available. If ESPN changes its page or
+    blocks the request, the app falls back to a small monitor list and clearly
+    labels that it is fallback data.
+    """
+    if not REQUESTS_AVAILABLE:
+        return pd.DataFrame(), "requests package unavailable"
+    slug = ESPN_INJURY_SLUGS.get(team_name)
+    if not slug:
+        return pd.DataFrame(), "no ESPN injury slug for team"
+    url = f"https://www.espn.com/nba/team/injuries/_/name/{slug}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        html = requests.get(url, headers=headers, timeout=12).text
+    except Exception as e:
+        return pd.DataFrame(), f"ESPN request failed: {e}"
+
+    # First try pandas table parsing.
+    try:
+        tables = pd.read_html(html)
+        rows = []
+        for tbl in tables:
+            cols = [str(c).strip() for c in tbl.columns]
+            lower = [c.lower() for c in cols]
+            if not any("player" in c or "name" in c for c in lower):
+                continue
+            tbl.columns = cols
+            for _, r in tbl.iterrows():
+                player = str(r.get("PLAYER", r.get("Player", r.get("Name", "")))).strip()
+                if not player or player.lower() == "nan":
+                    continue
+                status = str(r.get("STATUS", r.get("Status", "Monitor"))).strip()
+                injury = str(r.get("INJURY", r.get("Injury", "Not specified"))).strip()
+                date = str(r.get("DATE", r.get("Date", ""))).strip()
+                comment = str(r.get("COMMENT", r.get("Comment", r.get("Latest Update", "")))).strip()
+                rows.append({
+                    "Player": player,
+                    "Status": status if status and status.lower() != "nan" else "Monitor",
+                    "Injury": injury if injury and injury.lower() != "nan" else "Not specified",
+                    "Latest Update": comment if comment and comment.lower() != "nan" else date,
+                    "Impact": injury_impact_note(player, status, injury, team_name),
+                    "Source": "ESPN injury report",
+                })
+        if rows:
+            return pd.DataFrame(rows).drop_duplicates(subset=["Player"]).reset_index(drop=True), "ESPN injury report"
+    except Exception:
+        pass
+
+    # Backup parse using BeautifulSoup when tables are not readable.
+    if BS4_AVAILABLE:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            text_blocks = [x.get_text(" ", strip=True) for x in soup.select("tbody tr")]
+            rows = []
+            for block in text_blocks:
+                if len(block.split()) < 3:
+                    continue
+                # Conservative fallback: keep a readable line as the update.
+                rows.append({
+                    "Player": block.split("  ")[0].strip(),
+                    "Status": "Monitor",
+                    "Injury": "See latest update",
+                    "Latest Update": block,
+                    "Impact": "Check pregame availability because this could change rotation minutes.",
+                    "Source": "ESPN injury report parsed text",
+                })
+            if rows:
+                return pd.DataFrame(rows).head(10), "ESPN injury report parsed text"
+        except Exception:
+            pass
+    return pd.DataFrame(), "No ESPN injury rows found"
+
+def injury_impact_note(player, status, injury, team_name):
+    status_l = str(status).lower()
+    injury_l = str(injury).lower()
+    star_names = set(TEAM_PROFILES.get(team_name, {}).get("starters", [])[:3])
+    if player in star_names:
+        base = f"{player} is a major rotation piece for {team_name}; his status can change matchup planning and usage."
+    else:
+        base = f"{player}'s status mainly affects depth, bench minutes, and matchup flexibility."
+    if "out" in status_l:
+        return base + " If out, expect the rotation to tighten and another player to absorb minutes."
+    if "question" in status_l or "doubt" in status_l or "game" in status_l:
+        return base + " Pregame warmups and final injury report matter here."
+    if "prob" in status_l or "available" in status_l:
+        return base + " He is more likely to play, but workload may still matter."
+    if any(x in injury_l for x in ["knee", "ankle", "hamstring", "calf", "foot"]):
+        return base + " Lower-body injuries can affect defense, transition play, and late-game burst."
+    return base
+
+def get_injury_report(team_name):
+    df, source = fetch_espn_injury_report(team_name)
+    if df is not None and not df.empty:
+        return df, source
+    fallback = FALLBACK_INJURY_REPORT.get(team_name, [])
+    if fallback:
+        out = pd.DataFrame(fallback)
+        out["Source"] = "Fallback monitor list — check official pregame report"
+        return out, source + "; showing fallback monitor list"
+    return pd.DataFrame(columns=["Player","Status","Injury","Latest Update","Impact","Source"]), source
+
+def render_injury_report(team_name, opponent_name=None):
+    st.subheader("Injury Report / Pregame Availability")
+    st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled.")
+    teams = [team_name]
+    if opponent_name and opponent_name not in teams:
+        teams.append(opponent_name)
+    for tm in teams:
+        df, source = get_injury_report(tm)
+        st.markdown(f"### {tm}")
+        st.caption(f"Source/status: {source} · refreshed about every 30 minutes")
+        if df.empty:
+            st.success("No injury rows found from the live source right now.")
+            continue
+        cols = st.columns(min(3, max(1, len(df))))
+        for i, (_, r) in enumerate(df.iterrows()):
+            with cols[i % len(cols)]:
+                st.markdown("<div class='injury-card'>", unsafe_allow_html=True)
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    try:
+                        st.image(headshot(str(r.get("Player", ""))), width=72)
+                    except Exception:
+                        pass
+                with c2:
+                    st.markdown(f"**{r.get('Player','Unknown')}**")
+                    st.markdown(f"<span class='injury-status'>{r.get('Status','Monitor')}</span>", unsafe_allow_html=True)
+                    st.write(f"**Injury:** {r.get('Injury','Not specified')}")
+                st.markdown(f"<div class='injury-note'><b>Latest:</b> {r.get('Latest Update','Check pregame report')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='injury-note'><b>Scouting impact:</b> {r.get('Impact','Could affect rotation minutes.')}</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
 
 @st.cache_data(ttl=1800)
 def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
@@ -1175,6 +1364,7 @@ if page == "Home Dashboard":
     c2.markdown(f"<div class='big-status'>{series_status_text(favorite_team)}</div>", unsafe_allow_html=True)
     c3.metric("Seed", profile["seed"])
     render_game_countdown(favorite_team)
+    render_injury_report(favorite_team, profile.get("current_opponent"))
     _, s=series_for_team(favorite_team)
     if s and s.get("games"):
         st.caption(f"Auto-updated from completed games/fallback data · Last app refresh: {datetime.now().strftime('%b %d, %Y %I:%M %p')}")
@@ -1204,6 +1394,7 @@ elif page == "Previous Rounds":
 elif page == "Live Game Center":
     render_matchup_header(favorite_team)
     st.subheader("Advanced Live Game Center")
+    render_injury_report(favorite_team, profile.get("current_opponent"))
     if AUTOREFRESH_AVAILABLE: st_autorefresh(interval=30000, key="live_refresh"); st.caption("Refreshing every 30 seconds.")
     if not NBA_LIVE_AVAILABLE:
         st.error("nba_api live endpoints are unavailable. Check requirements.txt.")
