@@ -110,6 +110,7 @@ ESPN_INJURY_SLUGS = {
 
 FALLBACK_INJURY_REPORT = {
     "New York Knicks": [
+        {"Player":"OG Anunoby","Status":"Questionable / Monitor","Injury":"Availability status","Latest Update":"Key wing availability should be checked on the official pregame report before every Knicks game.","Impact":"If Anunoby is out or limited, New York loses a primary wing defender, matchup flexibility, and transition finishing."},
         {"Player":"Mitchell Robinson","Status":"Monitor","Injury":"Availability/conditioning","Latest Update":"Check pregame status before tipoff.","Impact":"If limited, rim protection and offensive rebounding become more dependent on the starting frontcourt."},
     ],
     "Philadelphia 76ers": [
@@ -795,9 +796,13 @@ def get_injury_report(team_name):
 
 def render_injury_report(team_name, opponent_name=None):
     st.subheader("Injury Report / Pregame Availability")
-    st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled.")
+    st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled. Key fallback monitor rows are included when live injury data is unavailable.")
     teams = [team_name]
-    if opponent_name and opponent_name not in teams:
+    if isinstance(opponent_name, (list, tuple, set)):
+        for op in opponent_name:
+            if op and op not in teams:
+                teams.append(op)
+    elif opponent_name and opponent_name not in teams:
         teams.append(opponent_name)
     for tm in teams:
         df, source = get_injury_report(tm)
@@ -1226,6 +1231,99 @@ def render_matchup_header(team_name, first_round=False):
 def team_logo_html(team,size=28):
     return f"<img src='{TEAM_LOGOS[team]}' width='{size}' style='vertical-align:middle;margin-right:8px;'>"
 
+
+# ==========================================================
+# Next-round advancement helpers
+# ==========================================================
+def paired_second_round_key(series_key):
+    pairs = {
+        "NYK-PHI": "DET-CLE",
+        "DET-CLE": "NYK-PHI",
+        "OKC-LAL": "SAS-MIN",
+        "SAS-MIN": "OKC-LAL",
+    }
+    return pairs.get(series_key)
+
+def next_round_context_for_team(team_name):
+    """Return next-round display context when the team's current custom series is complete.
+
+    Example: if NYK has finished NYK-PHI and DET-CLE is not finished yet,
+    the home dashboard shows Knicks vs Pistons / Cavaliers in the Eastern
+    Conference Championship instead of staying stuck on Knicks vs 76ers.
+    """
+    series_map = build_second_round_series()
+    current_key = None
+    current_series = None
+    for key, series in series_map.items():
+        if team_name in [series.get("a"), series.get("b")]:
+            current_key = key
+            current_series = series
+            break
+    if not current_series or not current_series.get("winner"):
+        return None
+    if current_series.get("winner") != team_name:
+        return {
+            "advanced": False,
+            "eliminated": True,
+            "round_label": "Eliminated",
+            "opponents": [],
+            "opponent_text": current_series.get("winner", "Opponent"),
+            "status_text": f"{team_name} was eliminated by {current_series.get('winner')}.",
+            "completed_series": current_series,
+        }
+    paired_key = paired_second_round_key(current_key)
+    paired = series_map.get(paired_key) if paired_key else None
+    if not paired:
+        return None
+    conf = current_series.get("conf", "")
+    round_label = "Eastern Conference Championship" if conf == "East" else "Western Conference Championship"
+    if paired.get("winner"):
+        opponents = [paired["winner"]]
+        opponent_text = paired["winner"]
+    else:
+        opponents = [paired.get("a"), paired.get("b")]
+        opponent_text = f"{paired.get('a')} / {paired.get('b')}"
+    opponents = [op for op in opponents if op in TEAM_PROFILES]
+    return {
+        "advanced": True,
+        "eliminated": False,
+        "round_label": round_label,
+        "opponents": opponents,
+        "opponent_text": opponent_text,
+        "status_text": f"{team_name} advances to the {round_label} vs {opponent_text}.",
+        "completed_series": current_series,
+        "paired_series": paired,
+    }
+
+def render_home_matchup_header(team_name):
+    ctx = next_round_context_for_team(team_name)
+    if not ctx or not ctx.get("advanced"):
+        render_matchup_header(team_name)
+        return ctx
+    p = TEAM_PROFILES[team_name]
+    c1, c2, c3 = st.columns([1, 2.8, 1.4])
+    with c1:
+        st.image(TEAM_LOGOS[team_name], width=110)
+    with c2:
+        st.markdown(
+            f"<div style='text-align:center'><h1>({p['seed']}) {team_name} vs {ctx['opponent_text']}</h1>"
+            f"<h3>{ctx['round_label']}</h3><p>{ctx['status_text']}</p></div>",
+            unsafe_allow_html=True,
+        )
+    with c3:
+        logo_cols = st.columns(max(1, len(ctx.get("opponents", []))))
+        for i, op in enumerate(ctx.get("opponents", [])):
+            with logo_cols[i % len(logo_cols)]:
+                st.image(TEAM_LOGOS[op], width=82)
+                st.caption(op)
+    return ctx
+
+def home_injury_opponents(team_name):
+    ctx = next_round_context_for_team(team_name)
+    if ctx and ctx.get("advanced"):
+        return ctx.get("opponents", [])
+    return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+
 def series_card(s, round_name):
     a,b=s["a"],s["b"]; aw,bw=s["a_wins"],s["b_wins"]
     winner=s.get("winner")
@@ -1330,17 +1428,139 @@ def render_lineup_cards(team, box_df):
             st.write(f"STL {seas['STL']} | BLK {seas['BLK']}")
             st.markdown("</div>", unsafe_allow_html=True)
 
+
+# ==========================================================
+# Previous rounds / playoff path helpers
+# ==========================================================
+FALLBACK_GAME_MVPS = {
+    ("New York Knicks", "Atlanta Hawks", 1): ("Jalen Brunson", "Controlled the half court and gave New York the Game 1 tone."),
+    ("New York Knicks", "Atlanta Hawks", 2): ("Trae Young", "Late-shot creation and pressure helped Atlanta steal a road game."),
+    ("New York Knicks", "Atlanta Hawks", 3): ("Trae Young", "Carried Atlanta's offense in a one-possession finish."),
+    ("New York Knicks", "Atlanta Hawks", 4): ("Jalen Brunson", "Reset the series for New York with stronger offensive control."),
+    ("New York Knicks", "Atlanta Hawks", 5): ("Karl-Anthony Towns", "Spacing and scoring changed the geometry of the Knicks offense."),
+    ("New York Knicks", "Atlanta Hawks", 6): ("Jalen Brunson", "Closed the series with lead-guard control and playoff poise."),
+    ("New York Knicks", "Philadelphia 76ers", 1): ("Jalen Brunson", "Set the pace for New York's second-round opener."),
+    ("New York Knicks", "Philadelphia 76ers", 2): ("Jalen Brunson", "Protected the late-game margin and pushed the Knicks to a 2-0 series edge."),
+    ("Detroit Pistons", "Orlando Magic", 1): ("Paolo Banchero", "Powered Orlando's Game 1 road win."),
+    ("Detroit Pistons", "Orlando Magic", 2): ("Cade Cunningham", "Got Detroit's offense organized and tied the series."),
+    ("Detroit Pistons", "Orlando Magic", 3): ("Paolo Banchero", "Kept Orlando ahead with star-level shot creation."),
+    ("Detroit Pistons", "Orlando Magic", 4): ("Franz Wagner", "Gave Orlando secondary scoring and two-way stability."),
+    ("Detroit Pistons", "Orlando Magic", 5): ("Cade Cunningham", "Kept Detroit alive with command of the offense."),
+    ("Detroit Pistons", "Orlando Magic", 6): ("Jalen Duren", "Controlled the glass and helped extend the series."),
+    ("Detroit Pistons", "Orlando Magic", 7): ("Cade Cunningham", "Delivered the Game 7 control that sent Detroit forward."),
+    ("Detroit Pistons", "Cleveland Cavaliers", 1): ("Cade Cunningham", "Organized Detroit's offense and gave the Pistons the series lead."),
+    ("Detroit Pistons", "Cleveland Cavaliers", 2): ("Cade Cunningham", "Pushed Detroit to a 2-0 lead with steady lead-option control."),
+}
+
+def infer_opponent_from_matchup(matchup, team_name):
+    if not matchup or " at " not in str(matchup):
+        return "Opponent"
+    left, right = str(matchup).split(" at ", 1)
+    def short_name(full):
+        return full.replace("New York ", "").replace("Philadelphia ", "").replace("Atlanta ", "").replace("Detroit ", "").replace("Cleveland ", "").replace("Oklahoma City ", "").replace("Los Angeles ", "").replace("San Antonio ", "").replace("Minnesota ", "").replace("Portland ", "").replace("Phoenix ", "").strip()
+    team_short = short_name(team_name)
+    if team_short in left:
+        return right
+    if team_short in right:
+        return left
+    return left if right == team_short else right
+
+def mvp_for_game(team_a, team_b, game_num, winner=None):
+    for key in [(team_a, team_b, game_num), (team_b, team_a, game_num)]:
+        if key in FALLBACK_GAME_MVPS:
+            return FALLBACK_GAME_MVPS[key]
+    # Generic but still concrete: use the main creator/anchor from winner if known.
+    chosen_team = winner if winner in TEAM_PROFILES else team_a
+    candidates = TEAM_PROFILES.get(chosen_team, {}).get("starters", [])
+    name = candidates[0] if candidates else "Top performer"
+    return name, f"Best estimated standout for {chosen_team} based on the game result and team role hierarchy."
+
+def get_current_series_games_for_previous_rounds(team_name):
+    _, s = series_for_team(team_name)
+    if not s or not s.get("games"):
+        return []
+    games = []
+    opp = s["b"] if team_name == s["a"] else s["a"]
+    for idx, g in enumerate(s.get("games", []), start=1):
+        row = dict(g)
+        row["Game"] = row.get("Game") or f"Game {idx}"
+        row["Matchup"] = row.get("Matchup") or f"{team_name} vs {opp}"
+        mvp, why = mvp_for_game(team_name, opp, idx, row.get("Winner"))
+        row["Game MVP"] = row.get("Game MVP") or mvp
+        row["MVP Note"] = row.get("MVP Note") or why
+        games.append(row)
+    return games
+
+def render_series_history_card(team_a, team_b, games, round_label, result_text=None):
+    if not games:
+        st.info(f"No game results available yet for {team_a} vs {team_b}.")
+        return
+    a_wins = sum(1 for g in games if g.get("Winner") == team_a)
+    b_wins = sum(1 for g in games if g.get("Winner") == team_b)
+    st.markdown("""
+    <style>
+    .history-card{border:1px solid rgba(0,0,0,.12);border-radius:20px;padding:16px;margin:12px 0;background:linear-gradient(135deg,#ffffff,#f8fafc);box-shadow:0 4px 18px rgba(15,23,42,.06)}
+    .history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.history-team{text-align:center;font-weight:900;font-size:18px}.history-score{font-size:28px;font-weight:950;color:#ea580c;text-align:center}.game-row{border-top:1px solid rgba(0,0,0,.08);padding:10px 2px}.mvp-pill{display:inline-block;background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:3px 10px;font-weight:800;color:#9a3412}
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
+    c1,c2,c3=st.columns([1.2,.8,1.2])
+    with c1:
+        st.image(TEAM_LOGOS.get(team_a,""), width=82)
+        st.markdown(f"<div class='history-team'>({TEAM_PROFILES[team_a]['seed']}) {team_a}</div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='history-score'>{a_wins} - {b_wins}</div>", unsafe_allow_html=True)
+        st.caption(round_label)
+    with c3:
+        st.image(TEAM_LOGOS.get(team_b,""), width=82)
+        st.markdown(f"<div class='history-team'>({TEAM_PROFILES[team_b]['seed']}) {team_b}</div>", unsafe_allow_html=True)
+    if result_text:
+        st.info(result_text)
+    for idx, g in enumerate(games, start=1):
+        game_num = g.get("Game", f"Game {idx}")
+        try:
+            n = int(str(game_num).replace("Game", "").strip())
+        except Exception:
+            n = idx
+        if "Game MVP" not in g:
+            mvp, why = mvp_for_game(team_a, team_b, n, g.get("Winner"))
+        else:
+            mvp, why = g.get("Game MVP"), g.get("MVP Note", "Standout performer for this game.")
+        st.markdown(f"<div class='game-row'><b>{game_num}</b> · {g.get('Date','Date TBD')} · {g.get('Matchup', team_a+' vs '+team_b)}<br><b>Score:</b> {g.get('Score','Score TBD')}<br><span class='mvp-pill'>Game MVP: {mvp}</span><br><span style='color:#475569'>{why}</span></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def render_previous_rounds_history(team_name):
+    profile = TEAM_PROFILES[team_name]
+    first_opp = profile["first_round_opponent"]
+    st.subheader("Playoff Path So Far")
+    st.caption("Includes logos, scores, winners, and estimated game MVP/standout player for each completed game.")
+    first_games = []
+    for idx, row in enumerate(FIRST_ROUND_GAME_SCORES.get(team_name, []), start=1):
+        r = dict(row)
+        n = int(r.get("Game", idx)) if str(r.get("Game", idx)).isdigit() else idx
+        mvp, why = mvp_for_game(team_name, first_opp, n, r.get("Winner"))
+        r["Game"] = f"Game {n}"
+        r["Game MVP"] = mvp
+        r["MVP Note"] = why
+        first_games.append(r)
+    render_series_history_card(team_name, first_opp, first_games, "First Round", profile.get("first_round_result"))
+
+    current_opp = profile.get("current_opponent")
+    if current_opp:
+        second_games = get_current_series_games_for_previous_rounds(team_name)
+        render_series_history_card(team_name, current_opp, second_games, "Current Round / Second Round", series_status_text(team_name))
+
 # ==========================================================
 # Sidebar
 # ==========================================================
 PAGES={
     "🏀 Home Dashboard":"Home Dashboard",
-    "🏀 Playoff Bracket":"Playoff Bracket",
-    "🏀 Previous Rounds":"Previous Rounds",
     "🏀 Live Game Center":"Live Game Center",
+    "🏀 Playoff Bracket":"Playoff Bracket",
+    "🏀 Matchup Lineups":"Matchup Lineups",
     "🏀 Player Playoff Tracker":"Player Playoff Tracker",
     "🏀 Legacy Tracker":"Legacy Tracker",
-    "🏀 Matchup Lineups":"Matchup Lineups",
+    "🏀 Previous Rounds":"Previous Rounds",
 }
 favorite_team=st.sidebar.selectbox("Choose your 2026 NBA playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
 USE_DEMO_BACKUP = st.sidebar.toggle(
@@ -1358,13 +1578,14 @@ page=PAGES[page_label]
 # Pages
 # ==========================================================
 if page == "Home Dashboard":
-    render_matchup_header(favorite_team)
+    home_ctx = render_home_matchup_header(favorite_team)
     c1,c2,c3=st.columns(3)
-    c1.metric("Status", profile["status"])
-    c2.markdown(f"<div class='big-status'>{series_status_text(favorite_team)}</div>", unsafe_allow_html=True)
+    c1.metric("Status", "Advanced" if home_ctx and home_ctx.get("advanced") else profile["status"])
+    home_status = home_ctx["status_text"] if home_ctx and home_ctx.get("advanced") else series_status_text(favorite_team)
+    c2.markdown(f"<div class='big-status'>{home_status}</div>", unsafe_allow_html=True)
     c3.metric("Seed", profile["seed"])
     render_game_countdown(favorite_team)
-    render_injury_report(favorite_team, profile.get("current_opponent"))
+    render_injury_report(favorite_team, home_injury_opponents(favorite_team))
     _, s=series_for_team(favorite_team)
     if s and s.get("games"):
         st.caption(f"Auto-updated from completed games/fallback data · Last app refresh: {datetime.now().strftime('%b %d, %Y %I:%M %p')}")
@@ -1381,20 +1602,13 @@ elif page == "Playoff Bracket":
 
 elif page == "Previous Rounds":
     st.header(f"{profile['conference']} Previous Rounds")
-    first_opp=profile["first_round_opponent"]
     render_matchup_header(favorite_team, first_round=True)
-    st.info(profile["first_round_result"])
-    st.subheader("First Round Game-by-Game Scores")
-    st.dataframe(pd.DataFrame(FIRST_ROUND_GAME_SCORES.get(favorite_team, [])), use_container_width=True)
-    _, s=series_for_team(favorite_team)
-    if s and s.get("games"):
-        st.subheader("Second Round Games Played So Far")
-        st.dataframe(pd.DataFrame(s["games"]), use_container_width=True)
+    render_previous_rounds_history(favorite_team)
 
 elif page == "Live Game Center":
     render_matchup_header(favorite_team)
     st.subheader("Advanced Live Game Center")
-    render_injury_report(favorite_team, profile.get("current_opponent"))
+    render_injury_report(favorite_team, home_injury_opponents(favorite_team))
     if AUTOREFRESH_AVAILABLE: st_autorefresh(interval=30000, key="live_refresh"); st.caption("Refreshing every 30 seconds.")
     if not NBA_LIVE_AVAILABLE:
         st.error("nba_api live endpoints are unavailable. Check requirements.txt.")
