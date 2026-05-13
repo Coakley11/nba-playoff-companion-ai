@@ -66,10 +66,7 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .injury-note { font-size:13px; color:#374151; }
 .live-score-sticky {
   position: sticky; top: 0; z-index: 1000;
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   color: #f8fafc; border-radius: 16px; padding: 14px 16px 16px;
-  border: 1px solid rgba(148,163,184,.35);
-  box-shadow: 0 8px 30px rgba(15,23,42,.35);
   margin-bottom: 14px;
 }
 .live-hero-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
@@ -446,6 +443,25 @@ def series_key_for_pair(t1, t2, templates=None):
             return key
     return None
 
+
+def canonical_series_key(team_a, team_b):
+    """Stable tricode key for a two-team series (order-independent)."""
+    if not team_a or not team_b:
+        return ""
+    x, y = TEAM_ALIASES.get(team_a, ""), TEAM_ALIASES.get(team_b, "")
+    if not x or not y:
+        return f"{team_a}-{team_b}"
+    return "-".join(sorted([x, y]))
+
+
+def second_round_series_for_team(team_name):
+    """The second-round (semifinal) series shell containing this team, if any."""
+    for key, s in build_second_round_series().items():
+        if team_name in (s.get("a"), s.get("b")):
+            return key, s
+    return None, None
+
+
 def clean_and_recount_series(series):
     """De-dupe, sort, label Game 1/Game 2/etc., and recalculate wins."""
     for key, s in series.items():
@@ -514,53 +530,147 @@ def build_second_round_series():
     # The sidebar variable is created later; default is strict API mode.
     return build_second_round_series_cached(globals().get("USE_DEMO_BACKUP", False))
 
-def infer_next_round_series(round_name, conf=None):
-    """Infer Conference Finals/Finals once API games between winners appear.
 
-    This avoids hard-coding future scores. Once second-round winners are known,
-    games between those winners are grouped automatically. Finals are inferred
-    once East and West winners have NBA API games against each other.
+@st.cache_data(ttl=300)
+def build_conference_finals_series_cached(use_demo_backup=False):
+    """East/West Conference Finals shells from second-round winners + API games.
+
+    No hard-coded CF pairings: each conference finals matchup is the two teams
+    that won the conference's second-round series, discovered from completed games.
     """
-    second = build_second_round_series()
-    east_winners = [s.get("winner") for s in second.values() if s.get("conf") == "East" and s.get("winner")]
-    west_winners = [s.get("winner") for s in second.values() if s.get("conf") == "West" and s.get("winner")]
+    second = build_second_round_series_cached(use_demo_backup)
+    out = {}
+    for conf in ("East", "West"):
+        semis = [(k, s) for k, s in second.items() if s.get("conf") == conf]
+        winners = []
+        for _k, s in semis:
+            w = s.get("winner")
+            if w:
+                winners.append(w)
+        if len(winners) != 2 or winners[0] == winners[1]:
+            continue
+        t1, t2 = winners[0], winners[1]
+        key = canonical_series_key(t1, t2)
+        a, b = sorted([t1, t2], key=lambda t: (TEAM_PROFILES.get(t, {}).get("seed", 99), t))
+        shell = {"conf": conf, "round": "Conference Finals", "a": a, "b": b, "a_wins": 0, "b_wins": 0, "winner": None, "games": []}
+        for g in fetch_completed_games_recent():
+            h, aw = g.get("Home"), g.get("Away")
+            if h and aw and {h, aw} == {a, b}:
+                shell["games"].append({
+                    "Game": "",
+                    "Date": g.get("Date", ""),
+                    "GameDate": g.get("GameDate", ""),
+                    "Score": g.get("Score", ""),
+                    "Winner": g.get("Winner", ""),
+                    "GameID": g.get("GameID", ""),
+                    "Source": "NBA API",
+                })
+        out[key] = shell
+    return clean_and_recount_series(out)
 
-    if round_name == "Conference Finals":
-        teams = east_winners if conf == "East" else west_winners
-        if len(teams) != 2:
-            return None
-        templates = {f"{TEAM_ALIASES[teams[0]]}-{TEAM_ALIASES[teams[1]]}": {"conf":conf,"round":"Conference Finals","a":teams[0],"b":teams[1]}}
-    else:
-        if len(east_winners) != 1 or len(west_winners) != 1:
-            return None
-        templates = {f"{TEAM_ALIASES[east_winners[0]]}-{TEAM_ALIASES[west_winners[0]]}": {"conf":"NBA Finals","round":"NBA Finals","a":east_winners[0],"b":west_winners[0]}}
 
-    dynamic = {k: {**v, "a_wins":0, "b_wins":0, "winner":None, "games":[]} for k, v in templates.items()}
+def build_conference_finals_series():
+    return build_conference_finals_series_cached(globals().get("USE_DEMO_BACKUP", False))
+
+
+def _cf_champion_for_conference(cf_map, conf):
+    for s in cf_map.values():
+        if s.get("conf") == conf and s.get("winner"):
+            return s.get("winner")
+    return None
+
+
+@st.cache_data(ttl=300)
+def build_nba_finals_series_cached(use_demo_backup=False):
+    """NBA Finals shell once both conference champions exist; games from API only."""
+    cf = build_conference_finals_series_cached(use_demo_backup)
+    east_ch = _cf_champion_for_conference(cf, "East")
+    west_ch = _cf_champion_for_conference(cf, "West")
+    if not east_ch or not west_ch:
+        return {}
+    a, b = sorted([east_ch, west_ch], key=lambda t: (TEAM_PROFILES.get(t, {}).get("seed", 99), t))
+    key = canonical_series_key(east_ch, west_ch)
+    shell = {"conf": "NBA Finals", "round": "NBA Finals", "a": a, "b": b, "a_wins": 0, "b_wins": 0, "winner": None, "games": []}
     for g in fetch_completed_games_recent():
-        key = series_key_for_pair(g.get("Home"), g.get("Away"), templates)
-        if key:
-            dynamic[key]["games"].append({
-                "Game":"", "Date":g.get("Date",""), "GameDate":g.get("GameDate",""),
-                "Score":g.get("Score",""), "Winner":g.get("Winner",""),
-                "GameID":g.get("GameID",""), "Source":"NBA API"
+        h, aw = g.get("Home"), g.get("Away")
+        if h and aw and {h, aw} == {a, b}:
+            shell["games"].append({
+                "Game": "",
+                "Date": g.get("Date", ""),
+                "GameDate": g.get("GameDate", ""),
+                "Score": g.get("Score", ""),
+                "Winner": g.get("Winner", ""),
+                "GameID": g.get("GameID", ""),
+                "Source": "NBA API",
             })
-    return clean_and_recount_series(dynamic)
+    return clean_and_recount_series({key: shell})
+
+
+def build_nba_finals_series():
+    return build_nba_finals_series_cached(globals().get("USE_DEMO_BACKUP", False))
+
+
+def infer_next_round_series(round_name, conf=None):
+    """Return series dict(s) for Conference Finals or NBA Finals (API-driven).
+
+    Conference Finals are built from second-round winners per conference.
+    NBA Finals are built from conference-finals champions (not from semis).
+    """
+    if round_name == "Conference Finals":
+        cf = build_conference_finals_series()
+        if not cf:
+            return None
+        if conf:
+            sub = {k: v for k, v in cf.items() if v.get("conf") == conf}
+            return sub if sub else None
+        return cf
+    if round_name == "NBA Finals":
+        nf = build_nba_finals_series()
+        return nf if nf else None
+    return None
+
 
 def series_for_team(team_name):
-    for key, s in build_second_round_series().items():
-        if team_name in [s["a"], s["b"]]:
+    """Primary playoff series for this team: Finals, then Conference Finals, then active second round.
+
+    After a team clinches a second-round series but before the conference finals shell exists
+    (waiting on the other semi), returns (None, None) so the dashboard can show advancement context
+    instead of the finished semi game log as the 'current' series.
+    """
+    nf = build_nba_finals_series()
+    for key, s in nf.items():
+        if team_name in (s.get("a"), s.get("b")):
             return key, s
-    # Future rounds, if already generated by API results.
-    for collection in [infer_next_round_series("Conference Finals", "East"), infer_next_round_series("Conference Finals", "West"), infer_next_round_series("NBA Finals")]:
-        if collection:
-            for key, s in collection.items():
-                if team_name in [s["a"], s["b"]]:
-                    return key, s
-    return None, None
+
+    cf = build_conference_finals_series()
+    for key, s in cf.items():
+        if team_name in (s.get("a"), s.get("b")):
+            return key, s
+
+    second = build_second_round_series()
+    sk, ss = None, None
+    for key, s in second.items():
+        if team_name in (s.get("a"), s.get("b")):
+            sk, ss = key, s
+            break
+    if not ss:
+        return None, None
+    if ss.get("winner") == team_name:
+        in_cf = any(team_name in (s.get("a"), s.get("b")) for s in (cf or {}).values())
+        if not in_cf:
+            return None, None
+    return sk, ss
 
 def series_status_text(team_name):
     _, s = series_for_team(team_name)
-    if not s: return "No active series"
+    if not s:
+        _, semi = second_round_series_for_team(team_name)
+        if semi and semi.get("winner") == team_name:
+            return f"{TEAM_ALIASES[team_name]} clinched their second-round series — Conference Finals matchup forms when both conference semis finish."
+        if semi and semi.get("winner") and semi.get("winner") != team_name:
+            w = semi["winner"]
+            return f"{TEAM_ALIASES[team_name]} eliminated by {TEAM_ALIASES[w]}."
+        return "No active series"
     a, b = s["a"], s["b"]
     aw, bw = s["a_wins"], s["b_wins"]
     team_w = aw if team_name == a else bw
@@ -568,7 +678,8 @@ def series_status_text(team_name):
     opp_w = bw if team_name == a else aw
     verb = "leads" if team_w > opp_w else "trails" if team_w < opp_w else "tied"
     source_note = "" if s.get("source") == "NBA API" else f" ({s.get('source','')})"
-    return f"{TEAM_ALIASES[team_name]} {verb} {team_w}-{opp_w} vs {TEAM_ALIASES[opp]}{source_note}"
+    rnd = s.get("round", "Playoffs")
+    return f"{rnd}: {TEAM_ALIASES[team_name]} {verb} {team_w}-{opp_w} vs {TEAM_ALIASES[opp]}{source_note}"
 
 def historic_series_context(team_name):
     _, s = series_for_team(team_name)
@@ -1266,22 +1377,26 @@ def team_logo_html(team,size=28):
 # ==========================================================
 # Next-round advancement helpers
 # ==========================================================
-def paired_second_round_key(series_key):
-    pairs = {
-        "NYK-PHI": "DET-CLE",
-        "DET-CLE": "NYK-PHI",
-        "OKC-LAL": "SAS-MIN",
-        "SAS-MIN": "OKC-LAL",
-    }
-    return pairs.get(series_key)
+def sibling_second_round_key(current_key, second_map):
+    """The other second-round series in the same conference (dynamic bracket wiring)."""
+    conf = second_map.get(current_key, {}).get("conf")
+    if not conf:
+        return None
+    others = [k for k, s in second_map.items() if k != current_key and s.get("conf") == conf]
+    return others[0] if len(others) == 1 else None
+
 
 def next_round_context_for_team(team_name):
-    """Return next-round display context when the team's current custom series is complete.
+    """Return next-round display context when the team's second-round series is complete
+    but conference finals are not yet formed (waiting on the other conference semi).
 
-    Example: if NYK has finished NYK-PHI and DET-CLE is not finished yet,
-    the home dashboard shows Knicks vs Pistons / Cavaliers in the Eastern
-    Conference Championship instead of staying stuck on Knicks vs 76ers.
+    Once conference finals (or finals) exist for this team, returns None — the home
+    header uses ``series_for_team`` directly for that matchup.
     """
+    _, s_active = series_for_team(team_name)
+    if s_active and s_active.get("round") in ("Conference Finals", "NBA Finals"):
+        return None
+
     series_map = build_second_round_series()
     current_key = None
     current_series = None
@@ -1302,7 +1417,7 @@ def next_round_context_for_team(team_name):
             "status_text": f"{team_name} was eliminated by {current_series.get('winner')}.",
             "completed_series": current_series,
         }
-    paired_key = paired_second_round_key(current_key)
+    paired_key = sibling_second_round_key(current_key, series_map)
     paired = series_map.get(paired_key) if paired_key else None
     if not paired:
         return None
@@ -1327,6 +1442,24 @@ def next_round_context_for_team(team_name):
     }
 
 def render_home_matchup_header(team_name):
+    _k, s = series_for_team(team_name)
+    rnd = (s or {}).get("round", "")
+    if s and rnd in ("Conference Finals", "NBA Finals"):
+        opp = s["b"] if team_name == s["a"] else s["a"]
+        p = TEAM_PROFILES[team_name]
+        c1, c2, c3 = st.columns([1, 2.8, 1.4])
+        with c1:
+            st.image(TEAM_LOGOS[team_name], width=110)
+        with c2:
+            st.markdown(
+                f"<div style='text-align:center'><h1>({p['seed']}) {team_name} vs ({TEAM_PROFILES[opp]['seed']}) {opp}</h1>"
+                f"<h3>{p['conference']} {rnd}</h3></div>",
+                unsafe_allow_html=True,
+            )
+        with c3:
+            st.image(TEAM_LOGOS[opp], width=110)
+        return {"advanced": False, "bracket_series": True, "round_label": rnd, "opponent": opp, "series": s}
+
     ctx = next_round_context_for_team(team_name)
     if not ctx or not ctx.get("advanced"):
         render_matchup_header(team_name)
@@ -1353,6 +1486,10 @@ def home_injury_opponents(team_name):
     ctx = next_round_context_for_team(team_name)
     if ctx and ctx.get("advanced"):
         return ctx.get("opponents", [])
+    _, s = series_for_team(team_name)
+    if s and s.get("round") in ("Conference Finals", "NBA Finals"):
+        opp = s["b"] if team_name == s["a"] else s["a"]
+        return [opp]
     return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
 
 def series_card(s, round_name):
@@ -1381,13 +1518,41 @@ def render_bracket():
     east_conf = infer_next_round_series("Conference Finals", "East")
     west_conf = infer_next_round_series("Conference Finals", "West")
     finals = infer_next_round_series("NBA Finals")
-    east_cf=[s.get("winner") or "TBD" for s in east_sr]; west_cf=[s.get("winner") or "TBD" for s in west_sr]
+    east_cf_labels = [s.get("winner") or "TBD" for s in east_sr]
+    west_cf_labels = [s.get("winner") or "TBD" for s in west_sr]
+    while len(east_cf_labels) < 2:
+        east_cf_labels.append("TBD")
+    while len(west_cf_labels) < 2:
+        west_cf_labels.append("TBD")
+
+    if east_conf and len(east_conf) == 1:
+        east_cf_block = series_card(list(east_conf.values())[0], "East Finals")
+    else:
+        east_cf_block = f"<p style='color:#cbd5e1;font-size:13px'>East semis → {east_cf_labels[0]} / {east_cf_labels[1]}<br/><span style='color:#94a3b8'>Conference Finals matchup appears when both winners are known.</span></p>"
+
+    if west_conf and len(west_conf) == 1:
+        west_cf_block = series_card(list(west_conf.values())[0], "West Finals")
+    else:
+        west_cf_block = f"<p style='color:#cbd5e1;font-size:13px'>West semis → {west_cf_labels[0]} / {west_cf_labels[1]}<br/><span style='color:#94a3b8'>Conference Finals matchup appears when both winners are known.</span></p>"
+
+    if finals and len(finals) == 1:
+        finals_block = "<h3 style='margin-top:14px'>NBA Finals</h3>" + series_card(list(finals.values())[0], "NBA Finals")
+    else:
+        finals_block = "<h3 style='margin-top:14px'>NBA Finals</h3><p style='color:#93c5fd;font-size:13px'>Populates when East and West conference champions are decided.</p>"
+
+    center_column = (
+        "<h3>Conference Finals</h3>"
+        + east_cf_block
+        + "<div class='trophy'>🏆</div>"
+        + west_cf_block
+        + finals_block
+    )
     html=f"""
     <div class='bracket-wrap'><div class='bracket-title'>2026 NBA PLAYOFF BRACKET</div><div class='bracket-sub'>Auto-refreshing bracket view · API scores override fallback data when available</div>
     <div class='bracket-grid'>
     <div><div class='conf-title'>Eastern Conference</div><div class='round-title'>First Round</div>{''.join(series_card(s,'First Round') for s in east_fr)}</div>
     <div><div class='round-title'>Second Round</div>{''.join(series_card(s,'Second Round') for s in east_sr)}</div>
-    <div class='finals-box'><h3>Conference Finals</h3><p>East: {east_cf[0]} / {east_cf[1]}</p><div class='trophy'>🏆</div><p>West: {west_cf[0]} / {west_cf[1]}</p><h3>NBA Finals</h3></div>
+    <div class='finals-box'>{center_column}</div>
     <div><div class='round-title'>Second Round</div>{''.join(series_card(s,'Second Round') for s in west_sr)}</div>
     <div><div class='conf-title'>Western Conference</div><div class='round-title'>First Round</div>{''.join(series_card(s,'First Round') for s in west_fr)}</div>
     </div></div>"""
@@ -1510,7 +1675,30 @@ def _injury_hero_lines(team_names, max_each=2):
             bits.append(f"<span class='live-pill' style='font-size:11px'>🩹 {pl}: {stt}</span>")
         if bits:
             lines.append(f"<div style='margin-top:6px'><span style='font-weight:800;color:#e2e8f0'>{html.escape(tm)}</span> {' '.join(bits)}</div>")
-    return "".join(lines) if lines else "<div style='margin-top:8px;color:#94a3b8;font-size:12px'>No injury rows from live source · see <b>Key Injuries</b> tab.</div>"
+    return "".join(lines) if lines else "<div style='margin-top:8px;color:#94a3b8;font-size:12px'>No injury rows from live source · see <b>Injuries</b> tab.</div>"
+
+
+def live_hero_palette(favorite_team):
+    """Subtle gradient + accent for sticky hero; tuned for contrast on dark backgrounds."""
+    palettes = {
+        "New York Knicks": {"bg0": "#0a1628", "bg1": "#152642", "accent": "#f97316", "accent_soft": "rgba(249,115,22,.22)"},
+        "Philadelphia 76ers": {"bg0": "#0c1220", "bg1": "#1a1f3c", "accent": "#3b82f6", "accent_soft": "rgba(59,130,246,.22)"},
+        "Detroit Pistons": {"bg0": "#1a0a0c", "bg1": "#241018", "accent": "#ef4444", "accent_soft": "rgba(239,68,68,.2)"},
+        "Cleveland Cavaliers": {"bg0": "#1a0c12", "bg1": "#2a1220", "accent": "#f472b6", "accent_soft": "rgba(244,114,182,.18)"},
+        "Oklahoma City Thunder": {"bg0": "#0a1524", "bg1": "#122238", "accent": "#38bdf8", "accent_soft": "rgba(56,189,248,.22)"},
+        "Los Angeles Lakers": {"bg0": "#14081f", "bg1": "#251538", "accent": "#fbbf24", "accent_soft": "rgba(251,191,36,.2)"},
+        "San Antonio Spurs": {"bg0": "#0c0c0c", "bg1": "#1c232e", "accent": "#cbd5e1", "accent_soft": "rgba(203,213,225,.18)"},
+        "Minnesota Timberwolves": {"bg0": "#061a18", "bg1": "#0f2d28", "accent": "#34d399", "accent_soft": "rgba(52,211,153,.2)"},
+        "Boston Celtics": {"bg0": "#061510", "bg1": "#0f2418", "accent": "#22c55e", "accent_soft": "rgba(34,197,94,.2)"},
+        "Atlanta Hawks": {"bg0": "#1a0c0c", "bg1": "#2a1212", "accent": "#dc2626", "accent_soft": "rgba(220,38,38,.2)"},
+        "Orlando Magic": {"bg0": "#0a1420", "bg1": "#122a45", "accent": "#60a5fa", "accent_soft": "rgba(96,165,250,.22)"},
+        "Toronto Raptors": {"bg0": "#0f0f12", "bg1": "#1a1520", "accent": "#ef4444", "accent_soft": "rgba(239,68,68,.18)"},
+        "Phoenix Suns": {"bg0": "#1a0f08", "bg1": "#2d1810", "accent": "#fb923c", "accent_soft": "rgba(251,146,60,.22)"},
+        "Portland Trail Blazers": {"bg0": "#120808", "bg1": "#221010", "accent": "#e11d48", "accent_soft": "rgba(225,29,72,.2)"},
+        "Denver Nuggets": {"bg0": "#0f1724", "bg1": "#1e2a42", "accent": "#facc15", "accent_soft": "rgba(250,204,21,.2)"},
+        "Houston Rockets": {"bg0": "#140808", "bg1": "#241010", "accent": "#f87171", "accent_soft": "rgba(248,113,113,.2)"},
+    }
+    return palettes.get(favorite_team, {"bg0": "#0f172a", "bg1": "#1e293b", "accent": "#38bdf8", "accent_soft": "rgba(56,189,248,.18)"})
 
 
 def render_live_game_center(favorite_team, profile):
@@ -1574,8 +1762,15 @@ def render_live_game_center(favorite_team, profile):
         if profile.get("current_opponent") and profile["current_opponent"] not in inj_teams:
             inj_teams.append(profile["current_opponent"])
 
+    pal = live_hero_palette(favorite_team)
+    hero_box = "border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 36px rgba(0,0,0,.42);"
+    hero_style = f"background: linear-gradient(165deg, {pal['bg0']} 0%, {pal['bg1']} 52%, #070b12 100%); {hero_box}"
+    away_score_color = pal["accent"] if away_name == favorite_team else "#f8fafc"
+    home_score_color = pal["accent"] if home_name == favorite_team else "#f8fafc"
+    prob_pill_style = f"background:{pal['accent_soft']}; border:1px solid {pal['accent']}77; color:#f8fafc"
+
     hero_html = f"""
-<div class="live-score-sticky">
+<div class="live-score-sticky" style="{hero_style}">
   <div class="live-hero-grid">
     <div class="live-hero-side">
       <img src="{logo_away}" width="56" height="56" style="object-fit:contain" alt="" />
@@ -1587,9 +1782,9 @@ def render_live_game_center(favorite_team, profile):
     </div>
     <div style="text-align:center;padding:4px 8px">
       <div style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:.06em">LIVE SCOREBOARD</div>
-      <div class="live-score-big"><span style="color:#f8fafc">{away_score}</span>
+      <div class="live-score-big"><span style="color:{away_score_color}">{away_score}</span>
         <span style="color:#64748b;margin:0 10px">—</span>
-        <span style="color:#f8fafc">{home_score}</span></div>
+        <span style="color:{home_score_color}">{home_score}</span></div>
       <div style="font-size:14px;font-weight:700;color:#e2e8f0;margin-top:4px">{html.escape(away_tri)} @ {html.escape(home_tri)}</div>
     </div>
     <div class="live-hero-side right">
@@ -1606,7 +1801,7 @@ def render_live_game_center(favorite_team, profile):
     <span class="live-pill">⏱ Q{period} · {html.escape(clock or '—')}</span>
     <span class="live-pill series">🏆 {html.escape(series_line or 'Series')}</span>
     {('<span class="live-pill clutch">⚡ CLUTCH</span>' if clutch else '')}
-    <span class="live-pill prob">📈 Win prob · {favorite_team.split()[-1]}: {prob}%</span>
+    <span class="live-pill prob" style="{prob_pill_style}">📈 Win prob · {favorite_team.split()[-1]}: {prob}%</span>
   </div>
   <div class="live-tile-row">
     <div class="live-tile"><div class="k">Margin ({favorite_team.split()[-1]})</div><div class="v">{'+' if margin > 0 else ''}{margin}</div></div>
@@ -1629,29 +1824,27 @@ def render_live_game_center(favorite_team, profile):
 
     matchup_opp = opp if opp in TEAM_PROFILES else (opp_other if opp_other in TEAM_PROFILES else None)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "📊 Scoreboard",
-        "🩹 Key Injuries",
-        "📈 Momentum & Win %",
+    tab_sum, tab_inj, tab_mom, tab_top, tab_shot, tab_pbp, tab_what = st.tabs([
+        "📋 Game Summary / Live Score",
+        "🩹 Injuries",
+        "📈 Momentum / Win Probability",
         "⭐ Top Performers",
-        "⚔️ Matchup",
+        "🎯 Shot Chart",
         "📝 Play-by-Play",
-        "🎯 Shot Charts",
-        "✨ Legacy Impact",
-        "🔮 What-If",
+        "🔮 What-If Simulator",
     ])
 
-    with tab1:
+    with tab_sum:
         with st.container(border=True):
-            st.markdown("##### 📊 Game summary")
+            st.markdown("##### Game Summary / Live Score")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Clock", clock or "—")
             m2.metric("Period", f"Q{period}")
             m3.metric(f"{favorite_team.split()[-1]} pts", team_score)
             m4.metric("Opponent pts", opp_score)
             if not box_df.empty:
-                st.markdown("**Full box score**")
-                st.dataframe(box_df, use_container_width=True, height=320)
+                st.markdown("**Box score**")
+                st.dataframe(box_df, use_container_width=True, height=300)
                 st.markdown("**Foul trouble (4+ PF)**")
                 fouls = box_df[box_df["PF"].astype(float) >= 4]
                 st.dataframe(fouls[["Team", "Player", "PF", "PTS", "MIN"]], use_container_width=True) if not fouls.empty else st.success("No major foul trouble detected.")
@@ -1660,17 +1853,31 @@ def render_live_game_center(favorite_team, profile):
                     st.write(f"• {line}")
             else:
                 st.info("Live box score is still loading or unavailable.")
+            if matchup_opp:
+                st.divider()
+                st.markdown("**Positional matchup**")
+                st.dataframe(matchup_advantages(favorite_team, matchup_opp), use_container_width=True)
+            st.divider()
+            st.markdown("**Pressure & narrative**")
+            st.info(
+                f"{favorite_team} is {'ahead' if margin > 0 else 'tied' if margin == 0 else 'behind'} by {abs(margin)}. "
+                "The next stretch matters for turnovers, fouls, and shot quality."
+            )
+            st.markdown("**Next priorities**")
+            for item in ["Get stops without fouling", "Protect the defensive glass", "Create clean looks for the main scorer", "Avoid live-ball turnovers"]:
+                st.write(f"• {item}")
+            st.caption("Full legacy modeling: Legacy Tracker page.")
 
-    with tab2:
+    with tab_inj:
         with st.container(border=True):
-            st.markdown("##### 🩹 Key injuries & availability")
+            st.markdown("##### Injuries & availability")
             render_injury_report(favorite_team, home_injury_opponents(favorite_team), show_page_header=False)
             if away_name in TEAM_PROFILES and home_name in TEAM_PROFILES and {away_name, home_name} != {favorite_team, profile.get("current_opponent")}:
-                st.caption("Showing favorite team + sidebar opponent list; live matchup names above may differ from profile when bracket has advanced.")
+                st.caption("Favorite team + sidebar opponent list; live pair above may differ from profile when the bracket has advanced.")
 
-    with tab3:
+    with tab_mom:
         with st.container(border=True):
-            st.markdown("##### 📈 Live momentum & win probability")
+            st.markdown("##### Momentum / win probability")
             cL, cR = st.columns((1, 1))
             with cL:
                 st.plotly_chart(
@@ -1680,7 +1887,7 @@ def render_live_game_center(favorite_team, profile):
                         values="Probability",
                         title="Win probability split",
                         hole=0.45,
-                        color_discrete_sequence=["#0ea5e9", "#64748b"],
+                        color_discrete_sequence=[pal["accent"], "#64748b"],
                     ),
                     use_container_width=True,
                 )
@@ -1690,13 +1897,16 @@ def render_live_game_center(favorite_team, profile):
                 "Margin": [0, margin - 8, margin - 5, margin - 2, margin],
             })
             with cR:
-                st.plotly_chart(px.line(timeline, x="Game Segment", y="Win Probability", markers=True, title="Win probability path (illustrative)"), use_container_width=True)
+                st.plotly_chart(
+                    px.line(timeline, x="Game Segment", y="Win Probability", markers=True, title="Win probability path (illustrative)"),
+                    use_container_width=True,
+                )
             st.plotly_chart(px.line(timeline, x="Game Segment", y="Margin", markers=True, title="Score margin momentum (illustrative)"), use_container_width=True)
             st.caption("Timeline is a compact visual aid tied to the current margin and period, not a full play-by-play reconstruction.")
 
-    with tab4:
+    with tab_top:
         with st.container(border=True):
-            st.markdown("##### ⭐ Top performers <span class='badge-hot'>🔥</span> hot · <span class='badge-cold'>❄️</span> cold", unsafe_allow_html=True)
+            st.markdown("##### Top performers <span class='badge-hot'>🔥</span> hot · <span class='badge-cold'>❄️</span> cold", unsafe_allow_html=True)
             if not box_df.empty:
                 render_lineup_cards(favorite_team, box_df)
                 if opp and opp in TEAM_PROFILES:
@@ -1706,33 +1916,9 @@ def render_live_game_center(favorite_team, profile):
             else:
                 st.info("Lineup cards appear when the live box score loads.")
 
-    with tab5:
+    with tab_shot:
         with st.container(border=True):
-            st.markdown("##### ⚔️ Team matchup analysis")
-            if matchup_opp:
-                st.dataframe(matchup_advantages(favorite_team, matchup_opp), use_container_width=True)
-            else:
-                st.warning("No opponent on file for positional matchup grid.")
-
-    with tab6:
-        with st.container(border=True):
-            st.markdown("##### 📝 Play-by-play (latest)")
-            if actions:
-                rows = []
-                for a in actions[-80:]:
-                    rows.append({
-                        "Q": a.get("period", ""),
-                        "Clock": a.get("clock", ""),
-                        "Team": a.get("teamTricode", ""),
-                        "Play": (a.get("description") or "")[:200],
-                    })
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, height=400)
-            else:
-                st.info("Play-by-play not available for this game yet.")
-
-    with tab7:
-        with st.container(border=True):
-            st.markdown("##### 🎯 Shot charts")
+            st.markdown("##### Shot chart")
             if actions:
                 shots = shot_df_from_pbp(actions, alias)
                 if shots.empty:
@@ -1766,25 +1952,25 @@ def render_live_game_center(favorite_team, profile):
             else:
                 st.info("Shot chart needs play-by-play data.")
 
-    with tab8:
+    with tab_pbp:
         with st.container(border=True):
-            st.markdown("##### ✨ Legacy impact & pressure")
-            st.info(
-                f"{favorite_team} is {'ahead' if margin > 0 else 'tied' if margin == 0 else 'behind'} by {abs(margin)}. "
-                "The next stretch matters for turnovers, fouls, and shot quality."
-            )
-            st.markdown("**What needs to happen next**")
-            for item in ["Get stops without fouling", "Protect the defensive glass", "Create clean looks for the main scorer", "Avoid live-ball turnovers"]:
-                st.write(f"• {item}")
-            if not box_df.empty:
-                st.markdown("**Storylines**")
-                for line in game_story(favorite_team, margin, prob, box_df):
-                    st.write(f"• {line}")
-            st.caption("For full legacy modeling, use the Legacy Tracker page.")
+            st.markdown("##### Play-by-play (latest)")
+            if actions:
+                rows = []
+                for a in actions[-80:]:
+                    rows.append({
+                        "Q": a.get("period", ""),
+                        "Clock": a.get("clock", ""),
+                        "Team": a.get("teamTricode", ""),
+                        "Play": (a.get("description") or "")[:200],
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, height=400)
+            else:
+                st.info("Play-by-play not available for this game yet.")
 
-    with tab9:
+    with tab_what:
         with st.container(border=True):
-            st.markdown("##### 🔮 What-if simulator")
+            st.markdown("##### What-if simulator")
             st.dataframe(
                 pd.DataFrame(
                     [
@@ -1847,12 +2033,18 @@ def mvp_for_game(team_a, team_b, game_num, winner=None):
     return name, f"Best estimated standout for {chosen_team} based on the game result and team role hierarchy."
 
 def get_current_series_games_for_previous_rounds(team_name):
-    _, s = series_for_team(team_name)
-    if not s or not s.get("games"):
+    _, s = second_round_series_for_team(team_name)
+    return _series_games_for_history(team_name, s) if s else []
+
+
+def _series_games_for_history(team_name, series_dict):
+    """Build game rows for history cards from any series shell containing team_name."""
+    if not series_dict or not series_dict.get("games"):
         return []
+    a, b = series_dict["a"], series_dict["b"]
+    opp = b if team_name == a else a
     games = []
-    opp = s["b"] if team_name == s["a"] else s["a"]
-    for idx, g in enumerate(s.get("games", []), start=1):
+    for idx, g in enumerate(series_dict.get("games", []), start=1):
         row = dict(g)
         row["Game"] = row.get("Game") or f"Game {idx}"
         row["Matchup"] = row.get("Matchup") or f"{team_name} vs {opp}"
@@ -1916,10 +2108,23 @@ def render_previous_rounds_history(team_name):
         first_games.append(r)
     render_series_history_card(team_name, first_opp, first_games, "First Round", profile.get("first_round_result"))
 
-    current_opp = profile.get("current_opponent")
-    if current_opp:
+    _, s2 = second_round_series_for_team(team_name)
+    if s2 and s2.get("games"):
+        opp2 = s2["b"] if team_name == s2["a"] else s2["a"]
         second_games = get_current_series_games_for_previous_rounds(team_name)
-        render_series_history_card(team_name, current_opp, second_games, "Current Round / Second Round", series_status_text(team_name))
+        sr_note = f"{s2['winner']} wins the series." if s2.get("winner") else None
+        render_series_history_card(team_name, opp2, second_games, "Second Round", sr_note)
+
+    for round_label, coll in (("Conference Finals", build_conference_finals_series()), ("NBA Finals", build_nba_finals_series())):
+        for _k, s in (coll or {}).items():
+            if team_name not in (s.get("a"), s.get("b")):
+                continue
+            opp = s["b"] if team_name == s["a"] else s["a"]
+            games = _series_games_for_history(team_name, s)
+            if not games:
+                continue
+            note = f"{s.get('winner')} wins the {round_label}." if s.get("winner") else None
+            render_series_history_card(team_name, opp, games, round_label, note)
 
 # ==========================================================
 # Sidebar
@@ -1951,7 +2156,8 @@ page=PAGES[page_label]
 if page == "Home Dashboard":
     home_ctx = render_home_matchup_header(favorite_team)
     c1,c2,c3=st.columns(3)
-    c1.metric("Status", "Advanced" if home_ctx and home_ctx.get("advanced") else profile["status"])
+    adv_like = home_ctx and (home_ctx.get("advanced") or home_ctx.get("bracket_series"))
+    c1.metric("Status", "Advanced" if adv_like else profile["status"])
     home_status = home_ctx["status_text"] if home_ctx and home_ctx.get("advanced") else series_status_text(favorite_team)
     c2.markdown(f"<div class='big-status'>{home_status}</div>", unsafe_allow_html=True)
     c3.metric("Seed", profile["seed"])
@@ -1966,6 +2172,12 @@ if page == "Home Dashboard":
         st.dataframe(previous_game_top_plays(favorite_team), use_container_width=True)
         st.subheader("Historical Series Tracking")
         st.dataframe(historic_series_context(favorite_team), use_container_width=True)
+    elif s and s.get("round") in ("Conference Finals", "NBA Finals"):
+        st.caption(f"{s.get('round')} is locked in — scores appear here as games complete (NBA API or demo backup).")
+    elif home_ctx and home_ctx.get("advanced"):
+        st.info(
+            "Second-round series clinched on the bracket. Conference Finals scores will appear once the other conference semi-final produces a winner and both winners meet in the next round."
+        )
     render_team_outlook(favorite_team)
 
 elif page == "Playoff Bracket":
