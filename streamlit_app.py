@@ -1524,34 +1524,35 @@ def _bracket_series_for_display(s, round_display_name):
 BRACKET_VISUAL_CSS = """
 .bracket-wrap {
   background: linear-gradient(160deg, #070d18 0%, #0f172a 45%, #1e1b4b 100%);
-  padding: 22px 14px 28px;
-  border-radius: 22px;
+  padding: 12px 10px 16px;
+  border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   color: #f8fafc;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   max-width: 100%;
   box-sizing: border-box;
 }
-.bmk-page-head { text-align: center; margin-bottom: 18px; }
+.bmk-page-head { text-align: center; margin-bottom: 10px; }
 .bmk-title {
-  font-size: clamp(1.4rem, 3.5vw, 1.95rem);
+  font-size: clamp(1.2rem, 2.6vw, 1.6rem);
   font-weight: 900;
   letter-spacing: -0.02em;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: #f8fafc;
 }
 .bmk-sub {
   color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.3;
   margin: 0 auto;
-  max-width: 36rem;
+  max-width: 52rem;
 }
 .bmk-scroll {
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
   scrollbar-color: rgba(100, 116, 139, 0.55) rgba(15, 23, 42, 0.5);
 }
 .bmk-grid {
@@ -1559,151 +1560,179 @@ BRACKET_VISUAL_CSS = """
   flex-direction: row;
   align-items: flex-start;
   gap: 0;
-  min-width: 1040px;
-  padding: 4px 2px 8px;
+  min-width: 1580px;
+  padding: 0;
   box-sizing: border-box;
 }
 .bmk-col {
   flex: 1 1 0;
-  min-width: 200px;
-  padding: 0 12px;
-  border-right: 1px solid rgba(71, 85, 105, 0.45);
+  min-width: 300px;
+  max-width: 400px;
+  padding: 0 8px;
+  border-right: 1px solid rgba(71, 85, 105, 0.38);
   box-sizing: border-box;
 }
 .bmk-col:last-child { border-right: none; }
 .bmk-col--hub {
-  min-width: 240px;
-  background: linear-gradient(180deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.85) 100%);
-  border-radius: 16px;
-  margin: 0 4px;
-  padding: 12px 12px 16px;
+  min-width: 320px;
+  max-width: 420px;
+  flex: 1.12 1 0;
+  background: linear-gradient(180deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border-radius: 12px;
+  margin: 0 2px;
+  padding: 8px 10px 10px;
   border: 1px solid rgba(129, 140, 248, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .bmk-col-head {
   text-align: center;
-  padding: 10px 4px 14px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
+  padding: 6px 2px 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.28);
 }
 .bmk-col-eyebrow {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .bmk-col[data-conf="east"] .bmk-col-eyebrow { color: #7dd3fc; }
 .bmk-col[data-conf="west"] .bmk-col-eyebrow { color: #fcd34d; }
 .bmk-col-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   color: #e2e8f0;
 }
-.bmk-col-stack { display: flex; flex-direction: column; gap: 14px; }
-.bmk-hub { display: flex; flex-direction: column; gap: 14px; text-align: center; }
+.bmk-col-stack { display: flex; flex-direction: column; gap: 8px; }
+.bmk-hub { display: flex; flex-direction: column; gap: 8px; text-align: center; }
 .bmk-hub-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: #c4b5fd;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .bmk-hub-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
 }
 .bmk-wait-card {
   background: rgba(30, 41, 59, 0.65);
-  border: 1px dashed rgba(148, 163, 184, 0.4);
-  border-radius: 14px;
-  padding: 14px 12px 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  padding: 8px 10px 10px;
   text-align: center;
 }
 .bmk-wait-card--finals { border-style: solid; border-color: rgba(251, 191, 36, 0.45); }
-.bmk-wait-kicker { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; margin-bottom: 8px; }
-.bmk-wait-title { font-size: 14px; font-weight: 800; color: #f8fafc; line-height: 1.35; }
-.bmk-wait-line { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: #cbd5e1; }
+.bmk-wait-kicker { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 4px; }
+.bmk-wait-title { font-size: 13px; font-weight: 800; color: #f8fafc; line-height: 1.25; }
+.bmk-wait-line { margin: 4px 0 0; font-size: 11px; line-height: 1.35; color: #cbd5e1; }
 .bmk-card {
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(71, 85, 105, 0.45);
-  border-radius: 16px;
-  padding: 14px 14px 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+  border-radius: 12px;
+  padding: 8px 10px 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
 }
 .bmk-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(148, 163, 184, 0.5);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
 }
-.bmk-card--active { border-color: rgba(56, 189, 248, 0.55); box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2), 0 8px 28px rgba(0, 0, 0, 0.35); }
-.bmk-card--complete { border-color: rgba(52, 211, 153, 0.45); }
+.bmk-card--active { border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.14), 0 4px 16px rgba(0, 0, 0, 0.26); }
+.bmk-card--complete { border-color: rgba(52, 211, 153, 0.4); }
 .bmk-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 .bmk-chip-round {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: #93c5fd;
-  background: rgba(59, 130, 246, 0.2);
-  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.18);
+  padding: 2px 8px;
   border-radius: 999px;
+  flex-shrink: 0;
 }
-.bmk-pill { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
-.bmk-pill--live { background: rgba(56, 189, 248, 0.22); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); }
-.bmk-pill--done { background: rgba(52, 211, 153, 0.2); color: #6ee7b7; border: 1px solid rgba(52, 211, 153, 0.4); }
-.bmk-series-score { font-size: 22px; font-weight: 900; color: #fbbf24; letter-spacing: 0.06em; }
-.bmk-rows { display: flex; flex-direction: column; gap: 8px; }
+.bmk-pill { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.bmk-pill--live { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); }
+.bmk-pill--done { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; border: 1px solid rgba(52, 211, 153, 0.35); }
+.bmk-series-score { font-size: 18px; font-weight: 900; color: #fbbf24; letter-spacing: 0.04em; flex-shrink: 0; white-space: nowrap; }
+.bmk-rows { display: flex; flex-direction: column; gap: 4px; }
 .bmk-team {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(71, 85, 105, 0.4);
-  border-left: 4px solid var(--stripe, #64748b);
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(71, 85, 105, 0.36);
+  border-left: 3px solid var(--stripe, #64748b);
 }
-.bmk-team--leading { background: rgba(30, 58, 95, 0.55); border-color: rgba(56, 189, 248, 0.35); }
-.bmk-team--winner { background: rgba(22, 78, 58, 0.42); border-color: rgba(52, 211, 153, 0.5); border-left-width: 5px; }
-.bmk-team-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.bmk-logo { width: 48px; height: 48px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45)); }
-.bmk-team-text { min-width: 0; text-align: left; display: flex; flex-direction: column; gap: 2px; }
-.bmk-seed { font-size: 11px; font-weight: 700; color: #94a3b8; }
-.bmk-name { font-size: 14px; font-weight: 800; color: #f1f5f9; line-height: 1.2; word-break: break-word; }
-.bmk-team-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.bmk-wins { font-size: 22px; font-weight: 900; color: #f8fafc; min-width: 28px; text-align: right; }
+.bmk-team--leading { background: rgba(30, 58, 95, 0.48); border-color: rgba(56, 189, 248, 0.3); }
+.bmk-team--winner { background: rgba(22, 78, 58, 0.36); border-color: rgba(52, 211, 153, 0.42); border-left-width: 4px; }
+.bmk-team-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.bmk-logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.4)); }
+.bmk-team-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.bmk-seed { font-size: 10px; font-weight: 700; color: #94a3b8; flex-shrink: 0; white-space: nowrap; }
+.bmk-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f1f5f9;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.bmk-team-meta { display: flex; align-items: center; gap: 5px; flex-shrink: 0; margin-left: 4px; }
+.bmk-wins { font-size: 18px; font-weight: 900; color: #f8fafc; min-width: 22px; text-align: right; flex-shrink: 0; }
 .bmk-won-badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.22);
-  padding: 3px 8px;
-  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.bmk-foot { font-size: 12px; color: #cbd5e1; margin-top: 10px; line-height: 1.45; text-align: left; }
-.bmk-foot--next { margin-top: 4px; font-size: 11px; color: #94a3b8; }
-.bmk-details { margin-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.65); padding-top: 8px; }
-.bmk-details summary { cursor: pointer; font-size: 12px; font-weight: 700; color: #93c5fd; list-style: none; }
+.bmk-foot { font-size: 11px; color: #cbd5e1; margin-top: 5px; line-height: 1.25; text-align: left; word-break: break-word; }
+.bmk-foot--next { margin-top: 2px; font-size: 10px; color: #94a3b8; line-height: 1.25; }
+.bmk-details { margin-top: 5px; border-top: 1px solid rgba(51, 65, 85, 0.52); padding-top: 5px; }
+.bmk-details summary { cursor: pointer; font-size: 11px; font-weight: 700; color: #93c5fd; list-style: none; }
 .bmk-details summary::-webkit-details-marker { display: none; }
-.bmk-log { margin: 8px 0 0; padding-left: 18px; text-align: left; }
-@media (min-width: 1400px) {
-  .bmk-grid { min-width: 1120px; }
+.bmk-log { margin: 4px 0 0; padding-left: 16px; text-align: left; }
+@media (min-width: 1600px) {
+  .bmk-grid { min-width: 1720px; }
+  .bmk-col { min-width: 312px; max-width: 420px; }
 }
 """
 
@@ -1785,7 +1814,7 @@ def bracket_series_card(s, round_display_name, show_round_chip=False):
         badge = '<span class="bmk-won-badge">Won series</span>' if is_winner else ""
         return (
             f'<div class="{" ".join(classes)}" style="--stripe:{stripe}">'
-            f'<div class="bmk-team-main"><img class="bmk-logo" src="{logo_url}" alt="" width="48" height="48"/>'
+            f'<div class="bmk-team-main"><img class="bmk-logo" src="{logo_url}" alt="" width="40" height="40"/>'
             f'<div class="bmk-team-text"><span class="bmk-seed">({html.escape(str(seed))})</span>'
             f'<span class="bmk-name">{html.escape(team)}</span></div></div>'
             f'<div class="bmk-team-meta">{badge}<span class="bmk-wins">{wins}</span></div></div>'
