@@ -1933,7 +1933,7 @@ def render_bracket():
     west_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in west_sr)
     west_fr_cards = "".join(bracket_series_card(s, "First Round") for s in west_fr)
 
-    html = f"""
+    bracket_html = f"""
 <div class="bracket-wrap">
   <h2 class="bmk-title">2026 NBA Playoff Bracket</h2>
   <p class="bmk-sub">Live structure from API scores (demo backup only if enabled). Expand any series for the game log.</p>
@@ -1962,7 +1962,7 @@ def render_bracket():
   </div>
 </div>
 """
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(bracket_html, unsafe_allow_html=True)
 
 def latest_game_note(team):
     _, s = series_for_team(team)
