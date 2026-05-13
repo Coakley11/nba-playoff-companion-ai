@@ -1,4 +1,5 @@
 
+import html
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -63,6 +64,35 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .injury-card { border:1px solid rgba(0,0,0,.12); border-radius:16px; padding:10px; background:rgba(255,255,255,.85); margin-bottom:10px; min-height:135px; }
 .injury-status { font-weight:900; padding:4px 8px; border-radius:999px; display:inline-block; background:#fee2e2; color:#991b1b; }
 .injury-note { font-size:13px; color:#374151; }
+.live-score-sticky {
+  position: sticky; top: 0; z-index: 1000;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc; border-radius: 16px; padding: 14px 16px 16px;
+  border: 1px solid rgba(148,163,184,.35);
+  box-shadow: 0 8px 30px rgba(15,23,42,.35);
+  margin-bottom: 14px;
+}
+.live-hero-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+@media (max-width: 900px) {
+  .live-hero-grid { grid-template-columns: 1fr; text-align: center; }
+  .live-hero-side { justify-content: center !important; }
+}
+.live-hero-side { display: flex; align-items: center; gap: 10px; }
+.live-hero-side.right { flex-direction: row-reverse; }
+.live-score-big { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
+.live-meta-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+.live-pill { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); }
+.live-pill.live { background: rgba(239,68,68,.25); border-color: rgba(252,165,165,.5); color: #fecaca; }
+.live-pill.clutch { background: rgba(234,179,8,.22); border-color: rgba(253,224,71,.45); color: #fef08a; }
+.live-pill.prob { background: rgba(56,189,248,.18); border-color: rgba(125,211,252,.4); color: #bae6fd; }
+.live-pill.series { background: rgba(167,139,250,.2); border-color: rgba(196,181,253,.4); color: #e9d5ff; }
+.live-tile-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
+.live-tile { background: rgba(15,23,42,.45); border-radius: 12px; padding: 8px 10px; text-align: center; border: 1px solid rgba(148,163,184,.2); }
+.live-tile .v { font-size: 1.25rem; font-weight: 800; color: #fff; }
+.live-tile .k { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+.live-inj-strip { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,.25); font-size: 12px; color: #cbd5e1; }
+.badge-hot { color: #f97316; font-weight: 800; }
+.badge-cold { color: #38bdf8; font-weight: 800; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -794,9 +824,10 @@ def get_injury_report(team_name):
         return out, source + "; showing fallback monitor list"
     return pd.DataFrame(columns=["Player","Status","Injury","Latest Update","Impact","Source"]), source
 
-def render_injury_report(team_name, opponent_name=None):
-    st.subheader("Injury Report / Pregame Availability")
-    st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled. Key fallback monitor rows are included when live injury data is unavailable.")
+def render_injury_report(team_name, opponent_name=None, show_page_header=True):
+    if show_page_header:
+        st.subheader("Injury Report / Pregame Availability")
+        st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled. Key fallback monitor rows are included when live injury data is unavailable.")
     teams = [team_name]
     if isinstance(opponent_name, (list, tuple, set)):
         for op in opponent_name:
@@ -1429,6 +1460,346 @@ def render_lineup_cards(team, box_df):
             st.markdown("</div>", unsafe_allow_html=True)
 
 
+def _live_team_full_name(team_tricode, team_obj):
+    t = ALIAS_TO_TEAM.get(team_tricode or "")
+    if t:
+        return t
+    city = (team_obj or {}).get("teamCity") or ""
+    nick = (team_obj or {}).get("teamName") or (team_tricode or "?")
+    return f"{city} {nick}".strip() or nick
+
+
+def _live_series_board(away_name, home_name):
+    pair = {away_name, home_name}
+    candidates = []
+    candidates.extend(build_second_round_series().values())
+    for coll in (
+        infer_next_round_series("Conference Finals", "East"),
+        infer_next_round_series("Conference Finals", "West"),
+        infer_next_round_series("NBA Finals"),
+    ):
+        if coll:
+            candidates.extend(coll.values())
+    for s in candidates:
+        if not s:
+            continue
+        if {s.get("a"), s.get("b")} == pair:
+            a, b = s["a"], s["b"]
+            return f"{TEAM_ALIASES[a]} {s['a_wins']}–{s['b_wins']} {TEAM_ALIASES[b]}", s.get("source") or ""
+    return None, None
+
+
+def _seed_badge(team_name):
+    if team_name not in TEAM_PROFILES:
+        return "—"
+    return f"Seed {TEAM_PROFILES[team_name]['seed']}"
+
+
+def _injury_hero_lines(team_names, max_each=2):
+    lines = []
+    for tm in team_names:
+        if not tm:
+            continue
+        df, _src = get_injury_report(tm)
+        if df is None or df.empty:
+            continue
+        bits = []
+        for _, r in df.head(max_each).iterrows():
+            pl = html.escape(str(r.get("Player", "?")))
+            stt = html.escape(str(r.get("Status", "?")))
+            bits.append(f"<span class='live-pill' style='font-size:11px'>🩹 {pl}: {stt}</span>")
+        if bits:
+            lines.append(f"<div style='margin-top:6px'><span style='font-weight:800;color:#e2e8f0'>{html.escape(tm)}</span> {' '.join(bits)}</div>")
+    return "".join(lines) if lines else "<div style='margin-top:8px;color:#94a3b8;font-size:12px'>No injury rows from live source · see <b>Key Injuries</b> tab.</div>"
+
+
+def render_live_game_center(favorite_team, profile):
+    """Professional dashboard layout: sticky score hero + tabbed sections."""
+    st.markdown("### 🏟️ Live Game Center")
+    st.caption("Compact layout · use tabs below for depth · refreshes with sidebar autorefresh when enabled")
+
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(interval=30000, key="live_refresh")
+        st.caption("Auto-refresh every 30 seconds.")
+
+    if not NBA_LIVE_AVAILABLE:
+        st.error("nba_api live endpoints are unavailable. Check requirements.txt.")
+        return
+
+    live = find_live_game_for_team(favorite_team)
+    if not live:
+        st.warning("No live or scheduled game found for this team right now.")
+        return
+
+    home = live.get("homeTeam", {}) or {}
+    away = live.get("awayTeam", {}) or {}
+    home_tri = home.get("teamTricode", "") or ""
+    away_tri = away.get("teamTricode", "") or ""
+    home_score = safe_int(home.get("score", 0))
+    away_score = safe_int(away.get("score", 0))
+    period = safe_int(live.get("period", 1), 1)
+    clock = live.get("gameClock", "") or ""
+    status = live.get("gameStatusText", "Unknown") or "Unknown"
+    gid = live.get("gameId", "") or ""
+
+    away_name = _live_team_full_name(away_tri, away)
+    home_name = _live_team_full_name(home_tri, home)
+    alias = TEAM_ALIASES[favorite_team]
+    is_home = home_tri == alias
+    team_score = home_score if is_home else away_score
+    opp_score = away_score if is_home else home_score
+    margin = team_score - opp_score
+    prob = win_prob(margin, period, is_home)
+
+    series_line, series_src = _live_series_board(away_name, home_name)
+    if not series_line and favorite_team in (away_name, home_name):
+        series_line = series_status_text(favorite_team)
+        _, s0 = series_for_team(favorite_team)
+        series_src = (s0 or {}).get("source", "")
+
+    clutch = period >= 4 and abs(margin) <= 5
+    is_live = status and ("Q" in status or ":" in status or "Halftime" in status) and "Final" not in status
+
+    logo_away = TEAM_LOGOS.get(away_name, f"https://cdn.nba.com/logos/nba/500/{away_tri}/primary/L/logo.svg")
+    logo_home = TEAM_LOGOS.get(home_name, f"https://cdn.nba.com/logos/nba/500/{home_tri}/primary/L/logo.svg")
+
+    momentum_note = "Favored team trending up in model" if prob > 55 else "Tight game in model" if prob >= 45 else "Underdog needs stops & quality looks"
+
+    inj_teams = []
+    for t in (away_name, home_name):
+        if t and t not in inj_teams and t in TEAM_PROFILES:
+            inj_teams.append(t)
+    if not inj_teams:
+        inj_teams = [favorite_team]
+        if profile.get("current_opponent") and profile["current_opponent"] not in inj_teams:
+            inj_teams.append(profile["current_opponent"])
+
+    hero_html = f"""
+<div class="live-score-sticky">
+  <div class="live-hero-grid">
+    <div class="live-hero-side">
+      <img src="{logo_away}" width="56" height="56" style="object-fit:contain" alt="" />
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#cbd5e1">{html.escape(away_tri)}</div>
+        <div style="font-size:15px;font-weight:800">{html.escape(away_name)}</div>
+        <div style="font-size:12px;color:#94a3b8">{html.escape(_seed_badge(away_name))}</div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:4px 8px">
+      <div style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:.06em">LIVE SCOREBOARD</div>
+      <div class="live-score-big"><span style="color:#f8fafc">{away_score}</span>
+        <span style="color:#64748b;margin:0 10px">—</span>
+        <span style="color:#f8fafc">{home_score}</span></div>
+      <div style="font-size:14px;font-weight:700;color:#e2e8f0;margin-top:4px">{html.escape(away_tri)} @ {html.escape(home_tri)}</div>
+    </div>
+    <div class="live-hero-side right">
+      <img src="{logo_home}" width="56" height="56" style="object-fit:contain" alt="" />
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#cbd5e1">{html.escape(home_tri)}</div>
+        <div style="font-size:15px;font-weight:800">{html.escape(home_name)}</div>
+        <div style="font-size:12px;color:#94a3b8">{html.escape(_seed_badge(home_name))}</div>
+      </div>
+    </div>
+  </div>
+  <div class="live-meta-row">
+    <span class="live-pill {'live' if is_live else ''}">{'🔴 LIVE' if is_live else '📅 ' + html.escape(status[:40])}</span>
+    <span class="live-pill">⏱ Q{period} · {html.escape(clock or '—')}</span>
+    <span class="live-pill series">🏆 {html.escape(series_line or 'Series')}</span>
+    {('<span class="live-pill clutch">⚡ CLUTCH</span>' if clutch else '')}
+    <span class="live-pill prob">📈 Win prob · {favorite_team.split()[-1]}: {prob}%</span>
+  </div>
+  <div class="live-tile-row">
+    <div class="live-tile"><div class="k">Margin ({favorite_team.split()[-1]})</div><div class="v">{'+' if margin > 0 else ''}{margin}</div></div>
+    <div class="live-tile"><div class="k">Venue</div><div class="v">{'HOME' if is_home else 'AWAY'}</div></div>
+    <div class="live-tile"><div class="k">Momentum (model)</div><div class="v" style="font-size:12px;line-height:1.25;font-weight:700">{html.escape(momentum_note)}</div></div>
+  </div>
+  <div class="live-inj-strip"><div style="font-weight:800;margin-bottom:4px;color:#f1f5f9">🩹 Availability snapshot</div>
+  {_injury_hero_lines(inj_teams)}
+  {('<div style="margin-top:6px;font-size:11px;color:#64748b">' + html.escape(str(series_src)) + '</div>' if series_src else '')}
+  </div>
+</div>
+"""
+    st.markdown(hero_html, unsafe_allow_html=True)
+
+    box = get_live_boxscore(gid)
+    box_df = create_boxscore_df(box) if box else pd.DataFrame()
+    actions = get_live_playbyplay(gid) if gid else []
+    opp_other = home_name if favorite_team == away_name else away_name
+    opp = profile.get("current_opponent") or opp_other
+
+    matchup_opp = opp if opp in TEAM_PROFILES else (opp_other if opp_other in TEAM_PROFILES else None)
+
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        "📊 Scoreboard",
+        "🩹 Key Injuries",
+        "📈 Momentum & Win %",
+        "⭐ Top Performers",
+        "⚔️ Matchup",
+        "📝 Play-by-Play",
+        "🎯 Shot Charts",
+        "✨ Legacy Impact",
+        "🔮 What-If",
+    ])
+
+    with tab1:
+        with st.container(border=True):
+            st.markdown("##### 📊 Game summary")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Clock", clock or "—")
+            m2.metric("Period", f"Q{period}")
+            m3.metric(f"{favorite_team.split()[-1]} pts", team_score)
+            m4.metric("Opponent pts", opp_score)
+            if not box_df.empty:
+                st.markdown("**Full box score**")
+                st.dataframe(box_df, use_container_width=True, height=320)
+                st.markdown("**Foul trouble (4+ PF)**")
+                fouls = box_df[box_df["PF"].astype(float) >= 4]
+                st.dataframe(fouls[["Team", "Player", "PF", "PTS", "MIN"]], use_container_width=True) if not fouls.empty else st.success("No major foul trouble detected.")
+                st.markdown("**Game story**")
+                for line in game_story(favorite_team, margin, prob, box_df):
+                    st.write(f"• {line}")
+            else:
+                st.info("Live box score is still loading or unavailable.")
+
+    with tab2:
+        with st.container(border=True):
+            st.markdown("##### 🩹 Key injuries & availability")
+            render_injury_report(favorite_team, home_injury_opponents(favorite_team), show_page_header=False)
+            if away_name in TEAM_PROFILES and home_name in TEAM_PROFILES and {away_name, home_name} != {favorite_team, profile.get("current_opponent")}:
+                st.caption("Showing favorite team + sidebar opponent list; live matchup names above may differ from profile when bracket has advanced.")
+
+    with tab3:
+        with st.container(border=True):
+            st.markdown("##### 📈 Live momentum & win probability")
+            cL, cR = st.columns((1, 1))
+            with cL:
+                st.plotly_chart(
+                    px.pie(
+                        pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [prob, 100 - prob]}),
+                        names="Outcome",
+                        values="Probability",
+                        title="Win probability split",
+                        hole=0.45,
+                        color_discrete_sequence=["#0ea5e9", "#64748b"],
+                    ),
+                    use_container_width=True,
+                )
+            timeline = pd.DataFrame({
+                "Game Segment": ["Start", "Q1", "Q2", "Q3", "Now"],
+                "Win Probability": [50, max(1, min(99, prob - 12)), max(1, min(99, prob - 7)), max(1, min(99, prob - 3)), prob],
+                "Margin": [0, margin - 8, margin - 5, margin - 2, margin],
+            })
+            with cR:
+                st.plotly_chart(px.line(timeline, x="Game Segment", y="Win Probability", markers=True, title="Win probability path (illustrative)"), use_container_width=True)
+            st.plotly_chart(px.line(timeline, x="Game Segment", y="Margin", markers=True, title="Score margin momentum (illustrative)"), use_container_width=True)
+            st.caption("Timeline is a compact visual aid tied to the current margin and period, not a full play-by-play reconstruction.")
+
+    with tab4:
+        with st.container(border=True):
+            st.markdown("##### ⭐ Top performers <span class='badge-hot'>🔥</span> hot · <span class='badge-cold'>❄️</span> cold", unsafe_allow_html=True)
+            if not box_df.empty:
+                render_lineup_cards(favorite_team, box_df)
+                if opp and opp in TEAM_PROFILES:
+                    render_lineup_cards(opp, box_df)
+                elif matchup_opp:
+                    render_lineup_cards(matchup_opp, box_df)
+            else:
+                st.info("Lineup cards appear when the live box score loads.")
+
+    with tab5:
+        with st.container(border=True):
+            st.markdown("##### ⚔️ Team matchup analysis")
+            if matchup_opp:
+                st.dataframe(matchup_advantages(favorite_team, matchup_opp), use_container_width=True)
+            else:
+                st.warning("No opponent on file for positional matchup grid.")
+
+    with tab6:
+        with st.container(border=True):
+            st.markdown("##### 📝 Play-by-play (latest)")
+            if actions:
+                rows = []
+                for a in actions[-80:]:
+                    rows.append({
+                        "Q": a.get("period", ""),
+                        "Clock": a.get("clock", ""),
+                        "Team": a.get("teamTricode", ""),
+                        "Play": (a.get("description") or "")[:200],
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, height=400)
+            else:
+                st.info("Play-by-play not available for this game yet.")
+
+    with tab7:
+        with st.container(border=True):
+            st.markdown("##### 🎯 Shot charts")
+            if actions:
+                shots = shot_df_from_pbp(actions, alias)
+                if shots.empty:
+                    st.info("No shot actions detected yet for this team.")
+                else:
+                    last = shots.iloc[-1]
+                    st.info(
+                        f"Latest: {last['Player']} {'made' if last['Made'] else 'missed'} — {str(last['Description'])[:120]}"
+                    )
+                    options = ["All players"] + sorted(shots["Player"].dropna().unique().tolist())
+                    shooter = st.selectbox("Shooter filter", options, key="live_shot_shooter")
+                    display = shots if shooter == "All players" else shots[shots["Player"] == shooter]
+                    st.plotly_chart(draw_court(display, f"{favorite_team} shot chart — blue ○ made, red × missed"), use_container_width=True)
+                st.markdown("**Clutch meter**")
+                if clutch:
+                    st.warning("Clutch-time situation: fourth quarter and within five points.")
+                else:
+                    st.info("Clutch meter becomes more important in the fourth quarter within five points.")
+                st.markdown("**Top plays (this game)**")
+                rows_tp = []
+                for a in actions:
+                    if (a.get("teamTricode") or "") == alias and is_top_play(a.get("description", "")):
+                        desc = a.get("description", "")
+                        rows_tp.append({
+                            "Period": a.get("period", ""),
+                            "Clock": a.get("clock", ""),
+                            "Top Play": desc,
+                            "Why it mattered": explain_play(desc, favorite_team),
+                        })
+                st.dataframe(pd.DataFrame(rows_tp[-5:]) if rows_tp else previous_game_top_plays(favorite_team), use_container_width=True)
+            else:
+                st.info("Shot chart needs play-by-play data.")
+
+    with tab8:
+        with st.container(border=True):
+            st.markdown("##### ✨ Legacy impact & pressure")
+            st.info(
+                f"{favorite_team} is {'ahead' if margin > 0 else 'tied' if margin == 0 else 'behind'} by {abs(margin)}. "
+                "The next stretch matters for turnovers, fouls, and shot quality."
+            )
+            st.markdown("**What needs to happen next**")
+            for item in ["Get stops without fouling", "Protect the defensive glass", "Create clean looks for the main scorer", "Avoid live-ball turnovers"]:
+                st.write(f"• {item}")
+            if not box_df.empty:
+                st.markdown("**Storylines**")
+                for line in game_story(favorite_team, margin, prob, box_df):
+                    st.write(f"• {line}")
+            st.caption("For full legacy modeling, use the Legacy Tracker page.")
+
+    with tab9:
+        with st.container(border=True):
+            st.markdown("##### 🔮 What-if simulator")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Scenario": f"{'+' if sw >= 0 else ''}{sw} point swing",
+                            "New margin": margin + sw,
+                            "Win probability": f"{win_prob(margin + sw, period, is_home)}%",
+                        }
+                        for sw in [10, 5, 0, -5, -10]
+                    ]
+                ),
+                use_container_width=True,
+            )
+
+
 # ==========================================================
 # Previous rounds / playoff path helpers
 # ==========================================================
@@ -1606,66 +1977,7 @@ elif page == "Previous Rounds":
     render_previous_rounds_history(favorite_team)
 
 elif page == "Live Game Center":
-    render_matchup_header(favorite_team)
-    st.subheader("Advanced Live Game Center")
-    render_injury_report(favorite_team, home_injury_opponents(favorite_team))
-    if AUTOREFRESH_AVAILABLE: st_autorefresh(interval=30000, key="live_refresh"); st.caption("Refreshing every 30 seconds.")
-    if not NBA_LIVE_AVAILABLE:
-        st.error("nba_api live endpoints are unavailable. Check requirements.txt.")
-    else:
-        live=find_live_game_for_team(favorite_team)
-        if not live:
-            st.warning("No live or scheduled game found for this team right now.")
-        else:
-            home=live.get("homeTeam",{}); away=live.get("awayTeam",{})
-            home_tri=home.get("teamTricode",""); away_tri=away.get("teamTricode","")
-            home_score=safe_int(home.get("score",0)); away_score=safe_int(away.get("score",0))
-            period=safe_int(live.get("period",1),1); clock=live.get("gameClock",""); status=live.get("gameStatusText","Unknown"); gid=live.get("gameId","")
-            st.write(f"### {away.get('teamName','Away')} at {home.get('teamName','Home')}")
-            st.write(f"**Status:** {status} | **Period:** {period} | **Clock:** {clock}")
-            a,b=st.columns(2); a.metric(away.get("teamName","Away"), away_score); b.metric(home.get("teamName","Home"), home_score)
-            alias=TEAM_ALIASES[favorite_team]; is_home=(home_tri==alias)
-            team_score=home_score if is_home else away_score; opp_score=away_score if is_home else home_score
-            margin=team_score-opp_score; prob=win_prob(margin, period, is_home)
-            c1,c2,c3=st.columns(3); c1.metric(f"{favorite_team} Win Probability", f"{prob}%"); c2.metric("Score Margin", margin); c3.metric("Home Game", "Yes" if is_home else "No")
-            st.plotly_chart(px.pie(pd.DataFrame({"Outcome":[f"{favorite_team} wins","Opponent wins"],"Probability":[prob,100-prob]}), names="Outcome", values="Probability", title="Current Win Probability"), use_container_width=True)
-            timeline=pd.DataFrame({"Game Segment":["Start","Q1","Q2","Q3","Now"],"Win Probability":[50,max(1,min(99,prob-12)),max(1,min(99,prob-7)),max(1,min(99,prob-3)),prob],"Margin":[0,margin-8,margin-5,margin-2,margin]})
-            st.subheader("Momentum / Win Probability Timeline"); st.plotly_chart(px.line(timeline,x="Game Segment",y="Win Probability",markers=True), use_container_width=True); st.plotly_chart(px.line(timeline,x="Game Segment",y="Margin",markers=True,title="Score Margin Momentum"), use_container_width=True)
-            box=get_live_boxscore(gid); box_df=create_boxscore_df(box) if box else pd.DataFrame()
-            if not box_df.empty:
-                render_lineup_cards(favorite_team, box_df)
-                opp=profile.get("current_opponent")
-                if opp: render_lineup_cards(opp, box_df)
-                st.subheader("Full Live Box Score"); st.dataframe(box_df, use_container_width=True)
-                st.subheader("Foul Trouble Tracker")
-                fouls=box_df[box_df["PF"].astype(float)>=4]
-                st.dataframe(fouls[["Team","Player","PF","PTS","MIN"]], use_container_width=True) if not fouls.empty else st.success("No major foul trouble detected.")
-                st.subheader("Game Story")
-                for line in game_story(favorite_team, margin, prob, box_df): st.write(f"• {line}")
-            st.subheader("AI Game Narrator")
-            st.info(f"{favorite_team} is {'ahead' if margin>0 else 'tied' if margin==0 else 'behind'} by {abs(margin)}. The next stretch matters for turnovers, fouls, and shot quality.")
-            st.subheader("What Needs To Happen Next")
-            for item in ["Get stops without fouling", "Protect the defensive glass", "Create clean looks for the main scorer", "Avoid live-ball turnovers"]: st.write(f"• {item}")
-            st.subheader("What-If Simulator")
-            st.dataframe(pd.DataFrame([{"Scenario":f"{'+' if sw>=0 else ''}{sw} point swing","New Margin":margin+sw,"Win Probability":f"{win_prob(margin+sw,period,is_home)}%"} for sw in [10,5,0,-5,-10]]), use_container_width=True)
-            actions=get_live_playbyplay(gid)
-            if actions:
-                shots=shot_df_from_pbp(actions, alias)
-                st.subheader("Live Shot Chart")
-                if shots.empty: st.info("No shot actions detected yet for this team.")
-                else:
-                    last=shots.iloc[-1]; st.info(f"Latest shot: {last['Player']} {'made' if last['Made'] else 'missed'} — {last['Description']}")
-                    options=["All players"]+sorted(shots["Player"].dropna().unique().tolist()); shooter=st.selectbox("Choose shooter", options)
-                    display=shots if shooter=="All players" else shots[shots["Player"]==shooter]
-                    st.plotly_chart(draw_court(display, f"{favorite_team} shot chart — blue O = made, red X = missed"), use_container_width=True)
-                st.subheader("Clutch Meter")
-                st.warning("Clutch-time situation: fourth quarter and within five points.") if period>=4 and abs(margin)<=5 else st.info("Clutch meter becomes more important in the fourth quarter.")
-                st.subheader("Top Plays From This Game")
-                rows=[]
-                for a in actions:
-                    if (a.get("teamTricode") or "") == alias and is_top_play(a.get("description","")):
-                        desc=a.get("description",""); rows.append({"Period":a.get("period",""),"Clock":a.get("clock",""),"Top Play":desc,"Why it mattered":explain_play(desc,favorite_team)})
-                st.dataframe(pd.DataFrame(rows[-5:]) if rows else previous_game_top_plays(favorite_team), use_container_width=True)
+    render_live_game_center(favorite_team, profile)
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team)
