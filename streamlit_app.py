@@ -1492,29 +1492,397 @@ def home_injury_opponents(team_name):
         return [opp]
     return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
 
-def series_card(s, round_name):
-    a,b=s["a"],s["b"]; aw,bw=s["a_wins"],s["b_wins"]
-    winner=s.get("winner")
-    note="Final" if winner else "In progress"
+def bracket_team_accent(team):
+    """Subtle stripe color for bracket team rows (presentation only)."""
+    return {
+        "New York Knicks": "#f97316",
+        "Philadelphia 76ers": "#3b82f6",
+        "Detroit Pistons": "#ef4444",
+        "Cleveland Cavaliers": "#f472b6",
+        "Oklahoma City Thunder": "#38bdf8",
+        "Los Angeles Lakers": "#fbbf24",
+        "San Antonio Spurs": "#cbd5e1",
+        "Minnesota Timberwolves": "#34d399",
+        "Boston Celtics": "#22c55e",
+        "Atlanta Hawks": "#dc2626",
+        "Orlando Magic": "#60a5fa",
+        "Toronto Raptors": "#ef4444",
+        "Phoenix Suns": "#fb923c",
+        "Portland Trail Blazers": "#e11d48",
+        "Denver Nuggets": "#facc15",
+        "Houston Rockets": "#f87171",
+    }.get(team, "#94a3b8")
+
+
+def _bracket_latest_game_html(s):
+    games = s.get("games") or []
+    if not games:
+        if s.get("winner"):
+            return f"Latest: <strong>{html.escape(str(s['winner']))}</strong> won the series."
+        return "Latest: <span style='opacity:.75'>No games in feed yet</span>"
+    last = games[-1]
+    score = html.escape(str(last.get("Score", "—")))
+    dt = html.escape(str(last.get("Date", "")))
+    win = html.escape(str(last.get("Winner", "")))
+    gnum = html.escape(str(last.get("Game", "")))
+    return f"Latest: <strong>{gnum}</strong> · {dt} · {score} · <strong>{win}</strong>"
+
+
+def _bracket_next_game_html(s):
+    if s.get("winner"):
+        return "Next: <span style='opacity:.7'>—</span>"
+    games = s.get("games") or []
+    n = len(games) + 1
+    return f"Next: <strong>Game {n}</strong> <span style='opacity:.75'>(schedule from NBA when available)</span>"
+
+
+def _bracket_game_log_items(s):
+    games = s.get("games") or []
+    rows = []
+    for g in games[-8:]:
+        rows.append(
+            "<li style='margin:4px 0;font-size:12px;color:#e2e8f0'>"
+            f"{html.escape(str(g.get('Game','')))} · {html.escape(str(g.get('Date','')))} · "
+            f"{html.escape(str(g.get('Score','—')))} — <strong>{html.escape(str(g.get('Winner','')))}</strong></li>"
+        )
+    return "".join(rows) if rows else "<li style='opacity:.7'>No game rows yet</li>"
+
+
+def bracket_series_card(s, round_display_name):
+    """Rich HTML matchup card for the Playoff Bracket page (presentation only)."""
+    a, b = s["a"], s["b"]
+    aw = int(s.get("a_wins", 0) or 0)
+    bw = int(s.get("b_wins", 0) or 0)
+    winner = s.get("winner")
+    active = not winner
+    seed_a = TEAM_PROFILES.get(a, {}).get("seed", "—")
+    seed_b = TEAM_PROFILES.get(b, {}).get("seed", "—")
+    logo_a = html.escape(TEAM_LOGOS.get(a, ""), quote=True)
+    logo_b = html.escape(TEAM_LOGOS.get(b, ""), quote=True)
+
+    def team_row(team, wins, seed, logo_url, is_winner, is_leading):
+        stripe = bracket_team_accent(team)
+        classes = ["bmk-team"]
+        if is_winner:
+            classes.append("bmk-team--winner")
+        elif active and is_leading:
+            classes.append("bmk-team--leading")
+        badge = '<span class="bmk-won-badge">Won series</span>' if is_winner else ""
+        return f"""
+        <div class="{' '.join(classes)}" style="--stripe:{stripe}">
+          <div class="bmk-team-main">
+            <img class="bmk-logo" src="{logo_url}" alt="" width="48" height="48" />
+            <div class="bmk-team-text">
+              <div class="bmk-seed">({seed})</div>
+              <div class="bmk-name">{html.escape(team)}</div>
+            </div>
+          </div>
+          <div class="bmk-team-meta">
+            {badge}
+            <span class="bmk-wins">{wins}</span>
+          </div>
+        </div>"""
+
+    row_a = team_row(a, aw, seed_a, logo_a, winner == a, aw > bw and not winner)
+    row_b = team_row(b, bw, seed_b, logo_b, winner == b, bw > aw and not winner)
+
+    complete_badge = (
+        '<span class="bmk-pill bmk-pill--done">Series complete</span>'
+        if winner
+        else '<span class="bmk-pill bmk-pill--live">In progress</span>'
+    )
+    card_mod = "bmk-card--active" if active else "bmk-card--complete"
+
+    details = f"""
+    <details class="bmk-details">
+      <summary>Game log &amp; details</summary>
+      <ul class="bmk-log">{_bracket_game_log_items(s)}</ul>
+    </details>"""
+
     return f"""
-    <div class='series-card'>
-      <div class='team-row'><div>{team_logo_html(a)} <b>{TEAM_PROFILES[a]['seed']}</b> {a}</div><div class='wins'>{aw}</div></div>
-      <div class='team-row'><div>{team_logo_html(b)} <b>{TEAM_PROFILES[b]['seed']}</b> {b}</div><div class='wins'>{bw}</div></div>
-      <div class='series-note'>{round_name} · {note}</div>
-    </div>
-    """
+    <div class="bmk-card {card_mod}">
+      <div class="bmk-card-top">
+        <span class="bmk-chip-round">{html.escape(round_display_name)}</span>
+        {complete_badge}
+        <span class="bmk-series-score">{aw}–{bw}</span>
+      </div>
+      <div class="bmk-rows">{row_a}{row_b}</div>
+      <div class="bmk-foot">{_bracket_latest_game_html(s)}</div>
+      <div class="bmk-foot bmk-foot--next">{_bracket_next_game_html(s)}</div>
+      {details}
+    </div>"""
+
 
 def render_bracket():
-    if AUTOREFRESH_AVAILABLE: st_autorefresh(interval=30000, key="bracket_refresh")
-    st.markdown("""
-    <style>
-    .bracket-wrap{background:linear-gradient(135deg,#07111f,#10213d,#301a55);padding:22px;border-radius:22px;border:1px solid rgba(255,255,255,.16);color:white;}
-    .bracket-title{text-align:center;font-size:34px;font-weight:900;margin-bottom:8px}.bracket-sub{text-align:center;color:#cbd5e1;margin-bottom:20px}
-    .bracket-grid{display:grid;grid-template-columns:1.25fr 1fr .85fr 1fr 1.25fr;gap:14px;align-items:center}.conf-title{text-align:center;font-size:22px;font-weight:900;padding:8px;background:rgba(255,255,255,.08);border-radius:14px;margin-bottom:10px}.round-title{text-align:center;font-size:15px;color:#93c5fd;font-weight:800;margin-bottom:8px}.series-card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:10px 12px;margin:9px 0;min-height:80px}.team-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:14px}.wins{font-weight:900;font-size:17px;color:#fbbf24}.series-note{text-align:center;color:#93c5fd;font-size:12px;margin-top:5px}.finals-box{background:radial-gradient(circle at top,#fbbf24,#1f2937 45%,#111827);border:1px solid rgba(255,255,255,.18);border-radius:22px;padding:22px 10px;text-align:center}.trophy{font-size:54px}
-    </style>""", unsafe_allow_html=True)
-    second=build_second_round_series()
-    east_fr=[s for s in FIRST_ROUND_SERIES.values() if s["conf"]=="East"]; west_fr=[s for s in FIRST_ROUND_SERIES.values() if s["conf"]=="West"]
-    east_sr=[s for s in second.values() if s["conf"]=="East"]; west_sr=[s for s in second.values() if s["conf"]=="West"]
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(interval=30000, key="bracket_refresh")
+    st.markdown(
+        """
+<style>
+.bracket-wrap {
+  background: linear-gradient(160deg, #0a0f1a 0%, #111827 40%, #1e1b4b 100%);
+  padding: 28px 20px 32px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  color: #f8fafc;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.bmk-title {
+  text-align: center;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  color: #f8fafc;
+}
+.bmk-sub {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  margin-bottom: 28px;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.bmk-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1.08fr 1fr 1.15fr;
+  gap: 10px 18px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .bmk-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .bmk-col { border-right: none !important; padding-right: 0 !important; }
+}
+.bmk-col {
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
+  padding-right: 14px;
+  position: relative;
+}
+.bmk-col:last-child { border-right: none; padding-right: 0; }
+.bmk-col::after {
+  content: "";
+  position: absolute;
+  top: 56px;
+  right: -10px;
+  width: 10px;
+  height: calc(100% - 72px);
+  min-height: 40px;
+  border-right: 2px solid rgba(56, 189, 248, 0.22);
+  border-top: 2px solid rgba(56, 189, 248, 0.22);
+  border-bottom: 2px solid rgba(56, 189, 248, 0.22);
+  border-radius: 0 8px 8px 0;
+  pointer-events: none;
+}
+.bmk-col:last-child::after { display: none; }
+.bmk-col:nth-child(3)::after { display: none; }
+@media (max-width: 1100px) {
+  .bmk-col::after { display: none; }
+}
+.bmk-conf {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #93c5fd;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.bmk-round {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e2e8f0;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+.bmk-hub {
+  background: radial-gradient(ellipse at top, rgba(251, 191, 36, 0.12), rgba(15, 23, 42, 0.92));
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 20px;
+  padding: 20px 14px 22px;
+  text-align: center;
+}
+.bmk-hub-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #fcd34d;
+  margin: 16px 0 10px;
+}
+.bmk-hub-title:first-child { margin-top: 0; }
+.bmk-trophy {
+  font-size: 42px;
+  line-height: 1;
+  margin: 10px 0;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+.bmk-placeholder {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 6px;
+}
+.bmk-placeholder span { color: #64748b; font-size: 12px; }
+
+/* Matchup cards */
+.bmk-card {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  padding: 14px 14px 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.bmk-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+.bmk-card--active {
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+.bmk-card--complete {
+  opacity: 0.96;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+.bmk-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.bmk-chip-round {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.15);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.bmk-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.bmk-pill--live {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.bmk-pill--done {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.bmk-series-score {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fbbf24;
+  letter-spacing: 0.06em;
+}
+.bmk-rows { display: flex; flex-direction: column; gap: 8px; }
+.bmk-team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(71, 85, 105, 0.35);
+  border-left: 4px solid var(--stripe, #64748b);
+}
+.bmk-team--leading {
+  background: rgba(30, 58, 95, 0.55);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.bmk-team--winner {
+  background: rgba(22, 78, 58, 0.45);
+  border-color: rgba(52, 211, 153, 0.45);
+  border-left-width: 5px;
+}
+.bmk-team-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bmk-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+.bmk-team-text { min-width: 0; text-align: left; }
+.bmk-seed { font-size: 11px; font-weight: 700; color: #94a3b8; }
+.bmk-name { font-size: 14px; font-weight: 800; color: #f1f5f9; line-height: 1.25; word-break: break-word; }
+.bmk-team-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.bmk-wins {
+  font-size: 22px;
+  font-weight: 900;
+  color: #f8fafc;
+  min-width: 28px;
+  text-align: right;
+}
+.bmk-won-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.2);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.bmk-foot {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-top: 10px;
+  line-height: 1.45;
+  text-align: left;
+}
+.bmk-foot--next { margin-top: 4px; opacity: 0.95; }
+.bmk-details {
+  margin-top: 10px;
+  border-top: 1px solid rgba(51, 65, 85, 0.6);
+  padding-top: 8px;
+}
+.bmk-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+  list-style: none;
+}
+.bmk-details summary::-webkit-details-marker { display: none; }
+.bmk-log {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  text-align: left;
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+    second = build_second_round_series()
+    east_fr = [s for s in FIRST_ROUND_SERIES.values() if s["conf"] == "East"]
+    west_fr = [s for s in FIRST_ROUND_SERIES.values() if s["conf"] == "West"]
+    east_sr = [s for s in second.values() if s["conf"] == "East"]
+    west_sr = [s for s in second.values() if s["conf"] == "West"]
     east_conf = infer_next_round_series("Conference Finals", "East")
     west_conf = infer_next_round_series("Conference Finals", "West")
     finals = infer_next_round_series("NBA Finals")
@@ -1526,36 +1894,74 @@ def render_bracket():
         west_cf_labels.append("TBD")
 
     if east_conf and len(east_conf) == 1:
-        east_cf_block = series_card(list(east_conf.values())[0], "East Finals")
+        east_cf_block = bracket_series_card(list(east_conf.values())[0], "Conference Finals")
     else:
-        east_cf_block = f"<p style='color:#cbd5e1;font-size:13px'>East semis → {east_cf_labels[0]} / {east_cf_labels[1]}<br/><span style='color:#94a3b8'>Conference Finals matchup appears when both winners are known.</span></p>"
+        east_cf_block = (
+            f"<div class='bmk-placeholder'><strong>East</strong> semifinal winners → "
+            f"{html.escape(str(east_cf_labels[0]))} / {html.escape(str(east_cf_labels[1]))}"
+            f"<br/><span>Conference Finals card unlocks when both East semis have a winner.</span></div>"
+        )
 
     if west_conf and len(west_conf) == 1:
-        west_cf_block = series_card(list(west_conf.values())[0], "West Finals")
+        west_cf_block = bracket_series_card(list(west_conf.values())[0], "Conference Finals")
     else:
-        west_cf_block = f"<p style='color:#cbd5e1;font-size:13px'>West semis → {west_cf_labels[0]} / {west_cf_labels[1]}<br/><span style='color:#94a3b8'>Conference Finals matchup appears when both winners are known.</span></p>"
+        west_cf_block = (
+            f"<div class='bmk-placeholder'><strong>West</strong> semifinal winners → "
+            f"{html.escape(str(west_cf_labels[0]))} / {html.escape(str(west_cf_labels[1]))}"
+            f"<br/><span>Conference Finals card unlocks when both West semis have a winner.</span></div>"
+        )
 
     if finals and len(finals) == 1:
-        finals_block = "<h3 style='margin-top:14px'>NBA Finals</h3>" + series_card(list(finals.values())[0], "NBA Finals")
+        finals_block = bracket_series_card(list(finals.values())[0], "NBA Finals")
     else:
-        finals_block = "<h3 style='margin-top:14px'>NBA Finals</h3><p style='color:#93c5fd;font-size:13px'>Populates when East and West conference champions are decided.</p>"
+        finals_block = "<div class='bmk-placeholder'><strong>NBA Finals</strong><br/><span>Appears when East and West conference champions are set.</span></div>"
 
-    center_column = (
-        "<h3>Conference Finals</h3>"
-        + east_cf_block
-        + "<div class='trophy'>🏆</div>"
-        + west_cf_block
-        + finals_block
-    )
-    html=f"""
-    <div class='bracket-wrap'><div class='bracket-title'>2026 NBA PLAYOFF BRACKET</div><div class='bracket-sub'>Auto-refreshing bracket view · API scores override fallback data when available</div>
-    <div class='bracket-grid'>
-    <div><div class='conf-title'>Eastern Conference</div><div class='round-title'>First Round</div>{''.join(series_card(s,'First Round') for s in east_fr)}</div>
-    <div><div class='round-title'>Second Round</div>{''.join(series_card(s,'Second Round') for s in east_sr)}</div>
-    <div class='finals-box'>{center_column}</div>
-    <div><div class='round-title'>Second Round</div>{''.join(series_card(s,'Second Round') for s in west_sr)}</div>
-    <div><div class='conf-title'>Western Conference</div><div class='round-title'>First Round</div>{''.join(series_card(s,'First Round') for s in west_fr)}</div>
-    </div></div>"""
+    center_column = f"""
+    <div class="bmk-hub">
+      <div class="bmk-hub-title">Eastern Conference Finals</div>
+      {east_cf_block}
+      <div class="bmk-trophy">🏆</div>
+      <div class="bmk-hub-title">Western Conference Finals</div>
+      {west_cf_block}
+      <div class="bmk-hub-title">NBA Finals</div>
+      {finals_block}
+    </div>
+    """
+
+    east_fr_cards = "".join(bracket_series_card(s, "First Round") for s in east_fr)
+    east_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in east_sr)
+    west_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in west_sr)
+    west_fr_cards = "".join(bracket_series_card(s, "First Round") for s in west_fr)
+
+    html = f"""
+<div class="bracket-wrap">
+  <h2 class="bmk-title">2026 NBA Playoff Bracket</h2>
+  <p class="bmk-sub">Live structure from API scores (demo backup only if enabled). Expand any series for the game log.</p>
+  <div class="bmk-grid">
+    <section class="bmk-col">
+      <div class="bmk-conf">Eastern Conference</div>
+      <div class="bmk-round">First Round</div>
+      {east_fr_cards}
+    </section>
+    <section class="bmk-col">
+      <div class="bmk-round">Conference Semifinals</div>
+      {east_sr_cards}
+    </section>
+    <section class="bmk-col bmk-col--hub">
+      {center_column}
+    </section>
+    <section class="bmk-col">
+      <div class="bmk-round">Conference Semifinals</div>
+      {west_sr_cards}
+    </section>
+    <section class="bmk-col">
+      <div class="bmk-conf">Western Conference</div>
+      <div class="bmk-round">First Round</div>
+      {west_fr_cards}
+    </section>
+  </div>
+</div>
+"""
     st.markdown(html, unsafe_allow_html=True)
 
 def latest_game_note(team):
