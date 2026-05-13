@@ -1,5 +1,6 @@
 
 import html
+import re
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -1354,6 +1355,449 @@ def matchup_advantages(team, opp):
             adv="Close"; why="This spot depends on current form, shooting, defense, matchup choices, and foul trouble."
         rows.append({"Position":pos, team:tp, opp:op, "Advantage":adv, "Why":why})
     return pd.DataFrame(rows)
+
+
+# ==========================================================
+# Matchup intelligence / series analysis engine
+# ==========================================================
+def _intel_parse_points_from_score(score_str, team, opp):
+    """Extract each team's point total from common score strings (best-effort)."""
+    if not score_str:
+        return None, None
+    s = re.sub(r"\([^)]*\)", "", str(score_str))
+    chunks = [c.strip() for c in re.split(r",\s*", s) if c.strip()]
+    found = {}
+    for ch in chunks:
+        m = re.search(r"(\d{2,3})\s*$", ch)
+        if not m:
+            continue
+        pts = int(m.group(1))
+        label = ch[: m.start()].strip().lower()
+        for tm in (team, opp):
+            tl = tm.lower()
+            last = tm.split()[-1].lower()
+            alias = TEAM_ALIASES.get(tm, "").lower()
+            if tl in label or last in label or alias in label:
+                found[tm] = pts
+    if team in found and opp in found:
+        return found[team], found[opp]
+    nums = re.findall(r"\b(\d{2,3})\b", s)
+    if len(nums) >= 2:
+        return int(nums[0]), int(nums[1])
+    return None, None
+
+
+def _intel_margin_series(games, team, opp):
+    """Per game: margin from team's perspective (positive = team won by that many)."""
+    rows = []
+    for g in games or []:
+        w = g.get("Winner")
+        tp, op = _intel_parse_points_from_score(g.get("Score", ""), team, opp)
+        if w == team and tp is not None and op is not None:
+            rows.append(tp - op)
+        elif w == opp and tp is not None and op is not None:
+            rows.append(-(tp - op))
+        elif w == team:
+            rows.append(8)
+        elif w == opp:
+            rows.append(-8)
+    return rows
+
+
+def _intel_injury_signal(team_name, opp_name):
+    """Rough availability pressure for narrative (counts + one headline name)."""
+    teams = [team_name, opp_name]
+    out = {"team_out": 0, "team_q": 0, "opp_out": 0, "opp_q": 0, "headline": None}
+    for i, tm in enumerate(teams):
+        df, _ = get_injury_report(tm)
+        if df is None or df.empty:
+            continue
+        for _, r in df.head(5).iterrows():
+            stt = str(r.get("Status", "")).lower()
+            pl = str(r.get("Player", ""))
+            if "out" in stt:
+                if i == 0:
+                    out["team_out"] += 1
+                else:
+                    out["opp_out"] += 1
+                if not out["headline"]:
+                    out["headline"] = (tm, pl, "out")
+            elif any(x in stt for x in ("question", "doubt", "game time")):
+                if i == 0:
+                    out["team_q"] += 1
+                else:
+                    out["opp_q"] += 1
+                if not out["headline"]:
+                    out["headline"] = (tm, pl, "questionable")
+    return out
+
+
+def _intel_variant(seed, options):
+    h = sum(ord(c) for c in str(seed)) % len(options)
+    return options[h]
+
+
+MATCHUP_INTEL_PAIR_HOOKS = {
+    frozenset({"New York Knicks", "Philadelphia 76ers"}): "**Brunson pick-and-roll** vs **Embiid drop depth** decides whether Philly gets clean weak-side threes or New York lives at the line.",
+    frozenset({"Oklahoma City Thunder", "Los Angeles Lakers"}): "**Thunder transition** vs **Lakers early help back** — the first four minutes off misses usually set the night's pace.",
+    frozenset({"Detroit Pistons", "Cleveland Cavaliers"}): "**Detroit offensive rebounding** vs **Cleveland's help-and-recover timing** can override cold half-court stretches.",
+    frozenset({"San Antonio Spurs", "Minnesota Timberwolves"}): "**Wembanyama rim deterrence** vs **Edwards downhill pressure** forces the defense to pick between early doubles and one-on-one survival.",
+}
+
+
+def intel_games_opponent_and_record(team_name):
+    """Resolve opponent, game rows, wins, and round label for analysis."""
+    prof = TEAM_PROFILES[team_name]
+    _, s = series_for_team(team_name)
+    games = []
+    opp = None
+    round_label = prof.get("round", "Playoffs")
+    if s:
+        opp = s["b"] if team_name == s["a"] else s["a"]
+        games = list(s.get("games") or [])
+        round_label = s.get("round", round_label)
+        tw = int(s.get("a_wins", 0)) if team_name == s["a"] else int(s.get("b_wins", 0))
+        ow = int(s.get("b_wins", 0)) if team_name == s["a"] else int(s.get("a_wins", 0))
+        return s, opp, games, tw, ow, round_label, "current"
+    if prof.get("status") == "Eliminated":
+        opp = prof.get("first_round_opponent")
+        games = [dict(g) for g in FIRST_ROUND_GAME_SCORES.get(team_name, [])]
+        tw = sum(1 for g in games if g.get("Winner") == team_name)
+        ow = sum(1 for g in games if g.get("Winner") == opp)
+        return None, opp, games, tw, ow, "First round (series complete)", "eliminated"
+    _, s2 = second_round_series_for_team(team_name)
+    if s2:
+        opp = s2["b"] if team_name == s2["a"] else s2["a"]
+        games = list(s2.get("games") or [])
+        round_label = s2.get("round", round_label)
+        tw = int(s2.get("a_wins", 0)) if team_name == s2["a"] else int(s2.get("b_wins", 0))
+        ow = int(s2.get("b_wins", 0)) if team_name == s2["a"] else int(s2.get("a_wins", 0))
+        return s2, opp, games, tw, ow, round_label, "current"
+    opp = prof.get("current_opponent") or prof.get("first_round_opponent")
+    return None, opp, [], 0, 0, round_label, "waiting"
+
+
+def build_matchup_intelligence_sections(team_name):
+    """Return nine analyst-style sections; inputs are series + profiles + injuries."""
+    s, opp, games, tw, ow, rnd, mode = intel_games_opponent_and_record(team_name)
+    if not opp or opp not in TEAM_PROFILES:
+        return None, "No resolved playoff opponent for this selection yet — try again after the bracket locks a series."
+
+    t_prof = TEAM_PROFILES[team_name]
+    o_prof = TEAM_PROFILES[opp]
+    margins = _intel_margin_series(games, team_name, opp)
+    inj = _intel_injury_signal(team_name, opp)
+    last_w = games[-1].get("Winner") if games else None
+    prev_w = games[-2].get("Winner") if len(games) > 1 else None
+    blowouts_for = sum(1 for m in margins if m >= 15)
+    blowouts_against = sum(1 for m in margins if m <= -15)
+    close_games = sum(1 for m in margins if abs(m) <= 7)
+    avg_abs = int(sum(abs(m) for m in margins) / len(margins)) if margins else 0
+
+    t_strengths = t_prof.get("strengths", [])
+    t_concerns = t_prof.get("concerns", [])
+    o_strengths = o_prof.get("strengths", [])
+    o_concerns = o_prof.get("concerns", [])
+    t_star = (t_prof.get("starters") or [""])[0]
+    o_star = (o_prof.get("starters") or [""])[0]
+    x_name = (t_prof.get("subs") or t_prof.get("starters", [""]))[0] if t_prof.get("subs") else (t_prof.get("starters") or ["Rotation"])[-1]
+
+    seed = f"{team_name}|{opp}|{tw}{ow}|{len(games)}"
+
+    # --- 1. Key matchup advantage ---
+    if tw > ow:
+        if margins:
+            adv_body = _intel_variant(
+                seed + "adv",
+                [
+                    f"{team_name} is translating **{t_strengths[0] if t_strengths else 'its identity'}** into wins on the scoreboard ({tw}-{ow}). The tape priority for {opp} is to take that away early in the shot clock.",
+                    f"The series ledger ({tw}-{ow}) says {team_name} is winning the **physical and execution** battle that shows up in {t_strengths[1] if len(t_strengths) > 1 else (t_strengths[0] if t_strengths else 'half-court control')}.",
+                    f"With a {tw}-{ow} edge, {team_name} is getting the game played on its terms — especially **{t_strengths[0] if t_strengths else 'star creation'}** — and forcing {opp} into tougher late-clock possessions.",
+                ],
+            )
+        else:
+            adv_body = _intel_variant(
+                seed + "advnom",
+                [
+                    f"The bracket reads **{tw}-{ow}** for {team_name} — even without full box-score parsing, the story matches **{t_strengths[0] if t_strengths else 'their best habits'}** showing up in winning minutes.",
+                    f"Up {tw}-{ow}, {team_name} is ahead where it matters. {opp} has to steal **initiation** — who starts the offense clean after misses usually follows the scoreboard here.",
+                    f"{tw}-{ow} favors {team_name}; the counter-film for {opp} starts with taking away **{t_strengths[0] if t_strengths else 'easy paint touches'}** without giving up the arc.",
+                ],
+            )
+    elif ow > tw:
+        if margins:
+            adv_body = _intel_variant(
+                seed + "advo",
+                [
+                    f"{opp} is ahead {ow}-{tw} and is leaning on **{o_strengths[0] if o_strengths else 'its best habits'}**. {team_name} has to flip where the game is contested: fewer clean looks for {o_star.split()[-1] if o_star else 'their lead option'} and more second chances.",
+                    f"The {ow}-{tw} margin reflects {opp} winning the **{o_strengths[0] if o_strengths else 'scheme'}** battle. {team_name}'s clearest counter is to attack **{o_concerns[0] if o_concerns else 'their weak-side help'}** until the defense cracks.",
+                    f"{opp} has controlled the series ({ow}-{tw}) by making {team_name} defend **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'multiple actions')}** without loading up on cheap fouls.",
+                ],
+            )
+        else:
+            adv_body = _intel_variant(
+                seed + "advonm",
+                [
+                    f"{opp} leads **{ow}-{tw}** on the ledger — {team_name} needs a cleaner **{t_strengths[0] if t_strengths else 'half-court'}** night and to stress **{o_concerns[0] if o_concerns else 'their turnover risk'}**.",
+                    f"Trailing {ow}-{tw}, {team_name} is chasing **{o_strengths[0] if o_strengths else 'their identity nights'}** with better **shot selection** and fewer **live-ball turnovers**.",
+                    f"The {ow}-{tw} hole means {team_name} should hunt **early mismatch switches** before {opp} can set its preferred **drop/tag** rules.",
+                ],
+            )
+    elif games:
+        adv_body = _intel_variant(
+            seed + "adv_even",
+            [
+                f"At {tw}-{ow}, neither side has a cushion — the edge is whichever team turns **{t_strengths[0] if t_strengths else 'transition'}** into real points and limits live-ball turnovers.",
+                f"Knotted at {tw}-{ow}, the matchup is basically a **shot-quality race**: {team_name}'s **{t_strengths[0] if t_strengths else 'spacing'}** vs {opp}'s **{o_strengths[0] if o_strengths else 'rim protection'}**.",
+                f"{tw}-{ow} means the next game is a swing spot. {team_name} wants the game to look like **{t_strengths[0] if t_strengths else 'its pace'}**; {opp} wants to make it a **{o_strengths[0] if o_strengths else 'grind'}** night.",
+            ],
+        )
+    else:
+        adv_body = (
+            f"Series games are not loaded yet for this matchup — the preview read still starts with **{t_strengths[0] if t_strengths else 'half-court execution'}** "
+            f"against **{o_strengths[0] if o_strengths else 'their set defense'}** once the first result posts."
+        )
+
+    hook = MATCHUP_INTEL_PAIR_HOOKS.get(frozenset({team_name, opp}))
+    if hook:
+        adv_body = adv_body.rstrip() + " " + hook
+    if blowouts_for >= 1 and any("rebound" in (x or "").lower() for x in t_strengths):
+        adv_body += f" Margin tape also supports **{team_name} owning the glass** when help stays home."
+    if blowouts_for >= 1 and any("pace" in (x or "").lower() or "transition" in (x or "").lower() for x in t_strengths):
+        adv_body += f" **Transition volume** has been a separator when {team_name} gets stops and runs."
+
+    # --- 2. Biggest tactical concern ---
+    concern_bits = []
+    if inj.get("headline"):
+        tm_h, pl_h, tag_h = inj["headline"]
+        concern_bits.append(
+            f"**{pl_h}** ({tm_h}) showing **{tag_h}** on the injury feed — rotation length and matchup choices tighten if that holds"
+        )
+    if inj["team_out"] or inj["team_q"]:
+        concern_bits.append(
+            f"availability stress ({inj['team_out']} out / {inj['team_q']} questionable signals) for {team_name}"
+        )
+    concern_bits.append(
+        f"{opp} can punish **{t_concerns[0] if t_concerns else 'slow rotations'}** with **{o_strengths[0] if o_strengths else 'shot creation'}**"
+    )
+    concern_body = (
+        "The biggest tactical worry is " + " and ".join(concern_bits[:2]) + "."
+    )
+
+    # --- 3. X-factor ---
+    x_body = _intel_variant(
+        seed + "xf",
+        [
+            f"**{x_name}** is the X-factor: bench minutes swing when starters sit, and {opp} tends to lose its edge when **{o_concerns[-1] if o_concerns else 'depth'}** gets tested in foul-trouble nights.",
+            f"Watch **{x_name}** — playoff series turn when a non-headline player provides **spacing, extra possessions, or defensive events** in a 6-minute second-quarter stretch.",
+            f"If **{x_name}** hits open shots and avoids defensive hunting targets, {team_name} keeps its main creators fresher for late **pick-and-roll** possessions.",
+        ],
+    )
+
+    # --- 4. Most important adjustment ---
+    if blowouts_against >= 2:
+        adj = f"{team_name} has been blown off the floor in multiple games — the urgent adjustment is **early help rules + transition get-backs** so {o_star.split()[-1] if o_star else opp} isn't getting runway in the open floor."
+    elif blowouts_for >= 2:
+        adj = f"{team_name} has shown it can **run away** in this matchup. {opp}'s adjustment is to **slow the game**, shrink transition, and force {team_name} into **late-clock isolations** without easy kickouts."
+    elif close_games >= max(2, len(margins) - 1) and margins:
+        adj = f"With **{close_games}** tight-score games (avg margin ~{avg_abs} pts), the series is about **ATO execution, SLOB/BLOB clarity, and who wins the first 6 minutes after halftime**."
+    else:
+        adj = _intel_variant(
+            seed + "adj",
+            [
+                f"Small-ball vs double-big minutes will decide **rebounding vs switching** — whichever staff forces the opponent into its **backup coverage** first usually wins the middle quarters.",
+                f"Expect a **pick-and-roll coverage tweak** (show vs drop vs blitz) aimed at {o_star.split()[-1] if o_star else 'their lead guard'} when {team_name} goes cold from three.",
+                f"The adjustment game is **side pick-and-roll placement** and **weak-side tag timing** — {opp} will try to keep {t_star.split()[-1] if t_star else 'your star'} off the nail without giving free corner threes.",
+            ],
+        )
+
+    # --- 5. Defensive matchup problems ---
+    def_body = _intel_variant(
+        seed + "def",
+        [
+            f"{team_name} has to solve how {opp} uses **{o_strengths[0] if o_strengths else 'star touches'}** in **spread pick-and-roll** — the weak-side low man is getting pulled, and skip passes are generating **clean above-the-break threes**.",
+            f"Defensively, the stress point is **{o_star}** attacking **{t_concerns[0] if t_concerns else 'the point of attack'}** — that creates help rotations that open **offensive rebounds and dump-offs**.",
+            f"{opp}'s **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'half-court size')}** is the matchup problem: {team_name} either lives with **switch size mismatches** or risks **over-help rebounding holes**.",
+        ],
+    )
+
+    # --- 6. Momentum shift ---
+    if last_w == team_name and prev_w == team_name:
+        mom_txt = f"{team_name} has taken **back-to-back** — the run is real until {opp} lands a **counterpunch quarter**."
+        mom_class = "up"
+    elif last_w == opp and prev_w == opp:
+        mom_txt = f"{opp} is stacking wins — {team_name} needs a **tone-setting defensive first quarter** next outing."
+        mom_class = "down"
+    elif last_w == team_name:
+        mom_txt = f"{team_name} grabbed the last game — **possession quality** and **defensive rebounding** are the carryover metrics to watch."
+        mom_class = "up"
+    elif last_w == opp:
+        mom_txt = f"{opp} answered last time out — expect **scheme tweaks** and more **physicality on screens** early."
+        mom_class = "down"
+    else:
+        mom_txt = "Momentum is neutral until the next result posts — **Game 1 (or next game) sets the officiating and pace tone**."
+        mom_class = "flat"
+
+    # --- 7. Clutch-time edge ---
+    if not margins:
+        clutch = "Once games are in the log, this panel reads **late-game shot quality** from margin patterns (tight vs blowout games)."
+    elif close_games >= len(margins) // 2 + 1:
+        clutch = f"This series has lived in **single-possession** windows — **clutch edge** belongs to whichever team wins **FTs, turnovers, and ORB on late misses** (not just hero shots)."
+    else:
+        clutch = f"Several games have broken open — **clutch is less about one play** and more about **avoiding the avalanche quarter** (usually tied to **live-ball turnovers** or **transition threes**)."
+
+    # --- 8. Pressure meter (higher = more heat on the selected team) ---
+    gp = tw + ow
+    diff = tw - ow
+    if mode == "eliminated":
+        pressure = 88
+        p_label = "Season-defining"
+        p_note = "Elimination context: evaluation mode — what broke schematically and what can carry forward."
+    elif gp == 0:
+        pressure = 32
+        p_label = "Pre-series"
+        p_note = "Sharpening after Game 1 posts — until then the index stays neutral-cool."
+    elif abs(diff) >= 3 and gp >= 3:
+        pressure = 22 if diff > 0 else 92
+        p_label = "Series separation"
+        p_note = (
+            f"{team_name} built a cushion; the opponent needs a schematic shock, not just shot-making variance."
+            if diff > 0
+            else f"{team_name} needs a tone reset — usually **defensive first quarters** and **fewer live-ball turnovers**."
+        )
+    elif diff <= -2 and max(tw, ow) >= 3:
+        pressure = 86
+        p_label = "Catch-up heat"
+        p_note = f"{team_name} is in scramble mode — timeouts, fouls, and rebounding carry playoff weight every trip."
+    elif diff >= 2 and max(tw, ow) >= 3:
+        pressure = 34
+        p_label = "Close-out leverage"
+        p_note = f"{team_name} has margin — the risk flips to **complacency and officiating swings**, not talent."
+    elif tw == ow and gp >= 4:
+        pressure = 58
+        p_label = "Chess-match heat"
+        p_note = "Even series: counter lineups and health swings matter as much as star shot-making."
+    else:
+        pressure = int(40 + min(22, gp * 5) + abs(diff) * 4)
+        pressure = min(88, max(24, pressure))
+        p_label = "Series calibration"
+        p_note = "Still establishing which side imposes pace and paint touches early in each half."
+
+    # --- 9. Coaching chess match ---
+    chess = _intel_variant(
+        seed + "ch",
+        [
+            f"It's a **timeout game**: {opp} will toggle **coverage on {t_star.split()[-1] if t_star else 'your star'}**, while {team_name} counters with **off-ball screens** to force **switch hunting**.",
+            f"Watch **rotation length** — the coach that first trusts a **shorter playoff rotation** without bleeding bench minutes usually stabilizes **defensive rebounding**.",
+            f"Series-long, the chess match is **who blinks on help-at-the-nail** vs **corner skip threes** — staff will sell out one to take away the other.",
+        ],
+    )
+
+    # Star pressure (woven into pressure card subtitle)
+    star_pressure = _intel_variant(
+        seed + "sp",
+        [
+            f"**{t_star}** sees the heaviest **trap/double decisions** when {team_name} stagnates; {opp} will live with rotations if it means **contested twos**.",
+            f"**{t_star}**'s **usage vs efficiency** tradeoff is the story — {opp} wants late clocks and **extra bodies at the level**.",
+            f"National narrative pressure sits on **{t_star}** in this matchup because {o_star} is the clearest **counter-star** on the other side.",
+        ],
+    )
+
+    sections = [
+        ("1", "Key matchup advantage", "🏆", adv_body, "good", None),
+        ("2", "Biggest tactical concern", "⚠️", concern_body, "warn", None),
+        ("3", "X-factor player", "✨", x_body, "neutral", None),
+        ("4", "Most important adjustment", "🧭", adj, "neutral", None),
+        ("5", "Defensive matchup problems", "🛡️", def_body, "warn", None),
+        ("6", "Momentum shift", "📈", mom_txt, mom_class, "momentum"),
+        ("7", "Clutch-time edge", "⏱️", clutch, "neutral", None),
+        ("8", "Pressure meter + star load", "🎯", f"**{p_label}** ({pressure}/100). {p_note} {star_pressure}", "neutral", None),
+        ("9", "Coaching chess match", "♟️", chess, "neutral", None),
+    ]
+    meta = {
+        "opp": opp,
+        "round": rnd,
+        "tw": tw,
+        "ow": ow,
+        "games_n": len(games),
+        "mode": mode,
+        "pressure": pressure,
+    }
+    return meta, sections
+
+
+def _inject_matchup_intel_css():
+    st.markdown(
+        """
+<style>
+.mi-wrap { max-width: 1100px; margin: 0 auto; }
+.mi-card {
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  border-left: 4px solid #38bdf8;
+}
+.mi-card.mi-good { border-left-color: #22c55e; }
+.mi-card.mi-warn { border-left-color: #f97316; }
+.mi-card.mi-neutral { border-left-color: #64748b; }
+.mi-card.mi-mom-up { border-left-color: #16a34a; background: linear-gradient(135deg, #f0fdf4, #ffffff); }
+.mi-card.mi-mom-down { border-left-color: #dc2626; background: linear-gradient(135deg, #fef2f2, #ffffff); }
+.mi-card.mi-mom-flat { border-left-color: #94a3b8; }
+.mi-num { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.06em; }
+.mi-title { font-size: 16px; font-weight: 900; color: #0f172a; margin: 2px 0 8px; display: flex; align-items: center; gap: 8px; }
+.mi-body { font-size: 14px; line-height: 1.55; color: #334155; }
+.mi-bar { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
+.mi-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #6366f1); }
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_matchup_intelligence(team_name):
+    _inject_matchup_intel_css()
+    meta, payload = build_matchup_intelligence_sections(team_name)
+    if meta is None:
+        st.warning(payload)
+        return
+    opp = meta["opp"]
+    st.markdown(
+        f"<div class='mi-wrap'><p style='color:#64748b;font-size:14px;margin:0 0 12px'>"
+        f"<strong style='color:#0f172a'>{html.escape(team_name)}</strong> vs "
+        f"<strong style='color:#0f172a'>{html.escape(opp)}</strong> · "
+        f"{html.escape(meta['round'])} · Series <strong>{meta['tw']}-{meta['ow']}</strong>"
+        f" · {meta['games_n']} games in log</p></div>",
+        unsafe_allow_html=True,
+    )
+    for num, title, icon, body, tone, kind in payload:
+        if kind == "momentum":
+            cls = f"mi-mom-{tone}"
+        else:
+            cls = {
+                "good": "mi-good",
+                "warn": "mi-warn",
+                "neutral": "mi-neutral",
+                "up": "mi-mom-up",
+                "down": "mi-mom-down",
+                "flat": "mi-mom-flat",
+            }.get(tone, "mi-neutral")
+        safe_title = html.escape(f"{icon} {title}")
+        # Allow bold markdown from body — convert ** to <strong> lightly
+        b = str(body)
+        b = html.escape(b)
+        b = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", b)
+        extra = ""
+        if num == "8":
+            pv = max(5, min(100, int(meta.get("pressure", 50))))
+            extra = f'<div class="mi-bar" title="Pressure on {html.escape(team_name)} (higher = more heat)"><span style="width:{pv}%"></span></div>'
+        st.markdown(
+            f"<div class='mi-card {cls}'><div class='mi-num'>SECTION {num}</div>"
+            f"<div class='mi-title'>{safe_title}</div><div class='mi-body'>{b}</div>{extra}</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ==========================================================
@@ -2998,6 +3442,7 @@ PAGES={
     "🏀 Home Dashboard":"Home Dashboard",
     "🏀 Live Game Center":"Live Game Center",
     "🏀 Playoff Bracket":"Playoff Bracket",
+    "🧠 Matchup Intelligence":"Matchup Intelligence",
     "🏀 Matchup Lineups":"Matchup Lineups",
     "🏀 Player Playoff Tracker":"Player Playoff Tracker",
     "🏀 Legacy Tracker":"Legacy Tracker",
@@ -3023,6 +3468,15 @@ if page == "Home Dashboard":
 
 elif page == "Playoff Bracket":
     render_bracket()
+
+elif page == "Matchup Intelligence":
+    render_matchup_header(favorite_team)
+    st.subheader("Analyst intelligence layer")
+    st.caption(
+        "Series-aware read from the playoff log (wins, parsed margins when available), "
+        "team strength tags, injuries, and recent outcomes. Heuristic engine — not a live betting model."
+    )
+    render_matchup_intelligence(favorite_team)
 
 elif page == "Previous Rounds":
     st.header(f"{profile['conference']} Previous Rounds")
