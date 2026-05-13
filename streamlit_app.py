@@ -1677,23 +1677,67 @@ def bracket_series_card(s, round_display_name, show_round_chip=False):
     </details>"""
 
     return f"""
-    <article class="bmk-card bmk-card--compact {card_mod}">
-      <header class="bmk-card-head">
+    <div class="bmk-card bmk-card--compact {card_mod}">
+      <div class="bmk-card-head">
         {chip_html}
         <span class="bmk-series-score" aria-label="Series wins">{aw}–{bw}</span>
         {status}
-      </header>
+      </div>
       <div class="bmk-rows">{row_a}{row_b}</div>
       <div class="bmk-latest">{_bracket_latest_game_html(s_disp)}</div>
       {details}
-    </article>"""
+    </div>"""
+
+
+def _markdown_safe_bracket_html(html_fragment):
+    """Strip leading whitespace on each line so Streamlit Markdown does not treat
+    indented HTML as code blocks (indented code fence / #859-style issues)."""
+    return "\n".join(line.lstrip() for line in html_fragment.splitlines())
+
+
+def _bracket_fallback_dataframe(
+    east_fr, east_sr, west_sr, west_fr, east_conf, west_conf, finals
+):
+    """Plain table of the same series the bracket uses, if HTML render fails."""
+    rows = []
+
+    def append_rows(column_label, series_list, round_name):
+        for s in series_list:
+            sd = _bracket_series_for_display(s, round_name)
+            games = sd.get("games") or []
+            if games:
+                lg = games[-1]
+                latest = f"{lg.get('Game', '')} {lg.get('Date', '')} {lg.get('Score', '')} → {lg.get('Winner', '')}"
+            else:
+                latest = "—"
+            rows.append(
+                {
+                    "Column": column_label,
+                    "Team A": sd.get("a"),
+                    "Team B": sd.get("b"),
+                    "Wins": f"{sd.get('a_wins', 0)}–{sd.get('b_wins', 0)}",
+                    "Winner": sd.get("winner") or "—",
+                    "Latest": latest,
+                }
+            )
+
+    append_rows("East — First round", east_fr, "First Round")
+    append_rows("East — Semifinals", east_sr, "Conference Semifinals")
+    append_rows("West — Semifinals", west_sr, "Conference Semifinals")
+    append_rows("West — First round", west_fr, "First Round")
+    if east_conf and len(east_conf) == 1:
+        append_rows("East — Conference finals", list(east_conf.values()), "Conference Finals")
+    if west_conf and len(west_conf) == 1:
+        append_rows("West — Conference finals", list(west_conf.values()), "Conference Finals")
+    if finals and len(finals) == 1:
+        append_rows("NBA Finals", list(finals.values()), "NBA Finals")
+    return pd.DataFrame(rows)
 
 
 def render_bracket():
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=30000, key="bracket_refresh")
-    st.markdown(
-        """
+    bracket_css = """
 <style>
 .bracket-wrap {
   background: linear-gradient(165deg, #0b1220 0%, #111827 50%, #172554 100%);
@@ -2026,9 +2070,7 @@ def render_bracket():
   .bmk-col--hub { min-width: 232px; }
 }
 </style>
-""",
-        unsafe_allow_html=True,
-    )
+"""
 
     second = build_second_round_series()
     east_fr = [s for s in FIRST_ROUND_SERIES.values() if s["conf"] == "East"]
@@ -2084,54 +2126,71 @@ def render_bracket():
     west_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in west_sr)
     west_fr_cards = "".join(bracket_series_card(s, "First Round") for s in west_fr)
 
-    bracket_html = f"""
-<div class="bracket-wrap">
-  <header class="bmk-page-head">
-    <h2 class="bmk-title">2026 NBA Playoff Bracket</h2>
-    <p class="bmk-sub">Live scores from the NBA feed when connected; use the horizontal scroll on smaller screens. Expand any series for schedule and full game log.</p>
-  </header>
-  <div class="bmk-scroll" role="region" aria-label="Playoff bracket columns">
-    <div class="bmk-grid">
-      <section class="bmk-col" data-conf="east">
-        <header class="bmk-col-head">
-          <span class="bmk-col-eyebrow">East</span>
-          <h3 class="bmk-col-title">First round</h3>
-        </header>
-        <div class="bmk-col-stack">{east_fr_cards}</div>
-      </section>
-      <section class="bmk-col" data-conf="east">
-        <header class="bmk-col-head">
-          <span class="bmk-col-eyebrow">East</span>
-          <h3 class="bmk-col-title">Semifinals</h3>
-        </header>
-        <div class="bmk-col-stack">{east_sr_cards}</div>
-      </section>
-      <section class="bmk-col bmk-col--hub">
-        <header class="bmk-col-head bmk-col-head--hub">
-          <span class="bmk-col-eyebrow">Center</span>
-          <h3 class="bmk-col-title">Conference &amp; NBA finals</h3>
-        </header>
-        <div class="bmk-col-stack">{center_column}</div>
-      </section>
-      <section class="bmk-col" data-conf="west">
-        <header class="bmk-col-head">
-          <span class="bmk-col-eyebrow">West</span>
-          <h3 class="bmk-col-title">Semifinals</h3>
-        </header>
-        <div class="bmk-col-stack">{west_sr_cards}</div>
-      </section>
-      <section class="bmk-col" data-conf="west">
-        <header class="bmk-col-head">
-          <span class="bmk-col-eyebrow">West</span>
-          <h3 class="bmk-col-title">First round</h3>
-        </header>
-        <div class="bmk-col-stack">{west_fr_cards}</div>
-      </section>
-    </div>
-  </div>
+    bracket_body = f"""
+<div class="bmk-page-head">
+<h2 class="bmk-title">2026 NBA Playoff Bracket</h2>
+<p class="bmk-sub">Live scores from the NBA feed when connected; use the horizontal scroll on smaller screens. Expand any series for schedule and full game log.</p>
+</div>
+<div class="bmk-scroll" role="region" aria-label="Playoff bracket columns">
+<div class="bmk-grid">
+<div class="bmk-col" data-conf="east">
+<div class="bmk-col-head">
+<span class="bmk-col-eyebrow">East</span>
+<h3 class="bmk-col-title">First round</h3>
+</div>
+<div class="bmk-col-stack">{east_fr_cards}</div>
+</div>
+<div class="bmk-col" data-conf="east">
+<div class="bmk-col-head">
+<span class="bmk-col-eyebrow">East</span>
+<h3 class="bmk-col-title">Semifinals</h3>
+</div>
+<div class="bmk-col-stack">{east_sr_cards}</div>
+</div>
+<div class="bmk-col bmk-col--hub">
+<div class="bmk-col-head bmk-col-head--hub">
+<span class="bmk-col-eyebrow">Center</span>
+<h3 class="bmk-col-title">Conference &amp; NBA finals</h3>
+</div>
+<div class="bmk-col-stack">{center_column}</div>
+</div>
+<div class="bmk-col" data-conf="west">
+<div class="bmk-col-head">
+<span class="bmk-col-eyebrow">West</span>
+<h3 class="bmk-col-title">Semifinals</h3>
+</div>
+<div class="bmk-col-stack">{west_sr_cards}</div>
+</div>
+<div class="bmk-col" data-conf="west">
+<div class="bmk-col-head">
+<span class="bmk-col-eyebrow">West</span>
+<h3 class="bmk-col-title">First round</h3>
+</div>
+<div class="bmk-col-stack">{west_fr_cards}</div>
+</div>
+</div>
 </div>
 """
-    st.markdown(bracket_html, unsafe_allow_html=True)
+
+    full_bracket_html = (
+        '<div class="bracket-wrap">'
+        + bracket_css.strip()
+        + bracket_body
+        + "</div>"
+    )
+    full_bracket_html = _markdown_safe_bracket_html(full_bracket_html)
+
+    try:
+        st.markdown(full_bracket_html, unsafe_allow_html=True)
+    except Exception as exc:
+        st.error(f"Playoff Bracket HTML could not render ({exc}). Showing the same data in a table.")
+        st.dataframe(
+            _bracket_fallback_dataframe(
+                east_fr, east_sr, west_sr, west_fr, east_conf, west_conf, finals
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 def latest_game_note(team):
     _, s = series_for_team(team)
