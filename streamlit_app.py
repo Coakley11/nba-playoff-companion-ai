@@ -1441,46 +1441,429 @@ def next_round_context_for_team(team_name):
         "paired_series": paired,
     }
 
-def render_home_matchup_header(team_name):
+def resolve_home_matchup_context(team_name):
+    """Resolve current matchup / round for the Home Dashboard (no Streamlit output)."""
+    profile = TEAM_PROFILES[team_name]
     _k, s = series_for_team(team_name)
     rnd = (s or {}).get("round", "")
     if s and rnd in ("Conference Finals", "NBA Finals"):
         opp = s["b"] if team_name == s["a"] else s["a"]
-        p = TEAM_PROFILES[team_name]
-        c1, c2, c3 = st.columns([1, 2.8, 1.4])
-        with c1:
-            st.image(TEAM_LOGOS[team_name], width=110)
-        with c2:
-            st.markdown(
-                f"<div style='text-align:center'><h1>({p['seed']}) {team_name} vs ({TEAM_PROFILES[opp]['seed']}) {opp}</h1>"
-                f"<h3>{p['conference']} {rnd}</h3></div>",
-                unsafe_allow_html=True,
-            )
-        with c3:
-            st.image(TEAM_LOGOS[opp], width=110)
-        return {"advanced": False, "bracket_series": True, "round_label": rnd, "opponent": opp, "series": s}
-
+        return {
+            "mode": "bracket_series",
+            "series": s,
+            "round_label": rnd,
+            "opponent": opp,
+            "opponent_display": opp,
+            "advanced": False,
+            "bracket_series": True,
+            "ctx": None,
+        }
     ctx = next_round_context_for_team(team_name)
     if not ctx or not ctx.get("advanced"):
-        render_matchup_header(team_name)
-        return ctx
-    p = TEAM_PROFILES[team_name]
-    c1, c2, c3 = st.columns([1, 2.8, 1.4])
-    with c1:
-        st.image(TEAM_LOGOS[team_name], width=110)
-    with c2:
-        st.markdown(
-            f"<div style='text-align:center'><h1>({p['seed']}) {team_name} vs {ctx['opponent_text']}</h1>"
-            f"<h3>{ctx['round_label']}</h3><p>{ctx['status_text']}</p></div>",
-            unsafe_allow_html=True,
+        opp = profile.get("current_opponent") or profile["first_round_opponent"]
+        return {
+            "mode": "standard",
+            "series": s,
+            "round_label": profile.get("round", "Playoffs"),
+            "opponent": opp,
+            "opponent_display": opp,
+            "advanced": False,
+            "bracket_series": False,
+            "ctx": ctx,
+        }
+    return {
+        "mode": "waiting_cf",
+        "series": None,
+        "round_label": ctx["round_label"],
+        "opponent": None,
+        "opponent_display": ctx.get("opponent_text", "TBD"),
+        "opponents": ctx.get("opponents", []),
+        "advanced": True,
+        "bracket_series": False,
+        "ctx": ctx,
+    }
+
+
+def _inject_home_command_center_css():
+    st.markdown(
+        """
+<style>
+.cmd-shell { max-width: 1200px; margin: 0 auto 8px auto; }
+.cmd-hero {
+  position: relative;
+  border-radius: 20px;
+  padding: 20px 18px 18px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+  background: radial-gradient(120% 80% at 10% 0%, rgba(255,255,255,0.07) 0%, transparent 55%),
+    linear-gradient(145deg, var(--cmd-bg0,#0b1220) 0%, var(--cmd-bg1,#111827) 45%, #0f172a 100%);
+}
+.cmd-hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 38%);
+}
+.cmd-hero-inner { position: relative; z-index: 1; color: #f8fafc; font-family: system-ui,-apple-system,sans-serif; }
+.cmd-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #94a3b8; text-align: center; margin-bottom: 8px; }
+.cmd-row { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
+.cmd-logo { width: clamp(72px, 14vw, 112px); height: auto; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55)); }
+.cmd-vs { font-size: 13px; font-weight: 900; color: #64748b; letter-spacing: 0.12em; }
+.cmd-center { text-align: center; min-width: min(100%, 260px); flex: 1 1 240px; }
+.cmd-opp-logos { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; min-width: 72px; }
+.cmd-match { font-size: clamp(1.15rem, 3.2vw, 1.75rem); font-weight: 900; line-height: 1.15; margin: 0 0 6px; }
+.cmd-round { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); color: #e2e8f0; margin-bottom: 8px; }
+.cmd-scoreline { font-size: clamp(1.6rem, 4vw, 2.35rem); font-weight: 950; color: #fbbf24; letter-spacing: 0.06em; margin: 4px 0 10px; }
+.cmd-rail { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+.cmd-pill { font-size: 11px; font-weight: 800; padding: 5px 11px; border-radius: 999px; background: rgba(15,23,42,0.55); border: 1px solid rgba(148,163,184,0.35); color: #e2e8f0; }
+.cmd-pill--accent { border-color: var(--cmd-accent, #38bdf8); color: #f0f9ff; background: var(--cmd-accent-soft, rgba(56,189,248,0.15)); }
+.cmd-headline { text-align: center; font-size: 15px; font-weight: 800; color: #f1f5f9; margin: 12px auto 0; max-width: 38rem; line-height: 1.35; }
+.cmd-inj { margin-top: 12px; font-size: 11px; color: #cbd5e1; text-align: center; line-height: 1.45; }
+.cmd-sec { margin: 18px 0 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid rgba(148,163,184,0.25); padding-bottom: 6px; }
+.cmd-tile { background: rgba(15,23,42,0.55); border: 1px solid rgba(71,85,105,0.45); border-radius: 14px; padding: 10px 12px; text-align: center; }
+.cmd-tile .v { font-size: 1.35rem; font-weight: 900; color: #f8fafc; }
+.cmd-tile .k { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+.cmd-next { background: rgba(15,23,42,0.45); border-radius: 14px; padding: 12px 14px; border: 1px solid rgba(71,85,105,0.4); margin-bottom: 12px; }
+.cmd-next-title { font-size: 12px; font-weight: 800; color: #93c5fd; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+.cmd-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+@media (max-width: 700px) {
+  .cmd-row { flex-direction: column; }
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _home_storyline_headline(team_name, hctx):
+    """One broadcast-style headline for the hero (rule-based, short)."""
+    profile = TEAM_PROFILES[team_name]
+    s = hctx.get("series")
+    mode = hctx.get("mode")
+    if mode == "waiting_cf" and hctx.get("ctx"):
+        return hctx["ctx"].get("status_text", f"{team_name} is waiting on the other conference semi.")
+    if not s:
+        if profile.get("status") == "Eliminated":
+            return f"{team_name}'s playoff run has ended — track legacy and film on other pages."
+        return f"{team_name} is set for the next chapter once the bracket updates."
+    rnd = s.get("round", "Playoffs")
+    a, b = s["a"], s["b"]
+    tw = s["a_wins"] if team_name == a else s["b_wins"]
+    ow = s["b_wins"] if team_name == a else s["a_wins"]
+    opp = b if team_name == a else a
+    last = (s.get("games") or [])[-1] if s.get("games") else None
+    lw = last.get("Winner") if last else None
+    if s.get("winner") == team_name:
+        return f"{team_name} wins the series — {tw}-{ow} over {opp}."
+    if s.get("winner") and s.get("winner") != team_name:
+        return f"{s['winner']} closes out the series — what it means for {team_name}'s offseason story."
+    if tw == 3 and ow <= 1:
+        return f"{team_name} one win away from advancing — {tw}-{ow} vs {opp} in the {rnd}."
+    if tw == ow and tw >= 1:
+        return f"Series knotted {tw}-{ow} — every possession swings momentum vs {opp}."
+    if lw == team_name and last:
+        return f"{team_name} took the last one ({last.get('Score','')}) — now the chess match continues vs {opp}."
+    if lw and lw != team_name:
+        return f"{opp} answered in the latest game — {team_name} looks to respond next."
+    if "Final" in rnd or "Conference" in rnd:
+        return f"{rnd}: {team_name} vs {opp} — the stakes rise each night."
+    return f"{team_name} vs {opp} — {tw}-{ow}. The {rnd} narrative is still being written."
+
+
+def _home_series_win_probability(team_name, hctx, live):
+    """Return integer 0-100 for favorite team; uses live win_prob when in-game."""
+    s = hctx.get("series")
+    if live:
+        home = live.get("homeTeam", {}) or {}
+        away = live.get("awayTeam", {}) or {}
+        home_tri = home.get("teamTricode", "") or ""
+        away_tri = away.get("teamTricode", "") or ""
+        alias = TEAM_ALIASES.get(team_name, "")
+        is_home = home_tri == alias
+        hs, as_ = safe_int(home.get("score", 0)), safe_int(away.get("score", 0))
+        margin = (hs - as_) if is_home else (as_ - hs)
+        period = safe_int(live.get("period", 1), 1)
+        stt = live.get("gameStatusText", "") or ""
+        if "Final" in stt:
+            return 100 if margin > 0 else (0 if margin < 0 else 50)
+        if "Q" in stt or ":" in stt or "Halftime" in stt:
+            return int(win_prob(margin, period, is_home))
+    if not s:
+        return 50
+    if s.get("winner") == team_name:
+        return 100
+    if s.get("winner"):
+        return 22
+    a, b = s["a"], s["b"]
+    tw = int(s.get("a_wins", 0) if team_name == a else s.get("b_wins", 0))
+    ow = int(s.get("b_wins", 0) if team_name == a else s.get("a_wins", 0))
+    diff = tw - ow
+    games_played = tw + ow
+    base = 50 + diff * 11 + (3 if games_played >= 4 else 0)
+    return int(max(12, min(88, base)))
+
+
+def _home_injury_hero_snippet(team_name, opponents):
+    teams = [team_name]
+    if isinstance(opponents, (list, tuple, set)):
+        teams.extend([t for t in opponents if t and t not in teams])
+    elif opponents and opponents not in teams:
+        teams.append(opponents)
+    parts = []
+    for tm in teams[:3]:
+        df, _ = get_injury_report(tm)
+        if df is None or df.empty:
+            continue
+        row = df.iloc[0]
+        parts.append(
+            f"<strong>{html.escape(tm)}</strong>: {html.escape(str(row.get('Player','?')))} "
+            f"<span style='opacity:.85'>({html.escape(str(row.get('Status','?')))})</span>"
         )
-    with c3:
-        logo_cols = st.columns(max(1, len(ctx.get("opponents", []))))
-        for i, op in enumerate(ctx.get("opponents", [])):
-            with logo_cols[i % len(logo_cols)]:
-                st.image(TEAM_LOGOS[op], width=82)
-                st.caption(op)
-    return ctx
+    if not parts:
+        return "Key injuries load from ESPN when available — see <strong>Key injuries</strong> below."
+    return " · ".join(parts)
+
+
+def _home_command_center_hero_html(team_name, hctx):
+    pal = live_hero_palette(team_name)
+    esc = html.escape
+    profile = TEAM_PROFILES[team_name]
+    s = hctx.get("series")
+    live = find_live_game_for_team(team_name)
+    prob = _home_series_win_probability(team_name, hctx, live)
+    headline = _home_storyline_headline(team_name, hctx)
+    opps = home_injury_opponents(team_name)
+    inj = _home_injury_hero_snippet(team_name, opps)
+    left_logo = TEAM_LOGOS.get(team_name, "")
+
+    if hctx.get("mode") == "waiting_cf":
+        parts = []
+        for op in (hctx.get("opponents") or [])[:2]:
+            u = TEAM_LOGOS.get(op, "")
+            if u:
+                parts.append(f"<img class='cmd-logo' src='{esc(u)}' alt=''/>")
+        if not parts:
+            parts.append(
+                "<span style='font-size:12px;color:#94a3b8;font-weight:700'>TBD</span>"
+            )
+        right_html = f"<div class='cmd-opp-logos'>{''.join(parts)}</div>"
+        matchup = (
+            f"{esc(team_name)} <span style='opacity:.55'>vs</span> "
+            f"{esc(hctx.get('opponent_display', 'TBD'))}"
+        )
+        score_txt = "Series TBD"
+        rnd = esc(hctx.get("round_label", "Playoffs"))
+    else:
+        opp = hctx.get("opponent") or profile.get("current_opponent") or "TBD"
+        ologo = TEAM_LOGOS.get(opp, "")
+        right_html = (
+            f"<div class='cmd-opp-logos'><img class='cmd-logo' src='{esc(ologo)}' alt=''/></div>"
+        )
+        matchup = (
+            f"({profile['seed']}) {esc(team_name)} <span style='opacity:.55'>vs</span> "
+            f"({TEAM_PROFILES.get(opp, {}).get('seed', '—')}) {esc(opp)}"
+        )
+        if s and not s.get("winner"):
+            a, b = s["a"], s["b"]
+            tw = int(s["a_wins"]) if team_name == a else int(s["b_wins"])
+            ow = int(s["b_wins"]) if team_name == a else int(s["a_wins"])
+            score_txt = f"{tw}–{ow}"
+        elif s and s.get("winner"):
+            a, b = s["a"], s["b"]
+            tw = int(s["a_wins"]) if team_name == a else int(s["b_wins"])
+            ow = int(s["b_wins"]) if team_name == a else int(s["a_wins"])
+            score_txt = f"Final {tw}–{ow}"
+        else:
+            score_txt = "—"
+        rnd = esc(
+            (s or {}).get("round")
+            or hctx.get("round_label")
+            or profile.get("round", "Playoffs")
+        )
+
+    next_line = ""
+    if live:
+        stt = live.get("gameStatusText", "") or ""
+        hs = live.get("homeTeam") or {}
+        aw = live.get("awayTeam") or {}
+        if not isinstance(hs, dict):
+            hs = {}
+        if not isinstance(aw, dict):
+            aw = {}
+        next_line = (
+            f"{esc(_live_team_full_name(aw.get('teamTricode', ''), aw))} @ "
+            f"{esc(_live_team_full_name(hs.get('teamTricode', ''), hs))} · "
+            f"{esc(stt[:48])}"
+        )
+    else:
+        next_line = (
+            f"Next: {esc(team_name)} vs "
+            f"{esc(hctx.get('opponent_display', profile.get('current_opponent') or 'opponent TBA'))} "
+            f"— tip data when NBA schedule loads."
+        )
+
+    return f"""
+<div class="cmd-shell" style="--cmd-bg0:{pal['bg0']};--cmd-bg1:{pal['bg1']};--cmd-accent:{pal['accent']};--cmd-accent-soft:{pal['accent_soft']};">
+<div class="cmd-hero">
+  <div class="cmd-hero-inner">
+    <div class="cmd-kicker">Playoff command center</div>
+    <div class="cmd-row">
+      <img class="cmd-logo" src="{esc(left_logo)}" alt=""/>
+      <div class="cmd-center">
+        <div class="cmd-round">{rnd}</div>
+        <div class="cmd-match">{matchup}</div>
+        <div class="cmd-scoreline">{score_txt}</div>
+        <div class="cmd-rail">
+          <span class="cmd-pill cmd-pill--accent">Win probability · {prob}%</span>
+          <span class="cmd-pill">Live pulse</span>
+        </div>
+      </div>
+      {right_html}
+    </div>
+    <div class="cmd-headline">{esc(headline)}</div>
+    <div class="cmd-inj">🩹 {inj}</div>
+    <div class="cmd-next" style="margin-top:14px">
+      <div class="cmd-next-title">Next game</div>
+      <div style="font-size:14px;font-weight:700;color:#e2e8f0">{next_line}</div>
+    </div>
+  </div>
+</div>
+</div>
+"""
+
+def render_next_game_actions(team_name):
+    """Compact live CTA row (replaces bulky countdown header)."""
+    live = find_live_game_for_team(team_name)
+    if live:
+        stt = live.get("gameStatusText", "") or ""
+        if "Final" not in stt and ("Q" in stt or ":" in stt or "Halftime" in stt):
+            if st.button("Open Live Game Center", key="cmd_open_live"):
+                st.session_state["page_override"] = "🏀 Live Game Center"
+                st.rerun()
+
+
+def render_playoff_command_center(team_name):
+    _inject_home_command_center_css()
+    hctx = resolve_home_matchup_context(team_name)
+    st.markdown(_home_command_center_hero_html(team_name, hctx), unsafe_allow_html=True)
+    render_next_game_actions(team_name)
+
+    st.markdown('<div class="cmd-sec">1 · Current series snapshot</div>', unsafe_allow_html=True)
+    snap_cols = st.columns(4)
+    status_txt = series_status_text(team_name)
+    adv_like = hctx.get("advanced") or hctx.get("bracket_series")
+    profile = TEAM_PROFILES[team_name]
+    snap_cols[0].metric("Playoff status", "Advanced" if adv_like else profile.get("status", "—"))
+    snap_cols[1].metric("Seed", profile.get("seed", "—"))
+    snap_cols[2].metric("Round", (hctx.get("series") or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"))
+    snap_cols[3].metric("Outlook", "Live edge" if find_live_game_for_team(team_name) else "Tracking")
+    st.markdown(
+        f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
+        unsafe_allow_html=True,
+    )
+    s = hctx.get("series")
+    if s and s.get("games"):
+        st.dataframe(pd.DataFrame(s["games"]), use_container_width=True, height=min(220, 38 + 28 * len(s["games"])))
+    elif hctx.get("advanced"):
+        st.info("Conference Finals matchup forms when both semis finish — scores land here next.")
+    elif s and s.get("round") in ("Conference Finals", "NBA Finals"):
+        st.caption("Conference Finals / Finals shell is set — game rows populate as games complete.")
+
+    st.markdown('<div class="cmd-sec">2 · Key injuries</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        render_injury_report(team_name, home_injury_opponents(team_name), show_page_header=False)
+
+    st.markdown('<div class="cmd-sec">3 · Top performers (rotation anchors)</div>', unsafe_allow_html=True)
+    starters = profile.get("starters", [])[:3]
+    pc = st.columns(len(starters) or 1)
+    for i, name in enumerate(starters or ["Rotation"]):
+        with pc[i]:
+            with st.container(border=True):
+                st.markdown(f"**{name}**")
+                try:
+                    st.image(headshot(name), width=76)
+                except Exception:
+                    pass
+                if name != "Rotation":
+                    sa = season_averages(name)
+                    st.metric("PTS", sa.get("PTS", "—"))
+                    st.caption(f"REB {sa.get('REB','—')} · AST {sa.get('AST','—')}")
+
+    st.markdown('<div class="cmd-sec">4 · Momentum & trends</div>', unsafe_allow_html=True)
+    hist = historic_series_context(team_name)
+    if not hist.empty:
+        st.markdown(f"<div style='font-size:13px;color:#cbd5e1;line-height:1.45'>{hist.iloc[0].get('Historical Context','')}</div>", unsafe_allow_html=True)
+    m1, m2, m3 = st.columns(3)
+    _, s2 = series_for_team(team_name)
+    if s2:
+        a, b = s2["a"], s2["b"]
+        tw = int(s2["a_wins"]) if team_name == a else int(s2["b_wins"])
+        ow = int(s2["b_wins"]) if team_name == a else int(s2["a_wins"])
+        m1.metric("Series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
+        m2.metric("Games played", tw + ow)
+        m3.metric("Data source", (s2.get("source") or "—")[:18])
+    else:
+        m1.metric("Series edge", "—")
+        m2.metric("Games played", "—")
+        m3.metric("Data", "Awaiting")
+
+    st.markdown('<div class="cmd-sec">5 · Legacy impact</div>', unsafe_allow_html=True)
+    anchor = profile.get("starters", [""])[0]
+    if anchor:
+        logs = playoff_game_logs_for_player(anchor)
+        sm = summarize_playoff_logs(logs)
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"{anchor.split()[-1]} PTS", sm.get("PTS", 0))
+        c2.metric("REB", sm.get("REB", 0))
+        c3.metric("AST", sm.get("AST", 0))
+    st.caption("Full what-if paths: **Legacy Tracker** page.")
+
+    st.markdown('<div class="cmd-sec">6 · Upcoming games</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        live = find_live_game_for_team(team_name)
+        if live:
+            home = live.get("homeTeam", {}) or {}
+            away = live.get("awayTeam", {}) or {}
+            st.markdown(
+                f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
+            )
+        else:
+            opp = profile.get("current_opponent")
+            st.info(f"{team_name} vs {opp or 'opponent TBA'} — live tip and countdown appear when NBA feed lists the game.")
+
+    st.markdown('<div class="cmd-sec">7 · Biggest playoff storylines</div>', unsafe_allow_html=True)
+    story_cols = st.columns(3)
+    stories = [
+        ("Pressure", f"Every close game shifts how {team_name.split()[-1]} is judged in crunch time."),
+        ("Health", "Availability swings matchups more than raw talent in a seven-game series."),
+        ("Margin for error", "One shooting slump or turnover stretch can flip home-court logic fast."),
+    ]
+    for col, (t, b) in zip(story_cols, stories):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"**{t}**")
+                st.caption(b)
+
+    st.markdown('<div class="cmd-sec">8 · Previous game MVP</div>', unsafe_allow_html=True)
+    _, s3 = series_for_team(team_name)
+    if s3 and s3.get("games"):
+        last = s3["games"][-1]
+        opp = s3["b"] if team_name == s3["a"] else s3["a"]
+        gn = last.get("Game") if isinstance(last.get("Game"), int) else str(last.get("Game", "Game")).replace("Game ", "")
+        try:
+            gn_i = int(str(gn).replace("Game ", ""))
+        except Exception:
+            gn_i = len(s3["games"])
+        mvp, why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
+        st.success(f"**{mvp}** — _{why}_")
+        st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
+    else:
+        st.caption("MVP tag unlocks when the most recent game row is available.")
+
+    st.markdown('<div class="cmd-sec">9 · Team outlook</div>', unsafe_allow_html=True)
+    render_team_outlook(team_name)
+
+    st.caption(f"Auto-updated bracket series + API where available · Refreshed {datetime.now().strftime('%b %d %I:%M %p')}")
 
 def home_injury_opponents(team_name):
     ctx = next_round_context_for_team(team_name)
@@ -2636,31 +3019,7 @@ page=PAGES[page_label]
 # Pages
 # ==========================================================
 if page == "Home Dashboard":
-    home_ctx = render_home_matchup_header(favorite_team)
-    c1,c2,c3=st.columns(3)
-    adv_like = home_ctx and (home_ctx.get("advanced") or home_ctx.get("bracket_series"))
-    c1.metric("Status", "Advanced" if adv_like else profile["status"])
-    home_status = home_ctx["status_text"] if home_ctx and home_ctx.get("advanced") else series_status_text(favorite_team)
-    c2.markdown(f"<div class='big-status'>{home_status}</div>", unsafe_allow_html=True)
-    c3.metric("Seed", profile["seed"])
-    render_game_countdown(favorite_team)
-    render_injury_report(favorite_team, home_injury_opponents(favorite_team))
-    _, s=series_for_team(favorite_team)
-    if s and s.get("games"):
-        st.caption(f"Auto-updated from completed games/fallback data · Last app refresh: {datetime.now().strftime('%b %d, %Y %I:%M %p')}")
-        st.subheader("Current Series Scores")
-        st.dataframe(pd.DataFrame(s["games"]), use_container_width=True)
-        st.subheader("Previous Game Top Plays")
-        st.dataframe(previous_game_top_plays(favorite_team), use_container_width=True)
-        st.subheader("Historical Series Tracking")
-        st.dataframe(historic_series_context(favorite_team), use_container_width=True)
-    elif s and s.get("round") in ("Conference Finals", "NBA Finals"):
-        st.caption(f"{s.get('round')} is locked in — scores appear here as games complete (NBA API or demo backup).")
-    elif home_ctx and home_ctx.get("advanced"):
-        st.info(
-            "Second-round series clinched on the bracket. Conference Finals scores will appear once the other conference semi-final produces a winner and both winners meet in the next round."
-        )
-    render_team_outlook(favorite_team)
+    render_playoff_command_center(favorite_team)
 
 elif page == "Playoff Bracket":
     render_bracket()
