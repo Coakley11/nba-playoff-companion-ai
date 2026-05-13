@@ -1492,6 +1492,55 @@ def home_injury_opponents(team_name):
         return [opp]
     return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
 
+def _first_round_synthetic_games(team_a, team_b):
+    """Static first-round game rows for bracket cards when API has not attached games."""
+    rows = FIRST_ROUND_GAME_SCORES.get(team_a) or FIRST_ROUND_GAME_SCORES.get(team_b) or []
+    out = []
+    for r in rows:
+        gn = r.get("Game", len(out) + 1)
+        if isinstance(gn, int):
+            gn = f"Game {gn}"
+        out.append({
+            "Game": str(gn),
+            "Date": str(r.get("Date", "")),
+            "Score": str(r.get("Score", "")),
+            "Winner": str(r.get("Winner", "")),
+            "Matchup": str(r.get("Matchup", "")),
+        })
+    return out
+
+
+def _bracket_series_for_display(s, round_display_name):
+    """Shallow copy of series shell with games filled from static first-round data when needed."""
+    view = dict(s)
+    games = view.get("games") or []
+    if not games and round_display_name == "First Round":
+        syn = _first_round_synthetic_games(view.get("a"), view.get("b"))
+        if syn:
+            view["games"] = syn
+    return view
+
+
+def _semifinal_hub_summary(sr_list):
+    """Human-readable East/West semifinal state for the hub placeholder."""
+    if not sr_list:
+        return "Semifinal matchups loading…"
+    bits = []
+    for semi in sr_list:
+        a, b = semi.get("a"), semi.get("b")
+        aw = int(semi.get("a_wins", 0) or 0)
+        bw = int(semi.get("b_wins", 0) or 0)
+        w = semi.get("winner")
+        if w:
+            bits.append(f"<strong>{html.escape(str(w))}</strong> <span style='opacity:.85'>(clinched)</span>")
+        else:
+            bits.append(
+                f"{html.escape(str(a))} vs {html.escape(str(b))} "
+                f"<span style='opacity:.85'>({aw}–{bw})</span>"
+            )
+    return " · ".join(bits)
+
+
 def bracket_team_accent(team):
     """Subtle stripe color for bracket team rows (presentation only)."""
     return {
@@ -1548,12 +1597,13 @@ def _bracket_game_log_items(s):
     return "".join(rows) if rows else "<li style='opacity:.7'>No game rows yet</li>"
 
 
-def bracket_series_card(s, round_display_name):
+def bracket_series_card(s, round_display_name, show_round_chip=False):
     """Rich HTML matchup card for the Playoff Bracket page (presentation only)."""
-    a, b = s["a"], s["b"]
-    aw = int(s.get("a_wins", 0) or 0)
-    bw = int(s.get("b_wins", 0) or 0)
-    winner = s.get("winner")
+    s_disp = _bracket_series_for_display(s, round_display_name)
+    a, b = s_disp["a"], s_disp["b"]
+    aw = int(s_disp.get("a_wins", 0) or 0)
+    bw = int(s_disp.get("b_wins", 0) or 0)
+    winner = s_disp.get("winner")
     active = not winner
     seed_a = TEAM_PROFILES.get(a, {}).get("seed", "—")
     seed_b = TEAM_PROFILES.get(b, {}).get("seed", "—")
@@ -1592,23 +1642,29 @@ def bracket_series_card(s, round_display_name):
         else '<span class="bmk-pill bmk-pill--live">In progress</span>'
     )
     card_mod = "bmk-card--active" if active else "bmk-card--complete"
+    top_extra = " bmk-card-top--compact" if not show_round_chip else ""
+    chip_html = (
+        f'<span class="bmk-chip-round">{html.escape(round_display_name)}</span>'
+        if show_round_chip
+        else ""
+    )
 
     details = f"""
     <details class="bmk-details">
       <summary>Game log &amp; details</summary>
-      <ul class="bmk-log">{_bracket_game_log_items(s)}</ul>
+      <ul class="bmk-log">{_bracket_game_log_items(s_disp)}</ul>
     </details>"""
 
     return f"""
     <div class="bmk-card {card_mod}">
-      <div class="bmk-card-top">
-        <span class="bmk-chip-round">{html.escape(round_display_name)}</span>
+      <div class="bmk-card-top{top_extra}">
+        {chip_html}
         {complete_badge}
         <span class="bmk-series-score">{aw}–{bw}</span>
       </div>
       <div class="bmk-rows">{row_a}{row_b}</div>
-      <div class="bmk-foot">{_bracket_latest_game_html(s)}</div>
-      <div class="bmk-foot bmk-foot--next">{_bracket_next_game_html(s)}</div>
+      <div class="bmk-foot">{_bracket_latest_game_html(s_disp)}</div>
+      <div class="bmk-foot bmk-foot--next">{_bracket_next_game_html(s_disp)}</div>
       {details}
     </div>"""
 
@@ -1765,6 +1821,13 @@ def render_bracket():
   gap: 8px;
   margin-bottom: 12px;
 }
+.bmk-card-top--compact {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.bmk-card-top--compact .bmk-series-score {
+  margin-left: auto;
+}
 .bmk-chip-round {
   font-size: 11px;
   font-weight: 800;
@@ -1886,19 +1949,12 @@ def render_bracket():
     east_conf = infer_next_round_series("Conference Finals", "East")
     west_conf = infer_next_round_series("Conference Finals", "West")
     finals = infer_next_round_series("NBA Finals")
-    east_cf_labels = [s.get("winner") or "TBD" for s in east_sr]
-    west_cf_labels = [s.get("winner") or "TBD" for s in west_sr]
-    while len(east_cf_labels) < 2:
-        east_cf_labels.append("TBD")
-    while len(west_cf_labels) < 2:
-        west_cf_labels.append("TBD")
 
     if east_conf and len(east_conf) == 1:
         east_cf_block = bracket_series_card(list(east_conf.values())[0], "Conference Finals")
     else:
         east_cf_block = (
-            f"<div class='bmk-placeholder'><strong>East</strong> semifinal winners → "
-            f"{html.escape(str(east_cf_labels[0]))} / {html.escape(str(east_cf_labels[1]))}"
+            f"<div class='bmk-placeholder'><strong>East</strong> semifinals · {_semifinal_hub_summary(east_sr)}"
             f"<br/><span>Conference Finals card unlocks when both East semis have a winner.</span></div>"
         )
 
@@ -1906,8 +1962,7 @@ def render_bracket():
         west_cf_block = bracket_series_card(list(west_conf.values())[0], "Conference Finals")
     else:
         west_cf_block = (
-            f"<div class='bmk-placeholder'><strong>West</strong> semifinal winners → "
-            f"{html.escape(str(west_cf_labels[0]))} / {html.escape(str(west_cf_labels[1]))}"
+            f"<div class='bmk-placeholder'><strong>West</strong> semifinals · {_semifinal_hub_summary(west_sr)}"
             f"<br/><span>Conference Finals card unlocks when both West semis have a winner.</span></div>"
         )
 
