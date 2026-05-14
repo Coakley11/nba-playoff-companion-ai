@@ -8,6 +8,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, time, timezone
+import time as pytime
+import concurrent.futures
 
 try:
     from zoneinfo import ZoneInfo
@@ -1649,7 +1651,7 @@ def season_averages(name):
     if not pid or not NBA_STATS_AVAILABLE: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
     try:
         try:
-            df = playercareerstats.PlayerCareerStats(player_id=pid, timeout=6).get_data_frames()[0]
+            df = playercareerstats.PlayerCareerStats(player_id=pid, timeout=5).get_data_frames()[0]
         except TypeError:
             df = playercareerstats.PlayerCareerStats(player_id=pid).get_data_frames()[0]
         if df.empty: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
@@ -1681,7 +1683,7 @@ def fetch_espn_injury_report(team_name):
         "Accept-Language": "en-US,en;q=0.9",
     }
     try:
-        html = requests.get(url, headers=headers, timeout=4).text
+        html = requests.get(url, headers=headers, timeout=3).text
     except Exception as e:
         return pd.DataFrame(), f"ESPN request failed: {e}"
 
@@ -1763,7 +1765,7 @@ def get_injury_report(team_name):
     return get_injury_report_cached(str(team_name))
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def get_injury_report_cached(team_name: str):
     """Injury rows + fallback — cached so Home + hero strip do not hammer ESPN every rerun."""
     df, source = fetch_espn_injury_report(team_name)
@@ -1835,7 +1837,7 @@ def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
             player_id=pid,
             season=season,
             season_type_all_star="Playoffs",
-            timeout=25,
+            timeout=10,
         ).get_data_frames()[0]
         return df if df is not None else pd.DataFrame()
     except Exception:
@@ -3440,6 +3442,7 @@ def sibling_second_round_key(current_key, second_map):
     return others[0] if len(others) == 1 else None
 
 
+@st.cache_data(ttl=75)
 def next_round_context_for_team(team_name):
     """Return next-round display context when the team's second-round series is complete
     but conference finals are not yet formed (waiting on the other conference semi).
@@ -3494,6 +3497,120 @@ def next_round_context_for_team(team_name):
         "completed_series": current_series,
         "paired_series": paired,
     }
+
+
+def _build_local_series_shell(team_name):
+    """Playoff series dict from bundled FIRST_ROUND_* / SECOND_ROUND_* only (no NBA API)."""
+    for _key, s in FIRST_ROUND_SERIES.items():
+        if team_name not in (s.get("a"), s.get("b")):
+            continue
+        a, b = s["a"], s["b"]
+        games_raw = FIRST_ROUND_GAME_SCORES.get(team_name, [])
+        games = []
+        for idx, r in enumerate(games_raw, start=1):
+            gn = r.get("Game", idx)
+            if isinstance(gn, int):
+                gn = f"Game {gn}"
+            games.append({
+                "Game": str(gn),
+                "Date": str(r.get("Date", "")),
+                "Score": str(r.get("Score", "")),
+                "Winner": str(r.get("Winner", "")),
+                "Matchup": str(r.get("Matchup", "")),
+            })
+        return {
+            "conf": s.get("conf", ""),
+            "round": "First Round",
+            "a": a,
+            "b": b,
+            "a_wins": int(s.get("a_wins", 0)),
+            "b_wins": int(s.get("b_wins", 0)),
+            "winner": s.get("winner"),
+            "games": games,
+            "source": "Local FIRST_ROUND_SERIES",
+        }
+
+    for key, shell in SECOND_ROUND_SERIES_TEMPLATE.items():
+        if team_name not in (shell.get("a"), shell.get("b")):
+            continue
+        a, b = shell["a"], shell["b"]
+        demo = SECOND_ROUND_DEMO_BACKUP.get(key, {})
+        raw = [dict(g) for g in demo.get("games", [])]
+        aw = sum(1 for g in raw if g.get("Winner") == a)
+        bw = sum(1 for g in raw if g.get("Winner") == b)
+        winner = a if aw >= 4 else (b if bw >= 4 else None)
+        return {
+            "conf": shell.get("conf", ""),
+            "round": shell.get("round", "Second Round"),
+            "a": a,
+            "b": b,
+            "a_wins": aw,
+            "b_wins": bw,
+            "winner": winner,
+            "games": raw,
+            "source": "Bundled SECOND_ROUND_DEMO_BACKUP" if raw else "Second-round shell (no bundled games)",
+        }
+    return None
+
+
+def get_fast_series_snapshot(team_name):
+    """Lightweight series snapshot: TEAM_PROFILES + local/bundled series packs only (no network)."""
+    profile = TEAM_PROFILES.get(team_name) or {}
+    out = {
+        "team_name": team_name,
+        "opponent": profile.get("current_opponent") or profile.get("first_round_opponent"),
+        "series_score": None,
+        "round": profile.get("round", "Playoffs"),
+        "latest_game": None,
+        "source": "TEAM_PROFILES (local)",
+    }
+    s = _build_local_series_shell(team_name)
+    if not s:
+        out["series_score"] = "—"
+        return out
+    a, b = s["a"], s["b"]
+    tw = int(s["a_wins"]) if team_name == a else int(s["b_wins"])
+    ow = int(s["b_wins"]) if team_name == a else int(s["a_wins"])
+    out["series_score"] = f"{tw}–{ow}"
+    out["opponent"] = b if team_name == a else a
+    out["round"] = s.get("round") or out["round"]
+    gl = s.get("games") or []
+    out["latest_game"] = gl[-1] if gl else None
+    out["source"] = str(s.get("source") or "Local series pack")
+    return out
+
+
+def resolve_home_matchup_context_fast(team_name):
+    """Home hub context without ``series_for_team`` / bracket builders (instant)."""
+    profile = TEAM_PROFILES[team_name]
+    s = _build_local_series_shell(team_name)
+    snap = get_fast_series_snapshot(team_name)
+    if s and s.get("round") in ("Conference Finals", "NBA Finals"):
+        opp = s["b"] if team_name == s["a"] else s["a"]
+        return {
+            "mode": "bracket_series",
+            "series": s,
+            "round_label": s.get("round"),
+            "opponent": opp,
+            "opponent_display": opp,
+            "advanced": False,
+            "bracket_series": True,
+            "ctx": None,
+            "fast_snapshot": snap,
+        }
+    opp = snap.get("opponent") or profile.get("current_opponent")
+    return {
+        "mode": "standard",
+        "series": s,
+        "round_label": snap.get("round") or profile.get("round", "Playoffs"),
+        "opponent": opp,
+        "opponent_display": opp,
+        "advanced": False,
+        "bracket_series": bool(s and s.get("round") == "Second Round"),
+        "ctx": None,
+        "fast_snapshot": snap,
+    }
+
 
 def resolve_home_matchup_context_impl(team_name):
     """Resolve current matchup / round for the Home Dashboard (no Streamlit output)."""
@@ -3690,13 +3807,17 @@ def _dashboard_section_order(
     return ["snapshot", "injuries", "stars", "momentum", "legacy", "next_game", "stories", "last_game", "outlook"]
 
 
-def build_dashboard_playoff_context(team_name, hctx, series_board=None):
+def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_live_fetch=False):
     profile = TEAM_PROFILES[team_name]
     lens = team_dashboard_lens(team_name)
-    fb = featured_broadcast_state(team_name)
-    live = None
-    if isinstance(fb, dict) and fb.get("game"):
-        live = fb["game"]
+    if skip_live_fetch:
+        fb = None
+        live = None
+    else:
+        fb = featured_broadcast_state(team_name)
+        live = None
+        if isinstance(fb, dict) and fb.get("game"):
+            live = fb["game"]
     s = hctx.get("series") or series_board
     mode = hctx.get("mode")
     tw = ow = 0
@@ -4047,24 +4168,38 @@ def _home_series_win_probability(team_name, hctx, live):
     return int(max(12, min(88, base)))
 
 
-def _home_injury_hero_snippet(team_name):
-    """One-team snippet for hero load — opponent rows load in the injuries expander."""
-    df, _ = get_injury_report(team_name)
-    if df is None or df.empty:
+def _home_injury_hero_snippet(team_name, use_live_feed=True):
+    """Hero injury line. Live ESPN merge only when ``use_live_feed`` (after user opts in)."""
+    if use_live_feed:
+        df, _ = get_injury_report(team_name)
+        if df is None or df.empty:
+            return (
+                f"Injury feed for {html.escape(fan_nick(team_name))} loads when available — "
+                f"use <strong>Load live API updates</strong> or open <strong>Injury Report</strong> below."
+            )
+        row = df.iloc[0]
         return (
-            f"Injury feed for {html.escape(fan_nick(team_name))} loads when available — "
-            f"open <strong>Key injuries & full availability</strong> below for the full board."
+            f"<strong>{html.escape(team_name)}</strong>: {html.escape(str(row.get('Player', '?')))} "
+            f"<span style='opacity:.85'>({html.escape(str(row.get('Status', '?')))})</span>"
         )
-    row = df.iloc[0]
+    fb_list = FALLBACK_INJURY_REPORT.get(team_name, []) or []
+    if not fb_list:
+        return (
+            "Bundled injury rows not loaded for this team — "
+            "<strong>Load live API updates</strong> or open <strong>Injury Report</strong> for ESPN data."
+        )
+    row = fb_list[0]
     return (
-        f"<strong>{html.escape(team_name)}</strong>: {html.escape(str(row.get('Player', '?')))} "
+        f"<strong>{html.escape(team_name)}</strong> (bundled): {html.escape(str(row.get('Player', '?')))} "
         f"<span style='opacity:.85'>({html.escape(str(row.get('Status', '?')))})</span>"
     )
 
 
-def _home_command_center_hero_html(team_name, hctx, pctx=None):
+def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=True):
     if pctx is None:
-        pctx = build_dashboard_playoff_context(team_name, hctx, None)
+        pctx = build_dashboard_playoff_context(
+            team_name, hctx, None, skip_live_fetch=not injury_use_live
+        )
     pal = live_hero_palette(team_name)
     esc = html.escape
     profile = TEAM_PROFILES[team_name]
@@ -4075,7 +4210,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None):
     headline = _home_storyline_headline(team_name, hctx, pctx)
     lens = pctx.get("lens") or team_dashboard_lens(team_name)
     kicker_dom = f"{esc(lens.get('hero_kicker', 'Playoff command center'))} · {esc(fan_nick(team_name))}"
-    inj = _home_injury_hero_snippet(team_name)
+    inj = _home_injury_hero_snippet(team_name, use_live_feed=injury_use_live)
     left_logo = TEAM_LOGOS.get(team_name, "")
 
     if hctx.get("mode") == "waiting_cf":
@@ -4195,9 +4330,12 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None):
 </div>
 """
 
-def render_home_live_hub_strip(team_name):
-    """Home strip when a merged playoff-window game exists (live / soon / final). No extra hub detection on Home."""
-    fb = featured_broadcast_state(team_name)
+def render_home_live_hub_strip(team_name, fb_prefetched=None):
+    """Home strip when a merged playoff-window game exists (live / soon / final).
+
+    Pass ``fb_prefetched`` from ``pctx[\"fb\"]`` on Home to avoid a second scoreboard merge.
+    """
+    fb = fb_prefetched if fb_prefetched is not None else featured_broadcast_state(team_name)
     if fb and fb.get("game"):
         g = fb["game"]
         phase = fb["phase"]
@@ -4258,16 +4396,146 @@ def render_home_live_hub_strip(team_name):
     # Live Game Center still runs full detection when the user opens it.
 
 
+HOME_DASH_LIVE_UPDATES = "home_dash_live_updates"
+HOME_DASH_LOAD_INJ = "home_dash_load_inj"
+HOME_DASH_LOAD_STARS = "home_dash_load_stars"
+HOME_DASH_LOAD_LEGACY = "home_dash_load_legacy"
+
+
+def _home_dashboard_fast_context(team_name):
+    """Instant Home context (local series shell + no live scoreboard fetch)."""
+    hctx = resolve_home_matchup_context_fast(team_name)
+    s_active = _build_local_series_shell(team_name)
+    pctx = build_dashboard_playoff_context(team_name, hctx, s_active, skip_live_fetch=True)
+    return hctx, s_active, pctx
+
+
+def _home_dashboard_live_data_bundle(team_name):
+    """Network-heavy context for Home — resolve matchup + series in parallel, then merge scoreboard."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        fh = ex.submit(resolve_home_matchup_context, team_name)
+        fs = ex.submit(lambda: series_for_team(team_name))
+        hctx = fh.result(timeout=3.5)
+        _k, s_active = fs.result(timeout=3.5)
+    pctx = build_dashboard_playoff_context(team_name, hctx, s_active, skip_live_fetch=False)
+    return hctx, s_active, pctx
+
+
+def _home_dashboard_perf_footer(t0, sections, fast_mode, api_calls, skipped_note=""):
+    elapsed_ms = (pytime.perf_counter() - t0) * 1000
+    sec_txt = " → ".join(sections) if sections else "(none)"
+    st.markdown(
+        "<div style='margin-top:16px;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,0.35);"
+        "background:rgba(15,23,42,0.45);font-size:13px;color:#e2e8f0;line-height:1.5'>"
+        f"<div style='font-weight:800;margin-bottom:6px;color:#94a3b8;text-transform:uppercase;font-size:11px;letter-spacing:0.12em'>"
+        f"Performance debug</div>"
+        f"<div><strong>Page render time</strong>: {elapsed_ms:.0f} ms</div>"
+        f"<div><strong>Fast mode</strong>: {'yes (no automatic NBA/ESPN fan-out)' if fast_mode else 'no (live API bundle)'}</div>"
+        f"<div><strong>API-style calls (this run)</strong>: {html.escape(str(api_calls))}</div>"
+        f"<div><strong>Sections touched</strong>: {html.escape(sec_txt)}</div>"
+        f"{skipped_note}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_playoff_command_center(team_name):
+    t0 = pytime.perf_counter()
+    sections = []
+    st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
+    live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
+
+    st.markdown("#### Home Dashboard")
+    b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
+    with b1:
+        if st.button("Load live API updates", key="home_btn_live_apis", disabled=live_on, help="Scoreboard merge, ESPN injuries, and full bracket APIs"):
+            st.session_state[HOME_DASH_LIVE_UPDATES] = True
+            st.rerun()
+    with b2:
+        if st.button("Instant dashboard (fast mode)", key="home_btn_fast_mode", disabled=not live_on):
+            st.session_state[HOME_DASH_LIVE_UPDATES] = False
+            st.session_state.pop(HOME_DASH_LOAD_INJ, None)
+            st.session_state.pop(HOME_DASH_LOAD_STARS, None)
+            st.session_state.pop(HOME_DASH_LOAD_LEGACY, None)
+            st.rerun()
+    with b3:
+        st.caption("⚡ Fast" if not live_on else "📡 Live")
+
     _inject_home_command_center_css()
-    hctx = resolve_home_matchup_context(team_name)
-    _, s_active = series_for_team(team_name)
-    pctx = build_dashboard_playoff_context(team_name, hctx, s_active)
+    sections.append("inject_css")
+
+    api_calls = 0
+    skip_note = ""
+
+    fast_hctx, fast_s, fast_p = _home_dashboard_fast_context(team_name)
+    hero_slot = st.empty()
+    emph_slot = st.empty()
+    hero_slot.markdown(
+        _home_command_center_hero_html(team_name, fast_hctx, fast_p, injury_use_live=False),
+        unsafe_allow_html=True,
+    )
+    emph_slot.markdown(_dashboard_emphasis_html(team_name, fast_p), unsafe_allow_html=True)
+    sections.append("hero_first_paint")
+
+    hctx, s_active, pctx = fast_hctx, fast_s, fast_p
+    injury_live = False
+
+    if live_on:
+        sections.append("live_bundle_start")
+        bundle = None
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            fut = ex.submit(_home_dashboard_live_data_bundle, team_name)
+            bundle = fut.result(timeout=8.0)
+        except concurrent.futures.TimeoutError:
+            bundle = None
+            skip_note = (
+                "<div style='margin-top:8px;color:#fca5a5'><strong>Live data skipped to keep dashboard fast.</strong> "
+                "The live bundle did not finish within 8 seconds — showing cached/local hero above.</div>"
+            )
+        except Exception as exc:
+            bundle = None
+            skip_note = (
+                "<div style='margin-top:8px;color:#fca5a5'><strong>Live data skipped to keep dashboard fast.</strong> "
+                f"{html.escape(repr(exc))}</div>"
+            )
+        finally:
+            try:
+                ex.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                ex.shutdown(wait=False)
+
+        if bundle is None:
+            st.session_state[HOME_DASH_LIVE_UPDATES] = False
+            live_on = False
+            injury_live = False
+            sections.append("live_bundle_failed")
+        else:
+            hctx, s_active, pctx = bundle
+            api_calls = 1
+            injury_live = True
+            hero_slot.markdown(
+                _home_command_center_hero_html(team_name, hctx, pctx, injury_use_live=True),
+                unsafe_allow_html=True,
+            )
+            emph_slot.markdown(_dashboard_emphasis_html(team_name, pctx), unsafe_allow_html=True)
+            sections.append("hero_live_refresh")
+            sections.append("live_bundle_ok")
+    else:
+        sections.append("fast_path")
+
     profile = pctx["profile"]
 
-    render_home_live_hub_strip(team_name)
-    st.markdown(_home_command_center_hero_html(team_name, hctx, pctx), unsafe_allow_html=True)
-    st.markdown(_dashboard_emphasis_html(team_name, pctx), unsafe_allow_html=True)
+    if live_on and isinstance(pctx.get("fb"), dict) and pctx["fb"].get("game"):
+        render_home_live_hub_strip(team_name, pctx.get("fb"))
+        sections.append("live_strip")
+    elif live_on:
+        sections.append("live_strip_no_row")
+    else:
+        sections.append("live_strip_skipped_fast")
+
+    sections.append("hero")
+    sections.append("emphasis_strip")
 
     st.markdown('<div class="cmd-sec">1 · Series board</div>', unsafe_allow_html=True)
     snap_cols = st.columns(4)
@@ -4290,7 +4558,7 @@ def render_playoff_command_center(team_name):
     elif fb and fb.get("game") and fb.get("phase") == "postgame":
         edge = "Final logged — wrap in hub"
     else:
-        edge = "Tracking next tip"
+        edge = "Local / static (no live scoreboard merge)" if not live_on else "Tracking next tip"
     snap_cols[3].metric("Tonight's edge", edge)
     st.markdown(
         f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
@@ -4307,6 +4575,7 @@ def render_playoff_command_center(team_name):
         st.info("Through the second round — Conference Finals pairings populate once both semis finish.")
     elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
+    sections.append("series_board")
 
     st.markdown('<div class="cmd-sec">2 · Runway to tip</div>', unsafe_allow_html=True)
     with st.container(border=True):
@@ -4320,25 +4589,51 @@ def render_playoff_command_center(team_name):
         else:
             opp = profile.get("current_opponent")
             st.info(
-                f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — live tip and countdown post when the NBA schedule feed lists the game."
+                f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
+                + (
+                    "Live scoreboard row appears after **Load live API updates**."
+                    if not live_on
+                    else "Live tip and countdown post when the NBA schedule feed lists the game."
+                )
             )
+    sections.append("runway")
 
     st.markdown('<div class="cmd-sec">3 · Quick outlook</div>', unsafe_allow_html=True)
     render_team_outlook(team_name, compact_home=True, series_obj=s_active)
+    sections.append("outlook_compact")
 
-    st.markdown('<div class="cmd-sec">4 · Injury snapshot</div>', unsafe_allow_html=True)
-    df_inj, _ = get_injury_report(team_name)
-    if df_inj is not None and not df_inj.empty:
-        st.dataframe(df_inj.head(5), use_container_width=True, hide_index=True)
-        st.caption("Top rows for your team — opponents and full notes load in the expander.")
+    st.markdown('<div class="cmd-sec">4 · Series snapshot (instant)</div>', unsafe_allow_html=True)
+    fsnap = hctx.get("fast_snapshot") or get_fast_series_snapshot(team_name)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Opponent", fsnap.get("opponent") or "—")
+    c2.metric("Series (local)", fsnap.get("series_score") or "—")
+    c3.metric("Source", (fsnap.get("source") or "—")[:28])
+    lg = fsnap.get("latest_game")
+    if isinstance(lg, dict) and lg:
+        st.caption(
+            f"Latest logged row (local pack): {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
+        )
+    sections.append("fast_series_snapshot")
+
+    st.markdown('<div class="cmd-sec">5 · Injury snapshot</div>', unsafe_allow_html=True)
+    if injury_live:
+        df_inj, _ = get_injury_report(team_name)
+        if df_inj is not None and not df_inj.empty:
+            st.dataframe(df_inj.head(5), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No injury rows in the merged feed yet.")
+        sections.append("injury_snapshot_live")
     else:
-        st.caption("No injury rows in the merged feed yet — open **Key injuries** for fallback boards.")
+        st.info(
+            "ESPN injury scrape is **off** in fast mode. Open **Injury Report** below and tap **Fetch** to load."
+        )
+        sections.append("injury_snapshot_fast_placeholder")
 
     def sec_injuries():
         with st.container(border=True):
             render_injury_report(
                 team_name,
-                home_injury_opponents(team_name),
+                home_injury_opponents_from_home_ctx(team_name, hctx, s_active),
                 show_page_header=False,
                 fan_perspective_team=team_name,
                 neutral_framing=True,
@@ -4425,24 +4720,83 @@ def render_playoff_command_center(team_name):
     def sec_outlook_full():
         render_team_outlook(team_name, compact_home=False, series_obj=s_active)
 
-    with st.expander("Key injuries & full availability (all teams in lens)", expanded=False):
-        sec_injuries()
-    with st.expander("Star workload & season touches (loads NBA stats)", expanded=False):
-        sec_stars()
-    with st.expander("Series leverage & historical read", expanded=False):
+    with st.expander("Injury Report (ESPN / merges)", expanded=False):
+        if st.button("Fetch injury report", key=f"home_fetch_inj_{team_name}"):
+            st.session_state[HOME_DASH_LOAD_INJ] = True
+            st.rerun()
+        if st.session_state.get(HOME_DASH_LOAD_INJ):
+            sec_injuries()
+        else:
+            st.caption("Loads ESPN scrape and merged tables — only after you click **Fetch**.")
+
+    with st.expander("Top Performers (NBA player stats)", expanded=False):
+        if st.button("Load player stats & headshots", key=f"home_fetch_stars_{team_name}"):
+            st.session_state[HOME_DASH_LOAD_STARS] = True
+            st.rerun()
+        if st.session_state.get(HOME_DASH_LOAD_STARS):
+            sec_stars()
+        else:
+            st.caption("Uses career stats + headshot URLs — skipped until you opt in.")
+
+    with st.expander("Momentum", expanded=False):
         sec_momentum()
-    with st.expander("Last game's swing piece", expanded=False):
-        sec_last_game()
-    with st.expander("What the bracket is asking (story cards)", expanded=False):
+
+    with st.expander("Player Storylines", expanded=False):
         sec_stories()
-    with st.expander("Marquee playoff line & legacy game totals", expanded=False):
-        sec_legacy()
+
+    with st.expander("Detailed Matchup Intelligence", expanded=False):
+        sec_last_game()
+
     with st.expander("Full team outlook & worry list", expanded=False):
         sec_outlook_full()
+
+    with st.expander("Legacy playoff game totals (NBA logs)", expanded=False):
+        if st.button("Load playoff game logs", key=f"home_fetch_legacy_{team_name}"):
+            st.session_state[HOME_DASH_LOAD_LEGACY] = True
+            st.rerun()
+        if st.session_state.get(HOME_DASH_LOAD_LEGACY):
+            sec_legacy()
+        else:
+            st.caption("Pulls player playoff game logs — heavy; click **Load** first.")
 
     st.caption(
         f"Auto-updated bracket series + API where available · Refreshed {datetime.now().strftime('%b %d %I:%M %p')}"
     )
+    sections.append("footer_caption")
+
+    live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
+    if live_flag and api_calls:
+        api_display = "1 × live_bundle (resolve_home_matchup + series_for_team + featured_broadcast_state)"
+    elif live_flag:
+        api_display = "0 (live bundle did not complete)"
+    else:
+        api_display = "0 automatic on Home (fast mode — optional APIs only via buttons)"
+
+    _home_dashboard_perf_footer(
+        t0,
+        sections,
+        fast_mode=not live_flag,
+        api_calls=api_display,
+        skipped_note=skip_note,
+    )
+
+def home_injury_opponents_from_home_ctx(team_name, hctx, s_active=None):
+    """Opponent list for injury merge using existing Home context (avoids extra ``series_for_team``)."""
+    if not isinstance(hctx, dict):
+        return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+    ctx = hctx.get("ctx")
+    if ctx and ctx.get("advanced"):
+        return ctx.get("opponents", [])
+    if hctx.get("mode") == "waiting_cf":
+        ops = hctx.get("opponents") or []
+        if ops:
+            return ops
+    s = s_active or hctx.get("series")
+    if s and s.get("round") in ("Conference Finals", "NBA Finals"):
+        opp = s["b"] if team_name == s["a"] else s["a"]
+        return [opp]
+    return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+
 
 def home_injury_opponents(team_name):
     ctx = next_round_context_for_team(team_name)
