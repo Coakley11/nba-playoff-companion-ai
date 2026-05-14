@@ -42,6 +42,10 @@ try:
 except Exception:
     REQUESTS_AVAILABLE = False
 
+# Live Game Center: merge CDN + scoreboardv2 for **today (Eastern)** only so first paint stays fast.
+# Set False to restore yesterday→tomorrow merges (better for late-night / travel slates, slower).
+LIVE_GC_MERGE_TODAY_ET_ONLY = True
+
 try:
     from bs4 import BeautifulSoup
     BS4_AVAILABLE = True
@@ -886,7 +890,7 @@ def get_live_games():
         return []
     try:
         try:
-            return scoreboard.ScoreBoard(timeout=10).get_dict().get("scoreboard", {}).get("games", []) or []
+            return scoreboard.ScoreBoard(timeout=8).get_dict().get("scoreboard", {}).get("games", []) or []
         except TypeError:
             return scoreboard.ScoreBoard().get_dict().get("scoreboard", {}).get("games", []) or []
     except Exception:
@@ -902,7 +906,10 @@ def _scoreboard_v2_games_for_date(game_date):
     d = game_date if hasattr(game_date, "strftime") else datetime.strptime(str(game_date)[:10], "%Y-%m-%d").date()
     for fmt in (d.strftime("%m/%d/%Y"), d.strftime("%Y-%m-%d")):
         try:
-            dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0, timeout=12).get_data_frames()
+            try:
+                dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0, timeout=8).get_data_frames()
+            except TypeError:
+                dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0).get_data_frames()
         except Exception:
             continue
         if dfs is None or len(dfs) < 2 or dfs[0].empty:
@@ -1119,14 +1126,23 @@ def find_live_game_for_team(team_name):
 
 def featured_broadcast_state(team_name):
     """Single merged scoreboard row for Live Game Center + Home hub (CDN + stats, normalized)."""
-    g = find_live_game_for_team(team_name)
-    if not g:
-        return None
-    g = normalize_scoreboard_game(dict(g))
-    phase = _live_broadcast_phase(g)
-    sec = _seconds_to_tipoff(g)
-    soon = sec is not None and 0 < sec <= 3600
-    return {"game": g, "phase": phase, "seconds_to_tip": sec, "starting_soon": bool(soon)}
+    try:
+        g = find_live_game_for_team(team_name)
+        if not g:
+            return None
+        g = normalize_scoreboard_game(dict(g))
+        phase = _live_broadcast_phase(g)
+        sec = _seconds_to_tipoff(g)
+        soon = sec is not None and 0 < sec <= 3600
+        return {"game": g, "phase": phase, "seconds_to_tip": sec, "starting_soon": bool(soon)}
+    except Exception as e:
+        return {
+            "game": None,
+            "phase": "unknown",
+            "seconds_to_tip": None,
+            "starting_soon": False,
+            "_merge_error": repr(e),
+        }
 
 
 def get_live_game_detection_context(team_name):
@@ -2703,7 +2719,7 @@ def _home_command_center_hero_html(team_name, hctx):
             f"{esc(_live_team_full_name(hs.get('teamTricode', ''), hs))} · "
             f"{esc(stt[:48])}"
         )
-        if fb and fb.get("phase") == "pregame":
+        if fb and fb.get("game") and fb.get("phase") == "pregame":
             sec = fb.get("seconds_to_tip")
             if sec is not None and sec > 0:
                 sec = int(sec)
@@ -2717,7 +2733,7 @@ def _home_command_center_hero_html(team_name, hctx):
 
     pulse = "Next tip tracking"
     prob_lab = "Tilt meter"
-    if fb:
+    if fb and fb.get("game"):
         ph = fb.get("phase")
         if ph == "live":
             pulse = "🔴 LIVE — broadcast hub hot"
@@ -2764,7 +2780,7 @@ def _home_command_center_hero_html(team_name, hctx):
 def render_home_live_hub_strip(team_name):
     """Prominent Home Dashboard strip when a playoff window game exists (live / soon / final / schedule fallback)."""
     fb = featured_broadcast_state(team_name)
-    if fb:
+    if fb and fb.get("game"):
         g = fb["game"]
         phase = fb["phase"]
         sec = fb.get("seconds_to_tip")
@@ -2880,13 +2896,13 @@ def render_playoff_command_center(team_name):
     snap_cols[1].metric("Your seed", profile.get("seed", "—"))
     snap_cols[2].metric("Round you're tracking", (hctx.get("series") or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"))
     fb = featured_broadcast_state(team_name)
-    if fb and fb.get("phase") == "live":
+    if fb and fb.get("game") and fb.get("phase") == "live":
         edge = "🔴 LIVE on the board"
-    elif fb and fb.get("starting_soon"):
+    elif fb and fb.get("game") and fb.get("starting_soon"):
         edge = "Tip soon — runway"
-    elif fb and fb.get("phase") == "pregame":
+    elif fb and fb.get("game") and fb.get("phase") == "pregame":
         edge = "Pregame data live"
-    elif fb and fb.get("phase") == "postgame":
+    elif fb and fb.get("game") and fb.get("phase") == "postgame":
         edge = "Final logged — wrap in hub"
     else:
         det = get_live_game_detection_context(team_name)
@@ -3621,7 +3637,7 @@ def render_team_outlook(team):
 def render_game_countdown(team):
     st.subheader("Game Status / Live Link")
     fb = featured_broadcast_state(team)
-    if not fb:
+    if not fb or not fb.get("game"):
         opp = TEAM_PROFILES[team].get("current_opponent")
         if opp:
             st.info(f"Next matchup: {team} vs {opp}. A scoreboard row lands here when the NBA feed lists it in the ET window.")
@@ -3855,17 +3871,39 @@ def _pregame_pressure_lines(favorite_team, opp_name, series_line, profile):
     return lines
 
 
+def _live_center_debug_probe():
+    """Light probe for debug UI; must not raise."""
+    errs = []
+    n_cdn = -999
+    try:
+        if NBA_LIVE_AVAILABLE:
+            g = get_live_games()
+            n_cdn = len(g) if isinstance(g, list) else -1
+        else:
+            n_cdn = -1
+    except Exception as e:
+        n_cdn = -1
+        errs.append(f"live scoreboard: {e!r}")
+    n_v2 = -999
+    try:
+        if NBA_STATS_AVAILABLE:
+            vg = _scoreboard_v2_games_for_date(_nba_et_date_today())
+            n_v2 = len(vg) if isinstance(vg, list) else -1
+        else:
+            n_v2 = -1
+    except Exception as e:
+        n_v2 = -1
+        errs.append(f"scoreboardv2 (today ET): {e!r}")
+    return n_cdn, n_v2, errs
+
+
 def render_live_game_center(favorite_team, profile):
-    """Playoff broadcast hub: merges live CDN + stats scoreboard window (ET) so games show pre/live/post."""
+    """Minimal fail-safe Live Game Center: always renders; heavy tabs/APIs temporarily disabled for reliability."""
     st.markdown("### 🏟️ Live Game Center")
     st.caption(
-        "Auto-merges **cdn.nba.com live board** with **stats scoreboard** (yesterday → tomorrow ET). "
-        "**Box score, play-by-play, matchup matrix, and lineup cards** load only when you open those sections."
+        "**Minimal mode** — box score, play-by-play, shot chart, momentum charts, injuries, lineups, and roster calls are "
+        "**disabled** until this page loads reliably. Only scoreboard merge + local series text runs."
     )
-
-    if not NBA_LIVE_AVAILABLE and not NBA_STATS_AVAILABLE:
-        st.error("nba_api live + stats endpoints are unavailable. Check requirements.txt.")
-        return
 
     if st.session_state.get("_live_gc_sel_team") != favorite_team:
         for k in list(st.session_state.keys()):
@@ -3873,483 +3911,114 @@ def render_live_game_center(favorite_team, profile):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = favorite_team
 
-    with st.spinner("Loading merged scoreboard (live CDN + stats, ET window)…"):
-        state = featured_broadcast_state(favorite_team)
-    live = state["game"] if state else None
+    alias = TEAM_ALIASES.get(favorite_team, "—")
+
+    featured_err = None
+    raw_fb = None
+    try:
+        raw_fb = featured_broadcast_state(favorite_team)
+    except Exception as e:
+        featured_err = repr(e)
+    state = raw_fb if isinstance(raw_fb, dict) and raw_fb.get("game") else None
+    if isinstance(raw_fb, dict) and raw_fb.get("_merge_error"):
+        featured_err = featured_err or raw_fb["_merge_error"]
+
+    n_cdn, n_v2, probe_errs = _live_center_debug_probe()
+
+    cdn_got = (n_cdn >= 0) and (n_cdn > 0)
+    v2_got = (n_v2 >= 0) and (n_v2 > 0)
+
+    with st.expander("🔧 Live Game Center debug (read first if the page misbehaves)", expanded=True):
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("NBA_LIVE_AVAILABLE", "yes" if NBA_LIVE_AVAILABLE else "no")
+        d2.metric("NBA_STATS_AVAILABLE", "yes" if NBA_STATS_AVAILABLE else "no")
+        d3.metric("Live CDN games (count)", str(n_cdn) if n_cdn >= 0 else "err")
+        d4.metric("scoreboardv2 today (rows)", str(n_v2) if n_v2 >= 0 else "err")
+        d5, d6 = st.columns(2)
+        d5.metric("Live scoreboard returned games", "yes" if cdn_got else ("no" if n_cdn == 0 else "err"))
+        d6.metric("Merged row for favorite", "yes" if state and state.get("game") else "no")
+        st.write(f"**Selected team:** {favorite_team} · **alias:** `{alias}`")
+        if featured_err:
+            st.warning(f"**Merge / featured error:** `{featured_err}`")
+        if probe_errs:
+            st.error("Probe errors:\n" + "\n".join(probe_errs))
+        elif not probe_errs:
+            st.success("Probe completed without exceptions.")
+
+    opp_prof = profile.get("current_opponent") or "—"
+    try:
+        series_txt = series_status_text(favorite_team)
+    except Exception as e:
+        series_txt = f"(series text error: {e!r})"
+
+    st.divider()
+    st.markdown("#### Snapshot (no images, no secondary APIs)")
+    st.write(f"**Profile opponent:** {opp_prof}")
+    st.write(f"**Series (local bracket data):** {series_txt}")
+
+    live = None
+    phase = "unknown"
+    if state and isinstance(state, dict):
+        live = state.get("game")
+        phase = state.get("phase", "unknown")
+
     if not live:
-        if not NBA_STATS_AVAILABLE:
-            st.error("nba_api stats scoreboard is unavailable — cannot widen the date window.")
-            return
-        _render_live_game_center_empty(favorite_team, profile)
+        st.info(
+            "No merged game row for this team right now — live CDN and/or stats scoreboard did not return a match, "
+            "or the merge step failed. The hub is still usable from this snapshot."
+        )
+        st.info(
+            f"**Feeds:** live CDN returned **{'games' if cdn_got else 'zero games'}**; "
+            f"scoreboardv2 (today ET) returned **{'rows' if v2_got else 'zero rows'}**."
+        )
+        if AUTOREFRESH_AVAILABLE:
+            st.caption("Auto-refresh paused in minimal mode when no game row.")
         return
 
-    phase = state["phase"]
-    sec_tip = state.get("seconds_to_tip")
-
-    if AUTOREFRESH_AVAILABLE:
-        iv = 12000 if phase == "live" else 30000
-        st_autorefresh(interval=iv, key="live_refresh")
-        st.caption("Auto-refresh every **12s** while the game is live, otherwise **30s**, across the ET scoreboard window.")
-
-    home = live.get("homeTeam", {}) or {}
-    away = live.get("awayTeam", {}) or {}
-    home_tri = home.get("teamTricode", "") or ""
-    away_tri = away.get("teamTricode", "") or ""
+    home = live.get("homeTeam") or {}
+    away = live.get("awayTeam") or {}
+    home_tri = (home.get("teamTricode") or "") or _tricode_from_team_dict(home)
+    away_tri = (away.get("teamTricode") or "") or _tricode_from_team_dict(away)
     home_score = safe_int(home.get("score", 0))
     away_score = safe_int(away.get("score", 0))
     period = safe_int(live.get("period", 0), 0)
     clock = live.get("gameClock", "") or ""
     status = live.get("gameStatusText", "Unknown") or "Unknown"
-    gid = live.get("gameId", "") or ""
+    gid = str(live.get("gameId") or "")
 
-    away_name = _live_team_full_name(away_tri, away)
     home_name = _live_team_full_name(home_tri, home)
-    alias = TEAM_ALIASES[favorite_team]
-    is_home = home_tri == alias
-    team_score = home_score if is_home else away_score
-    opp_score = away_score if is_home else home_score
-    margin = team_score - opp_score
+    away_name = _live_team_full_name(away_tri, away)
+    opp_display = home_name if favorite_team == away_name else away_name
 
-    eff_period = max(1, min(4, period)) if period else 1
-    if phase == "live":
-        prob = win_prob(margin, eff_period, is_home)
-    elif phase == "postgame":
-        prob = 100 if margin > 0 else (0 if margin < 0 else 50)
-    else:
-        prob = 50
+    st.markdown("#### Game row (minimal)")
+    st.write(f"**Your team:** {favorite_team} · **Opponent on board:** {opp_display}")
+    st.write(f"**{away_name}** @ **{home_name}**")
+    st.metric("Score", f"{away_tri} {away_score}  —  {home_tri} {home_score}")
+    st.write(f"**Status:** {status}")
+    if period or clock:
+        st.caption(f"Clock raw: Q{period} · {clock}" if period else f"Clock: {clock}")
+    st.write(f"**Phase:** `{phase}`")
+    st.caption(f"gameId: `{gid}`")
 
-    opp_other = home_name if favorite_team == away_name else away_name
-    nick_live = fan_nick(favorite_team)
-    opp_nick_live = fan_nick(opp_other) if opp_other else "them"
-    if phase == "pregame":
-        if sec_tip is not None and sec_tip > 0:
-            mm = max(0, int(sec_tip // 60))
-            ss = max(0, int(sec_tip % 60))
-            momentum_note = f"Tip window: about {mm}m {ss}s on the clock — matchups and availability still moving."
-        elif live.get("gameEt"):
-            momentum_note = f"Broadcast slate: {live.get('gameEt')}"
-        else:
-            momentum_note = "Pregame runway — the first six minutes usually set the tone on whistles and pace."
-    elif phase == "postgame":
-        momentum_note = "Final in the feed — numbers lock unless the league posts a correction."
-    elif prob > 58:
-        momentum_note = f"The live model leans {nick_live} — next run still swings the gym."
-    elif prob >= 42:
-        momentum_note = f"Coin-flip game state — one stop-and-score burst tilts the night."
-    else:
-        momentum_note = f"{nick_live} chasing in the model — stops and clean shots flip the math fast."
-
-    series_line, series_src = _live_series_board(away_name, home_name)
-    if not series_line and favorite_team in (away_name, home_name):
-        series_line = series_status_text(favorite_team)
-        _, s0 = series_for_team(favorite_team)
-        series_src = (s0 or {}).get("source", "")
-
-    clutch = phase == "live" and eff_period >= 4 and abs(margin) <= 5
-    is_live = phase == "live"
-
-    if phase == "postgame":
-        broadcast_kicker = "FINAL"
-    elif phase == "pregame" and state.get("starting_soon"):
-        broadcast_kicker = "GAME STARTING SOON"
-    elif phase == "pregame":
-        broadcast_kicker = "PREGAME"
-    else:
-        broadcast_kicker = "LIVE NOW"
-
-    if phase == "live" and period > 0:
-        time_pill_inner = f"⏱ Q{period} · {html.escape(clock or '—')}"
-    elif phase == "live":
-        time_pill_inner = f"⏱ {html.escape(status[:48])}"
-    elif phase == "pregame" and sec_tip is not None and sec_tip > 0:
-        mm, ss = max(0, int(sec_tip // 60)), max(0, int(sec_tip % 60))
-        time_pill_inner = f"⏱ Tip in ~ {mm}m {ss}s"
-    else:
-        time_pill_inner = f"⏱ {html.escape(status[:48])}"
-
-    if is_live:
-        live_pill_inner = "🔴 LIVE"
-    elif phase == "postgame":
-        live_pill_inner = f"📼 {html.escape(status[:36])}"
-    else:
-        live_pill_inner = f"📅 {html.escape(status[:40])}"
-
-    if phase == "pregame":
-        prob_pill_inner = f"📈 Win prob — unlocks at jump ball ({html.escape(nick_live)} vs {html.escape(opp_nick_live)})"
-    elif phase == "postgame":
-        ver = "W" if margin > 0 else ("L" if margin < 0 else "Even")
-        prob_pill_inner = f"📈 Result · {html.escape(nick_live)} {ver} ({'+' if margin > 0 else ''}{margin})"
-    else:
-        prob_pill_inner = f"📈 Live win prob · {html.escape(nick_live)}: {prob}%"
-
-    logo_away = TEAM_LOGOS.get(away_name, f"https://cdn.nba.com/logos/nba/500/{away_tri}/primary/L/logo.svg")
-    logo_home = TEAM_LOGOS.get(home_name, f"https://cdn.nba.com/logos/nba/500/{home_tri}/primary/L/logo.svg")
-
-    pal = live_hero_palette(favorite_team)
-    hero_box = "border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 36px rgba(0,0,0,.42);"
-    hero_style = f"background: linear-gradient(165deg, {pal['bg0']} 0%, {pal['bg1']} 52%, #070b12 100%); {hero_box}"
-    away_score_color = pal["accent"] if away_name == favorite_team else "#f8fafc"
-    home_score_color = pal["accent"] if home_name == favorite_team else "#f8fafc"
-    prob_pill_style = f"background:{pal['accent_soft']}; border:1px solid {pal['accent']}77; color:#f8fafc"
-
-    hero_html = f"""
-<div class="live-score-sticky" style="{hero_style}">
-  <div class="live-hero-grid">
-    <div class="live-hero-side">
-      <img src="{logo_away}" width="56" height="56" style="object-fit:contain" alt="" />
-      <div>
-        <div style="font-size:13px;font-weight:800;color:#cbd5e1">{html.escape(away_tri)}</div>
-        <div style="font-size:15px;font-weight:800">{html.escape(away_name)}</div>
-        <div style="font-size:12px;color:#94a3b8">{html.escape(_seed_badge(away_name))}</div>
-      </div>
-    </div>
-    <div style="text-align:center;padding:4px 8px">
-      <div style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:.06em">{broadcast_kicker}</div>
-      <div class="live-score-big"><span style="color:{away_score_color}">{away_score}</span>
-        <span style="color:#64748b;margin:0 10px">—</span>
-        <span style="color:{home_score_color}">{home_score}</span></div>
-      <div style="font-size:14px;font-weight:700;color:#e2e8f0;margin-top:4px">{html.escape(away_tri)} @ {html.escape(home_tri)}</div>
-    </div>
-    <div class="live-hero-side right">
-      <img src="{logo_home}" width="56" height="56" style="object-fit:contain" alt="" />
-      <div>
-        <div style="font-size:13px;font-weight:800;color:#cbd5e1">{html.escape(home_tri)}</div>
-        <div style="font-size:15px;font-weight:800">{html.escape(home_name)}</div>
-        <div style="font-size:12px;color:#94a3b8">{html.escape(_seed_badge(home_name))}</div>
-      </div>
-    </div>
-  </div>
-  <div class="live-meta-row">
-    <span class="live-pill {'live' if is_live else ''}">{live_pill_inner}</span>
-    <span class="live-pill">{time_pill_inner}</span>
-    <span class="live-pill series">🏆 {html.escape(series_line or 'Series')}</span>
-    {('<span class="live-pill clutch">⚡ CLUTCH</span>' if clutch else '')}
-    <span class="live-pill prob" style="{prob_pill_style}">{prob_pill_inner}</span>
-  </div>
-  <div class="live-tile-row">
-    <div class="live-tile"><div class="k">Margin</div><div class="v">{'+' if margin > 0 else ''}{margin}</div></div>
-    <div class="live-tile"><div class="k">Venue</div><div class="v">{'HOME' if is_home else 'AWAY'}</div></div>
-    <div class="live-tile"><div class="k">Momentum (model)</div><div class="v" style="font-size:12px;line-height:1.25;font-weight:700">{html.escape(momentum_note)}</div></div>
-  </div>
-  <div class="live-inj-strip"><div style="font-weight:800;margin-bottom:4px;color:#f1f5f9">🩹 Availability</div>
-  <div style="font-size:12px;color:#94a3b8">Injury boards load in the <b>Injuries</b> section below (on demand) so this header stays fast.</div>
-  {('<div style="margin-top:6px;font-size:11px;color:#64748b">' + html.escape(str(series_src)) + '</div>' if series_src else '')}
-  </div>
-</div>
-"""
-    st.markdown(hero_html, unsafe_allow_html=True)
-
-    opp = profile.get("current_opponent") or opp_other
-    matchup_opp = opp if opp in TEAM_PROFILES else (opp_other if opp_other in TEAM_PROFILES else None)
-
-    hl = _live_headline_natural(
-        favorite_team,
-        phase,
-        margin,
-        prob,
-        eff_period if phase == "live" else max(1, period or 1),
-        status,
-        opp_nick_live,
+    games_in_probe = (n_cdn > 0) or (n_v2 > 0)
+    st.info(
+        f"**Live API availability:** live CDN JSON = **{'yes' if NBA_LIVE_AVAILABLE else 'no'}**; "
+        f"stats (nba_api) = **{'yes' if NBA_STATS_AVAILABLE else 'no'}**. "
+        f"Probe: **{n_cdn}** CDN games, **{n_v2}** scoreboardv2 rows (today ET). "
+        f"Merged row for favorite: **{'yes' if live else 'no'}**."
     )
-    st.markdown(f"> **{hl}**")
-    if phase == "pregame" and state.get("starting_soon"):
-        st.success("Game starting soon — countdown and series pressure below; deep tables load in the section you pick.")
+    if not games_in_probe and not live:
+        st.warning("Neither probe nor merge returned games — feeds may be down or slate empty for this ET day.")
 
-    if phase == "pregame":
-        with st.container(border=True):
-            st.markdown("##### Pregame runway")
-            rc1, rc2, rc3 = st.columns(3)
-            if sec_tip is not None and sec_tip > 0:
-                rc1.metric("Tip countdown", f"{int(sec_tip // 60)}m {int(sec_tip % 60)}s")
-            else:
-                rc1.metric("Tip countdown", "—")
-            rc2.metric("Venue", "HOME" if is_home else "AWAY")
-            rc3.metric("Series strip", series_line or "—")
-            st.markdown("**Playoff pressure & legacy implications**")
-            for ln in _pregame_pressure_lines(favorite_team, opp_other, series_line, profile):
-                st.write(f"• {ln}")
-            if st.button("Load roster-backed probable lineups (NBA API)", key="live_gc_est_lineups"):
-                st.session_state["live_gc__est_lineups"] = True
-                st.rerun()
-            if st.session_state.get("live_gc__est_lineups"):
-                with st.spinner("Loading estimated rotations…"):
-                    st.markdown("**Probable lineups** *Minutes-based estimates until the live box posts.*")
-                    lc1, lc2 = st.columns(2)
-                    with lc1:
-                        render_lineup_cards(favorite_team, pd.DataFrame())
-                    with lc2:
-                        lu = matchup_opp or (opp_other if opp_other in TEAM_PROFILES else None)
-                        if lu:
-                            render_lineup_cards(lu, pd.DataFrame())
-                        else:
-                            st.caption("Opponent lineup card needs a TEAM_PROFILES matchup.")
+    if AUTOREFRESH_AVAILABLE and phase == "live":
+        st_autorefresh(interval=12000, key="live_refresh_minimal")
+        st.caption("Auto-refresh every **12s** while phase is **live** (minimal mode).")
 
-    if phase == "postgame":
-        with st.container(border=True):
-            st.markdown("##### Postgame desk")
-            cA, cB = st.columns(2)
-            cA.metric("Final", f"{away_score} — {home_score}")
-            cB.metric("Series", (series_line or "See bracket / series page")[:28])
-            st.markdown("**Turning point & MVP**")
-            st.caption(
-                "Play log + box MVP load in **Box score** and **Play-by-play** so this strip stays instant after the horn."
-            )
-            st.markdown("**Updated playoff outlook**")
-            st.caption(series_status_text(favorite_team)[:320])
-            nxt = profile.get("current_opponent")
-            st.caption(
-                f"Next scheduling context: **{nxt or 'TBD'}** when the NBA row publishes — refresh keeps the hub aligned."
-            )
-
-    st.divider()
-    live_section = st.radio(
-        "Live Center sections",
-        [
-            "Quick summary",
-            "Injuries",
-            "Momentum & charts",
-            "Box score, fouls & matchup",
-            "Top performers & lineups",
-            "Shot chart",
-            "Play-by-play",
-            "What-if",
-        ],
-        horizontal=True,
-        key="live_gc_section",
-        label_visibility="collapsed",
+    st.caption(
+        "Next re-enable order (toggle in code): box score → injuries → play-by-play → shot chart. "
+        "Heavy sections stay off until each step is verified."
     )
-    st.caption(f"Section: **{live_section}** — only this panel may call heavy NBA endpoints.")
-
-    box_df = pd.DataFrame()
-    actions = []
-    box_err = None
-    pbp_err = None
-
-    if live_section in ("Box score, fouls & matchup", "Top performers & lineups") and gid and NBA_LIVE_AVAILABLE:
-        with st.spinner("Loading live box score (8s API timeout)…"):
-            box_raw = get_live_boxscore(gid)
-            box_df = create_boxscore_df(box_raw) if box_raw else pd.DataFrame()
-            if not box_raw:
-                box_err = "Box score empty or live API did not return rows in time."
-    elif live_section in ("Box score, fouls & matchup", "Top performers & lineups") and not NBA_LIVE_AVAILABLE:
-        box_err = "Live box score needs nba_api live endpoints."
-
-    if live_section in ("Shot chart", "Play-by-play") and gid and NBA_LIVE_AVAILABLE:
-        with st.spinner("Loading play-by-play (8s API timeout)…"):
-            actions = get_live_playbyplay(gid) or []
-    elif live_section in ("Shot chart", "Play-by-play") and not NBA_LIVE_AVAILABLE:
-        pbp_err = "Play-by-play needs nba_api live endpoints."
-
-    if live_section == "Quick summary":
-        with st.container(border=True):
-            st.markdown("##### Quick summary")
-            m1, m2, m3, m4 = st.columns(4)
-            if phase == "pregame":
-                m1.metric("Clock", clock or "—")
-                m2.metric("Phase", "Pregame")
-                m3.metric(f"{nick_live} (board)", team_score)
-                m4.metric(f"{opp_nick_live} (board)", opp_score)
-            else:
-                m1.metric("Clock", clock or "—")
-                m2.metric("Period", f"Q{period}" if period else status[:20])
-                m3.metric(f"{nick_live} pts", team_score)
-                m4.metric(f"{opp_nick_live} pts", opp_score)
-            if phase == "live" and clutch:
-                st.warning("⚡ Clutch alert: late game, tight margin — possessions weigh like possessions in May.")
-            st.info(
-                "Full box, foul trouble, matchup matrix, and game story load in **Box score, fouls & matchup**. "
-                "Momentum charts are in **Momentum & charts**."
-            )
-            st.markdown("**Pressure read**")
-            if phase == "pregame":
-                st.info("The building is still filling in — execution in the first six minutes usually sets how tight the whistle feels.")
-            elif margin > 0:
-                st.info(f"{nick_live} carry a +{margin} cushion on the scoreboard — the counterattack is one clean run from the other side.")
-            elif margin == 0:
-                st.info("Deadlocked — the next three minutes tend to decide who walks out with the night.")
-            else:
-                st.info(f"{nick_live} trail by {abs(margin)} — a stop-and-score burst still flips the gym.")
-            st.markdown("**Next priorities on the floor**")
-            for item in [
-                "Stops without fouling — force contested twos.",
-                "Defensive glass to kill extra possessions.",
-                "Clean looks for the primary creator — no early-clock hero shots.",
-                "No live-ball turnovers that become transition layups.",
-            ]:
-                st.write(f"• {item}")
-            st.caption("Legacy modeling: **Legacy Tracker** page.")
-
-    elif live_section == "Injuries":
-        with st.container(border=True):
-            st.markdown("##### Injuries & availability")
-            with st.spinner("Loading injury reports (cached up to ~20 min)…"):
-                render_injury_report(
-                    favorite_team,
-                    home_injury_opponents(favorite_team),
-                    show_page_header=False,
-                    fan_perspective_team=favorite_team,
-                )
-            if away_name in TEAM_PROFILES and home_name in TEAM_PROFILES and {away_name, home_name} != {
-                favorite_team,
-                profile.get("current_opponent"),
-            }:
-                st.caption("Favorite team + sidebar opponent list; live pair above may differ from profile when the bracket has advanced.")
-
-    elif live_section == "Momentum & charts":
-        with st.container(border=True):
-            st.markdown("##### Momentum / win probability")
-            if phase == "live" and actions:
-                run_snip = _scoring_run_summary(actions, alias)
-                if run_snip:
-                    st.caption(run_snip)
-            elif phase == "live" and not actions:
-                st.caption("Open **Play-by-play** once to pull the log — then a run snippet can appear here on the next run.")
-            if phase == "pregame":
-                st.info(
-                    "Charts light up at jump ball — scoreboard context above is enough for the runway."
-                )
-            else:
-                cL, cR = st.columns((1, 1))
-                with cL:
-                    st.plotly_chart(
-                        px.pie(
-                            pd.DataFrame(
-                                {
-                                    "Outcome": [f"{nick_live} close tonight", f"{opp_nick_live} take the night"],
-                                    "Probability": [prob, 100 - prob],
-                                }
-                            ),
-                            names="Outcome",
-                            values="Probability",
-                            title="Win probability split",
-                            hole=0.45,
-                            color_discrete_sequence=[pal["accent"], "#64748b"],
-                        ),
-                        use_container_width=True,
-                    )
-                timeline = pd.DataFrame({
-                    "Game Segment": ["Start", "Q1", "Q2", "Q3", "Now"],
-                    "Win Probability": [50, max(1, min(99, prob - 12)), max(1, min(99, prob - 7)), max(1, min(99, prob - 3)), prob],
-                    "Margin": [0, margin - 8, margin - 5, margin - 2, margin],
-                })
-                with cR:
-                    st.plotly_chart(
-                        px.line(timeline, x="Game Segment", y="Win Probability", markers=True, title="Win probability path (illustrative)"),
-                        use_container_width=True,
-                    )
-                st.plotly_chart(px.line(timeline, x="Game Segment", y="Margin", markers=True, title="Score margin momentum (illustrative)"), use_container_width=True)
-            st.caption(f"Illustrative path tuned to **{nick_live}** vs **{opp_nick_live}** in this phase — not a full reconstruction.")
-
-    elif live_section == "Box score, fouls & matchup":
-        with st.container(border=True):
-            st.markdown("##### Box score, fouls & matchup")
-            if box_err:
-                st.warning(box_err)
-            if not box_df.empty:
-                st.markdown("**Box score**")
-                st.dataframe(box_df, use_container_width=True, height=300)
-                st.markdown("**Foul trouble (4+ PF)**")
-                fouls = box_df[box_df["PF"].astype(float) >= 4]
-                st.dataframe(fouls[["Team", "Player", "PF", "PTS", "MIN"]], use_container_width=True) if not fouls.empty else st.success("No major foul trouble detected.")
-                st.markdown("**Game story**")
-                for line in game_story(favorite_team, margin, prob, box_df):
-                    st.write(f"• {line}")
-            elif not box_err:
-                st.info("No box rows yet — try refresh or confirm the league posted the box.")
-            if matchup_opp:
-                st.divider()
-                st.markdown("**Positional matchup**")
-                with st.spinner("Loading matchup matrix (roster API, cached)…"):
-                    st.dataframe(matchup_advantages(favorite_team, matchup_opp), use_container_width=True)
-
-    elif live_section == "Top performers & lineups":
-        with st.container(border=True):
-            st.markdown("##### Top performers & lineups")
-            if not box_df.empty:
-                render_lineup_cards(favorite_team, box_df)
-                if opp and opp in TEAM_PROFILES:
-                    render_lineup_cards(opp, box_df)
-                elif matchup_opp:
-                    render_lineup_cards(matchup_opp, box_df)
-            elif phase == "pregame":
-                st.info("Load the live box in **Box score** for in-game lineup cards, or use **Pregame runway** for estimated starters.")
-            else:
-                st.info("Lineup cards need the live box — open **Box score** first, then return here.")
-
-    elif live_section == "Shot chart":
-        with st.container(border=True):
-            st.markdown("##### Shot chart")
-            if pbp_err:
-                st.warning(pbp_err)
-            if actions:
-                shots = shot_df_from_pbp(actions, alias)
-                if shots.empty:
-                    st.info("No shot actions detected yet for this team.")
-                else:
-                    last = shots.iloc[-1]
-                    st.info(
-                        f"Latest: {last['Player']} {'made' if last['Made'] else 'missed'} — {str(last['Description'])[:120]}"
-                    )
-                    options = ["All players"] + sorted(shots["Player"].dropna().unique().tolist())
-                    shooter = st.selectbox("Shooter filter", options, key="live_shot_shooter")
-                    display = shots if shooter == "All players" else shots[shots["Player"] == shooter]
-                    st.plotly_chart(draw_court(display, f"{nick_live} shot chart — blue ○ made, red × missed"), use_container_width=True)
-                st.markdown("**Clutch meter**")
-                if clutch:
-                    st.warning(f"Late clock, tight margin — {nick_live} in the possessions-that-echo stretch of the night.")
-                else:
-                    st.info(f"Margin still breathing room for {nick_live} — if it tightens inside five late, this strip goes red.")
-                st.markdown("**Top plays (this game)**")
-                rows_tp = []
-                for a in actions:
-                    if (a.get("teamTricode") or "") == alias and is_top_play(a.get("description", "")):
-                        desc = a.get("description", "")
-                        rows_tp.append({
-                            "Period": a.get("period", ""),
-                            "Clock": a.get("clock", ""),
-                            "Top Play": desc,
-                            "Why it mattered": explain_play(desc, favorite_team),
-                        })
-                st.dataframe(pd.DataFrame(rows_tp[-5:]) if rows_tp else pd.DataFrame(), use_container_width=True)
-            elif not pbp_err:
-                st.info("Shot chart needs play-by-play data — open this section after tip when the feed is live.")
-
-    elif live_section == "Play-by-play":
-        with st.container(border=True):
-            st.markdown("##### Play-by-play (latest)")
-            if pbp_err:
-                st.warning(pbp_err)
-            if actions:
-                rows = []
-                for a in actions[-80:]:
-                    rows.append({
-                        "Q": a.get("period", ""),
-                        "Clock": a.get("clock", ""),
-                        "Team": a.get("teamTricode", ""),
-                        "Play": (a.get("description") or "")[:200],
-                    })
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, height=400)
-            elif not pbp_err:
-                st.info("Play-by-play not available for this game yet.")
-
-    elif live_section == "What-if":
-        with st.container(border=True):
-            st.markdown("##### What-if simulator")
-            wp_period = max(1, min(4, period)) if period else (4 if phase == "postgame" else 1)
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        {
-                            "Scenario": f"{'+' if sw >= 0 else ''}{sw} point swing",
-                            "New margin": margin + sw,
-                            "Win probability": f"{win_prob(margin + sw, wp_period, is_home)}%",
-                        }
-                        for sw in [10, 5, 0, -5, -10]
-                    ]
-                ),
-                use_container_width=True,
-            )
-
+    return
 
 # ==========================================================
 # Previous rounds / playoff path helpers
