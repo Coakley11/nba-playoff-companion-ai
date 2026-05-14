@@ -2078,14 +2078,38 @@ def _cached_playoff_gamelog(player_id, season):
 
 
 def _prepare_chrono_playoff_logs(logs):
+    """Normalize playoff logs to strict chronological order: oldest game first.
+
+    nba_api often returns newest-first; ambiguous dates are tie-broken with GAME_ID
+    so Series 1 == first postseason series and timeline reversals stay consistent.
+    """
     if logs is None or logs.empty:
         return pd.DataFrame()
     df = logs.copy()
     if "GAME_DATE" in df.columns:
-        df["_dt"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
-        df = df.sort_values("_dt", ascending=True, na_position="last")
+        try:
+            df["_dt"] = pd.to_datetime(df["GAME_DATE"], errors="coerce", format="mixed")
+        except Exception:
+            df["_dt"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
+    else:
+        df["_dt"] = pd.NaT
+
+    if "GAME_ID" in df.columns:
+        df["_gid_sort"] = df["GAME_ID"].astype(str)
+    else:
+        df["_gid_sort"] = ""
+
+    has_dt = bool(df["_dt"].notna().any()) if "_dt" in df.columns else False
+    has_gid = "_gid_sort" in df.columns and df["_gid_sort"].astype(str).str.len().gt(0).any()
+    if has_dt and has_gid:
+        df = df.sort_values(["_dt", "_gid_sort"], ascending=[True, True], na_position="last", kind="mergesort")
+    elif has_dt:
+        df = df.sort_values("_dt", ascending=True, na_position="last", kind="mergesort")
+    elif has_gid:
+        df = df.sort_values("_gid_sort", ascending=True, kind="mergesort")
     else:
         df = df.iloc[::-1].reset_index(drop=True)
+
     for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV", "MIN", "PLUS_MINUS", "FGM", "FGA", "FG3M", "FG3A", "FTM", "FTA", "OREB", "DREB"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -2108,22 +2132,67 @@ def _matchup_opponent_tri(matchup, team_tri):
 
 
 def _series_chunks_chrono(df, team_tri):
+    """Split into contiguous series by opponent. df must be oldest-game-first."""
     if df.empty:
         return []
     team_tri = (team_tri or "").upper()
     out = []
     cur_opp = None
     start = 0
-    for i, row in df.iterrows():
+    n = len(df)
+    for pos in range(n):
+        row = df.iloc[pos]
         opp = _matchup_opponent_tri(row.get("MATCHUP"), team_tri)
         if cur_opp is None:
             cur_opp = opp
         elif opp != cur_opp:
-            out.append((cur_opp, df.iloc[start:i].copy()))
+            out.append((cur_opp, df.iloc[start:pos].copy()))
             cur_opp = opp
-            start = i
-    out.append((cur_opp, df.iloc[start : len(df)].copy()))
+            start = pos
+    out.append((cur_opp, df.iloc[start:n].copy()))
     return out
+
+
+def _series_chunks_playoff_order(df, team_tri):
+    """Series 1 = earliest postseason series, then Series 2, … (by first game in each chunk)."""
+    chunks = _series_chunks_chrono(df, team_tri)
+    if len(chunks) <= 1:
+        return chunks
+
+    def _chunk_start_key(item):
+        _, seg = item
+        if seg is None or seg.empty:
+            return (pd.Timestamp.max, "z")
+        s = seg
+        if "_dt" in s.columns and s["_dt"].notna().any():
+            s2 = s.sort_values(["_dt", "_gid_sort"] if "_gid_sort" in s.columns else ["_dt"], ascending=[True, True], na_position="last", kind="mergesort")
+            r0 = s2.iloc[0]
+            ts = r0["_dt"]
+            gid = str(r0.get("_gid_sort", r0.get("GAME_ID", "")))
+            return (ts, gid)
+        if "_gid_sort" in s.columns:
+            return (pd.Timestamp.max, str(s["_gid_sort"].astype(str).min()))
+        if "GAME_ID" in s.columns:
+            return (pd.Timestamp.max, str(s["GAME_ID"].astype(str).min()))
+        return (pd.Timestamp.max, "z")
+
+    return sorted(chunks, key=_chunk_start_key)
+
+
+def _df_newest_first_for_display(df):
+    """Rows for fan-facing feeds: latest game first (newest developments on top)."""
+    if df is None or df.empty:
+        return df
+    if "_dt" in df.columns and df["_dt"].notna().any():
+        cols = ["_dt"]
+        asc = [False]
+        if "_gid_sort" in df.columns:
+            cols.append("_gid_sort")
+            asc.append(False)
+        return df.sort_values(cols, ascending=asc, na_position="last", kind="mergesort").reset_index(drop=True)
+    if "_gid_sort" in df.columns and df["_gid_sort"].astype(str).str.len().gt(0).any():
+        return df.sort_values("_gid_sort", ascending=False, kind="mergesort").reset_index(drop=True)
+    return df.iloc[::-1].reset_index(drop=True)
 
 
 def _true_shooting_pct(df):
@@ -2526,7 +2595,8 @@ def render_player_playoff_story_hub(team_name, profile):
 
     # --- 2 · Series ---
     st.markdown("<div class='pp-sec'>2 · Series-by-series breakdown</div>", unsafe_allow_html=True)
-    chunks = _series_chunks_chrono(df, team_tri)
+    st.caption("Series 1 is the **first** playoff matchup in this log (earliest games), then Series 2 for the next opponent, and so on.")
+    chunks = _series_chunks_playoff_order(df, team_tri)
     if not chunks:
         st.info("Could not split series from matchups.")
     else:
@@ -2677,8 +2747,10 @@ def render_player_playoff_story_hub(team_name, profile):
         st.markdown("</div>", unsafe_allow_html=True)
     with tcol2:
         st.markdown("<div class='pp-card'><h4>Playoff timeline</h4>", unsafe_allow_html=True)
+        st.caption("Newest games first — scroll down for earlier rounds. Series cards above stay in playoff order (Series 1 = first matchup).")
         items = []
-        for _, rr in df.iterrows():
+        df_tl = _df_newest_first_for_display(df)
+        for _, rr in df_tl.iterrows():
             wl = str(rr.get("WL", "—"))
             items.append(
                 f"<div class='pp-tl-item'><b>{html.escape(str(rr.get('GAME_DATE','')))}</b> · {html.escape(wl)} · "
@@ -2699,7 +2771,8 @@ def render_player_playoff_story_hub(team_name, profile):
 
     show_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS"] if c in df.columns]
     with st.expander("Full playoff game log (table)"):
-        st.dataframe(df[show_cols], use_container_width=True)
+        df_tbl = _df_newest_first_for_display(df)
+        st.dataframe(df_tbl[show_cols], use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
