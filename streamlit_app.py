@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, time, timezone
 
 try:
@@ -113,6 +114,43 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .live-inj-strip { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,.25); font-size: 12px; color: #cbd5e1; }
 .badge-hot { color: #f97316; font-weight: 800; }
 .badge-cold { color: #38bdf8; font-weight: 800; }
+/* Player Playoff Story Hub */
+.pp-wrap { max-width: 1280px; margin: 0 auto; }
+.pp-hero {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+  padding: 18px 20px; border-radius: 18px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0c4a6e 100%);
+  color: #f8fafc; border: 1px solid rgba(148,163,184,.35);
+  margin-bottom: 16px;
+}
+.pp-hero h2 { margin: 0 0 6px 0; font-size: 1.45rem; letter-spacing: -0.02em; }
+.pp-hero .sub { color: #94a3b8; font-size: 14px; line-height: 1.45; }
+.pp-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pp-badge {
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  padding: 5px 10px; border-radius: 999px;
+  background: rgba(56,189,248,.15); border: 1px solid rgba(125,211,252,.35); color: #bae6fd;
+}
+.pp-badge.gold { background: rgba(234,179,8,.18); border-color: rgba(253,224,71,.4); color: #fef08a; }
+.pp-badge.fire { background: rgba(249,115,22,.2); border-color: rgba(253,186,116,.45); color: #ffedd5; }
+.pp-sec {
+  font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  color: #64748b; margin: 22px 0 10px 0;
+}
+.pp-card {
+  border: 1px solid rgba(15,23,42,.12); border-radius: 16px; padding: 14px 16px;
+  background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  margin-bottom: 12px;
+}
+.pp-card h4 { margin: 0 0 8px 0; font-size: 1.02rem; color: #0f172a; }
+.pp-muted { color: #64748b; font-size: 13px; line-height: 1.5; }
+.pp-meter { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin: 6px 0 4px 0; }
+.pp-meter > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #0ea5e9, #6366f1); }
+.pp-meter > span.gold { background: linear-gradient(90deg, #ca8a04, #f97316); }
+.pp-meter > span.ember { background: linear-gradient(90deg, #dc2626, #f97316); }
+.pp-timeline { border-left: 3px solid #cbd5e1; margin-left: 8px; padding-left: 14px; }
+.pp-tl-item { margin-bottom: 10px; font-size: 13px; color: #334155; }
+.pp-tl-item b { color: #0f172a; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1990,6 +2028,682 @@ def legacy_takeaways(player, team, pts, reb, ast, stl, blk, fg, three, plus_minu
         f"If you're comparing résumés out loud, think about names like {', '.join(comps[:4])} — not identical players, but useful bar talk.",
         f"With these sliders, {player} moves from **{player_specific_tier(base, player, team)}** toward **{player_specific_tier(title, player, team)}** if {nick} hang a banner. That's the fan fantasy path.",
     ]
+
+
+# --- Player Playoff Story Hub (narrative + impact layer on raw logs) ---
+
+def _prior_nba_season_label(season_str):
+    """'2025-26' -> '2024-25' for YoY playoff comparison."""
+    try:
+        parts = str(season_str).strip().split("-")
+        if len(parts) != 2:
+            return None
+        y_start = int(parts[0])
+        tail = parts[1].strip()
+        if len(tail) == 2:
+            y_end = int(str(y_start)[:2] + tail)
+        else:
+            y_end = int(tail)
+        return f"{y_start - 1}-{str(y_end - 1)[-2:]}"
+    except Exception:
+        return None
+
+
+def _round_narrative_weight(round_name):
+    r = (round_name or "").lower()
+    if "final" in r and "conference" not in r:
+        return 38
+    if "conference" in r:
+        return 28
+    if "second" in r:
+        return 16
+    if "first" in r:
+        return 8
+    return 12
+
+
+@st.cache_data(ttl=1800)
+def _cached_playoff_gamelog(player_id, season):
+    if not NBA_STATS_AVAILABLE or not player_id:
+        return pd.DataFrame()
+    try:
+        return playergamelog.PlayerGameLog(
+            player_id=int(player_id),
+            season=season,
+            season_type_all_star="Playoffs",
+            timeout=25,
+        ).get_data_frames()[0]
+    except Exception:
+        return pd.DataFrame()
+
+
+def _prepare_chrono_playoff_logs(logs):
+    if logs is None or logs.empty:
+        return pd.DataFrame()
+    df = logs.copy()
+    if "GAME_DATE" in df.columns:
+        df["_dt"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
+        df = df.sort_values("_dt", ascending=True, na_position="last")
+    else:
+        df = df.iloc[::-1].reset_index(drop=True)
+    for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV", "MIN", "PLUS_MINUS", "FGM", "FGA", "FG3M", "FG3A", "FTM", "FTA", "OREB", "DREB"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    for c in ["FG_PCT", "FG3_PCT", "FT_PCT"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df.reset_index(drop=True)
+
+
+def _matchup_opponent_tri(matchup, team_tri):
+    tris = re.findall(r"\b[A-Z]{3}\b", str(matchup or "").upper())
+    team_tri = (team_tri or "").upper()
+    if team_tri and tris:
+        for t in tris:
+            if t != team_tri:
+                return t
+    if len(tris) >= 2:
+        return tris[1]
+    return tris[0] if tris else "—"
+
+
+def _series_chunks_chrono(df, team_tri):
+    if df.empty:
+        return []
+    team_tri = (team_tri or "").upper()
+    out = []
+    cur_opp = None
+    start = 0
+    for i, row in df.iterrows():
+        opp = _matchup_opponent_tri(row.get("MATCHUP"), team_tri)
+        if cur_opp is None:
+            cur_opp = opp
+        elif opp != cur_opp:
+            out.append((cur_opp, df.iloc[start:i].copy()))
+            cur_opp = opp
+            start = i
+    out.append((cur_opp, df.iloc[start : len(df)].copy()))
+    return out
+
+
+def _true_shooting_pct(df):
+    """League-style TS% from game log totals (not poss-adjusted)."""
+    if df.empty:
+        return None
+    pts = df["PTS"].sum() if "PTS" in df.columns else 0
+    fga = df["FGA"].sum() if "FGA" in df.columns else 0
+    fta = df["FTA"].sum() if "FTA" in df.columns else 0
+    denom = 2 * (fga + 0.44 * fta)
+    if denom <= 0:
+        if "FG_PCT" in df.columns and "PTS" in df.columns:
+            return float(df["FG_PCT"].mean()) * 0.55 + 0.25
+        return None
+    return float(pts / denom)
+
+
+def _game_impact_score(row):
+    pts = safe_float(row.get("PTS"))
+    stl = safe_float(row.get("STL"))
+    blk = safe_float(row.get("BLK"))
+    pm = safe_float(row.get("PLUS_MINUS"))
+    reb = safe_float(row.get("REB"))
+    ast = safe_float(row.get("AST"))
+    return pts + 0.45 * reb + 0.55 * ast + 2.1 * stl + 2.0 * blk + 0.35 * pm
+
+
+def _consistency_rating(pts_series):
+    pts_series = pd.to_numeric(pts_series, errors="coerce").dropna()
+    if len(pts_series) < 2:
+        return None, "Not enough games yet for a volatility read."
+    mu = float(pts_series.mean())
+    if mu <= 0.5:
+        return None, "Scoring load is too thin to grade consistency."
+    cv = float(pts_series.std(ddof=0) / mu)
+    score = int(round(max(0, min(100, 100 * (1 - min(cv, 1.2) / 1.2)))))
+    if score >= 78:
+        tag = "High — night-to-night variance is low relative to scoring volume."
+    elif score >= 55:
+        tag = "Solid — some swing games, but nothing wildly erratic."
+    else:
+        tag = "Volatile — the stat line is spiky game to game (common for high-usage creators and shooters on tight windows)."
+    return score, tag
+
+
+def _momentum_reading(df):
+    if df.empty or "PTS" not in df.columns or len(df) < 3:
+        return "Early sample — momentum reads stabilize after a few games."
+    y = df["PTS"].astype(float).values
+    x = np.arange(1, len(y) + 1, dtype=float)
+    slope = float(np.polyfit(x, y, 1)[0])
+    early = float(y[: max(1, len(y) // 3)].mean())
+    late = float(y[-max(1, len(y) // 3) :].mean())
+    if slope > 1.25 and late > early + 2:
+        return f"Sharpening — scoring is trending up across the run (roughly +{slope:.1f} PPG per game played vs a flat line)."
+    if slope < -1.1 and late < early - 2:
+        return f"Cooling — defenses are squeezing looks or the shot diet is shifting (trend ~{slope:.1f} PPG per game vs a flat line)."
+    return "Steady — production is landing in a tight band without a clear drift."
+
+
+def _bounce_back_games(df):
+    if df.empty or "WL" not in df.columns:
+        return 0
+    w = df["WL"].astype(str).tolist()
+    n = 0
+    for i in range(1, len(w)):
+        if w[i - 1].upper().startswith("L") and w[i].upper().startswith("W"):
+            n += 1
+    return n
+
+
+def _franchise_playoff_touchstones(team_name):
+    return {
+        "New York Knicks": [
+            ("Carmelo Anthony", "volume scoring identity", "2010s high-usage scoring runs"),
+            ("Patrick Ewing", "interior two-way anchor", "the classic Knicks postseason big workload"),
+            ("Jalen Brunson", "modern lead-guard control", "the current era's half-court shot diet"),
+        ],
+        "Los Angeles Lakers": [
+            ("Kobe Bryant", "late-clock shotmaking", "Lakers perimeter takeover history"),
+            ("Shaquille O'Neal", "rim pressure", "interior dominance chapters"),
+            ("LeBron James", "playoff IQ + two-way responsibility", "the late-career Lakers chapter"),
+        ],
+        "Philadelphia 76ers": [
+            ("Allen Iverson", "isolation scoring burden", "Philly guard scoring mythology"),
+            ("Joel Embiid", "MVP-level interior gravity", "the modern half-court hub"),
+            ("Julius Erving", "transition charisma", "the older-school Finals-era wing"),
+        ],
+        "Oklahoma City Thunder": [
+            ("Russell Westbrook", "relentless pace + usage", "OKC's emotional playoff identity"),
+            ("Kevin Durant", "efficient high-volume scoring", "the early Thunder Finals window"),
+            ("Shai Gilgeous-Alexander", "compressed-space creation", "the modern OKC engine"),
+        ],
+        "Detroit Pistons": [
+            ("Isiah Thomas", "possession command", "Bad Boys guard leadership"),
+            ("Chauncey Billups", "clutch calm", "the 2004 steady-hand model"),
+            ("Ben Wallace", "defensive backbone", "rim protection without needing shots"),
+        ],
+        "Cleveland Cavaliers": [
+            ("LeBron James", "everything offense", "the return-era Cleveland standard"),
+            ("Kyrie Irving", "shot-making variance", "late-clock shot creation"),
+            ("Mark Price", "precision guard play", "the pre-2000s Cleveland creator mold"),
+        ],
+        "Minnesota Timberwolves": [
+            ("Kevin Garnett", "defensive tone-setter", "the soul-of-the-team playoff archetype"),
+            ("Kevin Love", "glass + outlet pressure", "the rebounding big template"),
+            ("Anthony Edwards", "explosive wing scoring", "the current Wolves shot diet"),
+        ],
+        "San Antonio Spurs": [
+            ("Tim Duncan", "two-way big fundamentals", "the Spurs dynasty anchor"),
+            ("Tony Parker", "paint touch + tempo", "the mid-2000s guard pressure"),
+            ("Kawhi Leonard", "defensive eraser + efficient scoring", "the 2014 two-way wing model"),
+        ],
+    }.get(team_name, [
+        ("Franchise legends", "playoff identity", "the historical bar fans use in barbershop debates"),
+        ("Recent stars", "modern shot diet", "what today's coverage compares you to"),
+        ("Role archetypes", "winning plays", "the non-box-score memory makers"),
+    ])
+
+
+def _historical_comparison_lines(player, team_name, cur, prev_summary, prof, role_lower):
+    lines = []
+    nick = fan_nick(team_name)
+    ppg = cur.get("PTS") or 0
+    ts = cur.get("TS_PCT")
+    stl = cur.get("STL") or 0
+    blk = cur.get("BLK") or 0
+    d_stk = stl + blk
+
+    icons = _franchise_playoff_touchstones(team_name)
+    if icons:
+        if "knicks" in team_name.lower() and ppg >= 22 and "brunson" not in player.lower():
+            lines.append(
+                f"At **{ppg:.1f} PPG**, you're in the Knicks-fan memory lane where people whisper **Carmelo Anthony**-type scoring responsibility — not a comp of style, but of how much the offense lives on one player's nightly output."
+            )
+        elif "knicks" in team_name.lower() and "brunson" in player.lower():
+            lines.append(
+                f"For {nick}, this is the **lead-guard playoff chapter** fans wanted when the front office bet on shot creation — {ppg:.1f} PPG is the engine number people will cite if the run keeps advancing."
+            )
+
+    if d_stk >= 2.4 and ("wing" in role_lower or "defend" in prof.get("resume", "").lower()):
+        lines.append(
+            f"Defensive counting stats ({stl:.1f} STL / {blk:.1f} BLK per game) read like **high-minute wing disruption** — the profile people reach for when they say *Draymond-adjacent influence* without claiming a perfect comp."
+        )
+    elif d_stk >= 1.8:
+        lines.append(
+            f"Steals/blocks combined at **{d_stk:.1f} per game** is real playoff activity on the ball — enough to swing possessions even when the scoring line is quieter."
+        )
+
+    if ts and ts >= 0.59 and ppg >= 22:
+        lines.append(
+            f"Efficiency is carrying weight: **{ts * 100:.1f}% TS** on meaningful volume mirrors the **Jimmy Butler 2020 Finals** archetype — tough shot diet, high trust, low waste — even if the matchup context is different."
+        )
+    elif ts and ts <= 0.52 and ppg >= 22:
+        lines.append(
+            f"The run is **high-usage with middling TS ({ts * 100:.1f}%)** — the kind of line that ages well if the team keeps winning, and harshly if the shot diet tightens later in the bracket."
+        )
+
+    if prev_summary and prev_summary.get("GP", 0) >= 3:
+        dppg = ppg - (prev_summary.get("PTS") or 0)
+        if dppg >= 4:
+            lines.append(
+                f"Versus last postseason's sample, scoring is **up ~{dppg:.1f} PPG** — a clear **step-forward** playoff profile if it holds through deeper rounds."
+            )
+        elif dppg <= -4:
+            lines.append(
+                f"Compared with last postseason's line, scoring is **down ~{-dppg:.1f} PPG** — worth watching whether that is matchup math, role change, or a cold stretch."
+            )
+
+    comps = _remove_self_comparisons(player, prof.get("comps") or [])
+    if comps:
+        lines.append(
+            f"NBA-wide bar talk (not a model): names like **{comps[0]}**, **{comps[1]}**, and **{comps[2]}** sit in the *neighborhood of role outcome* your stat shape is flirting with this spring."
+        )
+
+    if not lines:
+        lines.append(
+            f"The numbers are still writing the story — once the sample grows, this block tightens around **{nick}** history and the player comps that actually fit the shape of the run."
+        )
+    return lines[:5]
+
+
+def _narrative_storylines(player, team_name, cur, reg, prev_summary, prof):
+    stories = []
+    ppg = cur.get("PTS") or 0
+    pm = cur.get("PLUS_MINUS") or 0
+    gp = cur.get("GP") or 0
+
+    def _num_reg(k):
+        v = reg.get(k)
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    rppg = _num_reg("PTS")
+
+    if prev_summary and prev_summary.get("GP", 0) >= 3:
+        if ppg < (prev_summary.get("PTS") or 0) - 2 and pm >= 1:
+            stories.append(
+                "**Redemption arc (texture):** the counting line dipped versus last spring, but plus/minus is still carrying green — the run can still *feel* like a cleaner story if the winning keeps coming."
+            )
+        if ppg > (prev_summary.get("PTS") or 0) + 3:
+            stories.append(
+                "**Answering last year:** the scoring average jumped in a real way — the kind of postseason jump fans treat as *validation*, not noise."
+            )
+
+    if rppg is not None and ppg > rppg + 4:
+        stories.append(
+            "**Playoff lift:** production is meaningfully above regular-season scoring — the classic *he saved it for spring* shape (whether that is sustainable is the drama)."
+        )
+    if rppg is not None and ppg + 2 < rppg and gp >= 4:
+        stories.append(
+            "**Squeezed by the game:** playoff scoring sits under the regular-season baseline — often matchup or foul trouble, sometimes a role shift — worth reading next to wins and plus/minus, not in a vacuum."
+        )
+
+    baseline = prof.get("baseline", 45)
+    if baseline >= 66 and ppg >= 26:
+        stories.append(
+            "**Superstar validation mode:** the expectations were already enormous — this is the tier where every game becomes a referendum on whether you can be *the* reason a deep run happens."
+        )
+    elif baseline <= 42 and ppg >= 13:
+        stories.append(
+            "**Underdog emergence:** the résumé started lower, but the playoff line is loud enough that people are re-writing their mental depth chart in real time."
+        )
+
+    if "veteran" in prof.get("resume", "").lower() or any(x in player.lower() for x in ["lebron", "lowry", "conley", "george"]):
+        stories.append(
+            "**Veteran stewardship:** minutes and decision-making matter as much as peaks — the postseason is grading you on trust and shot quality as much as counting stats."
+        )
+
+    if pm <= -3 and ppg >= 18:
+        stories.append(
+            "**Proving the process:** high personal production with rough team on/off in the box can mean tough stagger lineups or garbage-time noise — still worth tracking as the series shortens."
+        )
+
+    if not stories:
+        stories.append(
+            "**Series truth:** playoff basketball rewards the player who can repeat the same winning habits on tired legs — the storyline here is still forming; the next two games usually decide how fans remember the chapter."
+        )
+    dedup = []
+    for s in stories:
+        if s not in dedup:
+            dedup.append(s)
+    return dedup[:6]
+
+
+def render_player_playoff_story_hub(team_name, profile):
+    """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
+    st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
+    st.subheader("Player Playoff Hub · journey, series texture, and legacy pressure")
+    st.caption(
+        f"Built for **{fan_nick(team_name)}** fans. Game logs come from NBA.com via **nba_api**; clutch and quarter reads use **honest proxies** where play-by-play splits are not in this feed."
+    )
+
+    plist = current_roster_names(team_name)
+    c_sel1, c_sel2 = st.columns([1.1, 1])
+    with c_sel1:
+        player = st.selectbox("Player", plist, key="pp_hub_player")
+    with c_sel2:
+        season = st.selectbox("Season", [CURRENT_NBA_SEASON, "2024-25", "2023-24"], index=0, key="pp_hub_season")
+
+    if not NBA_STATS_AVAILABLE:
+        st.error("nba_api stats endpoints unavailable.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    pid = get_player_id(player)
+    if not pid:
+        st.warning(f"Could not resolve NBA player id for **{player}**.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    logs_raw = _cached_playoff_gamelog(pid, season)
+    if logs_raw.empty:
+        st.warning(f"No playoff game log returned for **{player}** in **{season}**. Try another season or verify the player reached the postseason.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    df = _prepare_chrono_playoff_logs(logs_raw)
+    team_tri = ""
+    if "TEAM_ABBREVIATION" in df.columns and len(df):
+        team_tri = str(df["TEAM_ABBREVIATION"].iloc[0]).upper()
+    if not team_tri:
+        team_tri = TEAM_ALIASES.get(team_name, "")
+
+    cur_summary = summarize_playoff_logs(df)
+    cur_summary["TS_PCT"] = _true_shooting_pct(df)
+    cur_summary["GP"] = int(len(df))
+
+    prev_season = _prior_nba_season_label(season)
+    prev_summary = None
+    if prev_season:
+        prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
+        if not prev_df.empty:
+            prev_summary = summarize_playoff_logs(prev_df)
+            prev_summary["TS_PCT"] = _true_shooting_pct(prev_df)
+            prev_summary["GP"] = int(len(prev_df))
+
+    prof = player_resume_profile(player, team_name)
+    role_lower = str(prof.get("role", "")).lower()
+    reg_avg = season_averages(player)
+
+    seed = int(profile.get("seed") or 8)
+    rnd = profile.get("round") or "Playoffs"
+    status = profile.get("status") or "Active"
+    opp = profile.get("current_opponent")
+
+    # --- Hero ---
+    logo = TEAM_LOGOS.get(team_name, "")
+    hs = headshot(player)
+    wl_record = ""
+    if "WL" in df.columns:
+        w = int((df["WL"].astype(str).str.upper().str.startswith("W")).sum())
+        l = int((df["WL"].astype(str).str.upper().str.startswith("L")).sum())
+        wl_record = f"{w}-{l} in the log"
+
+    hero_badges = []
+    if status == "Active":
+        hero_badges.append(f"{rnd}")
+    else:
+        hero_badges.append("Postseason complete / eliminated context")
+    hero_badges.append(f"Seed {seed}")
+    if opp:
+        hero_badges.append(f"Board: vs {fan_nick(opp)}")
+
+    badge_html = "".join(f"<span class='pp-badge'>{html.escape(b)}</span>" for b in hero_badges[:4])
+    if cur_summary.get("PTS", 0) >= 25:
+        badge_html += "<span class='pp-badge gold'>High scoring load</span>"
+    if (cur_summary.get("STL", 0) + cur_summary.get("BLK", 0)) >= 2.5:
+        badge_html += "<span class='pp-badge fire'>Two-way activity</span>"
+
+    st.markdown(
+        f"""<div class='pp-hero'>
+  <div><img src='{hs}' width='104' style='border-radius:16px;border:2px solid rgba(248,250,252,.35);object-fit:cover;background:#0b1224;'/></div>
+  <div>
+    <h2>{html.escape(player)} · {html.escape(season)} playoffs</h2>
+    <div class='sub'>{html.escape(fan_nick(team_name))} · {html.escape(wl_record)} · {int(cur_summary.get('GP',0))} games in sample</div>
+    <div class='pp-badges'>{badge_html}</div>
+  </div>
+  <div style='justify-self:end;'><img src='{logo}' width='56' alt=''/></div>
+</div>""",
+        unsafe_allow_html=True,
+    )
+
+    # --- 1 · Current run ---
+    st.markdown("<div class='pp-sec'>1 · Current playoff run</div>", unsafe_allow_html=True)
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("PPG", f"{cur_summary.get('PTS', 0):.1f}")
+    m2.metric("RPG", f"{cur_summary.get('REB', 0):.1f}")
+    m3.metric("APG", f"{cur_summary.get('AST', 0):.1f}")
+    ts_disp = cur_summary.get("TS_PCT")
+    m4.metric("TS%", f"{ts_disp * 100:.1f}%" if ts_disp else "—")
+    m5.metric("+/-", f"{cur_summary.get('PLUS_MINUS', 0):+.1f}")
+
+    c_a, c_b = st.columns(2)
+    with c_a:
+        st.markdown("<div class='pp-card'><h4>Efficiency & turnover texture</h4>", unsafe_allow_html=True)
+        fg = cur_summary.get("FG_PCT") or 0
+        tp = cur_summary.get("FG3_PCT") or 0
+        ft = cur_summary.get("FT_PCT") or 0
+        tov = cur_summary.get("TOV") or 0
+        st.markdown(
+            f"<p class='pp-muted'>FG <b>{fg * 100:.1f}%</b> · 3P <b>{tp * 100:.1f}%</b> · FT <b>{ft * 100:.1f}%</b> · TOV <b>{tov:.1f}</b> per game.</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p class='pp-muted'>TS% uses makes/attempts from the log when available; it is not opponent-adjusted.</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    with c_b:
+        st.markdown("<div class='pp-card'><h4>Playoff highs / lows (box)</h4>", unsafe_allow_html=True)
+        if "PTS" in df.columns:
+            imax = int(df["PTS"].idxmax())
+            imin = int(df["PTS"].idxmin())
+            rmax = df.loc[imax]
+            rmin = df.loc[imin]
+            st.markdown(
+                f"<p class='pp-muted'><b>High:</b> {safe_float(rmax.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(rmax.get('MATCHUP'), team_tri)} on {html.escape(str(rmax.get('GAME_DATE','')))} "
+                f"(+/- {safe_float(rmax.get('PLUS_MINUS')):+.0f}).<br/>"
+                f"<b>Low:</b> {safe_float(rmin.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(rmin.get('MATCHUP'), team_tri)} on {html.escape(str(rmin.get('GAME_DATE','')))}.</p>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='pp-card'><h4>Clutch texture (proxies — no quarter splits in this feed)</h4>", unsafe_allow_html=True)
+    wins = df[df["WL"].astype(str).str.upper().str.startswith("W")] if "WL" in df.columns else df
+    loss = df[df["WL"].astype(str).str.upper().str.startswith("L")] if "WL" in df.columns else pd.DataFrame()
+    wppg = float(wins["PTS"].mean()) if not wins.empty and "PTS" in wins.columns else None
+    lppg = float(loss["PTS"].mean()) if not loss.empty and "PTS" in loss.columns else None
+    win_txt = f"{wppg:.1f}" if wppg is not None else "—"
+    loss_txt = f" · in losses: <b>{lppg:.1f}</b> PPG" if lppg is not None else ""
+    st.markdown(
+        f"<p class='pp-muted'>In logged wins: <b>{win_txt}</b> PPG average{loss_txt}. "
+        f"Bounce-back wins after a loss in this run: <b>{_bounce_back_games(df)}</b>.</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- 2 · Series ---
+    st.markdown("<div class='pp-sec'>2 · Series-by-series breakdown</div>", unsafe_allow_html=True)
+    chunks = _series_chunks_chrono(df, team_tri)
+    if not chunks:
+        st.info("Could not split series from matchups.")
+    else:
+        for idx, (opp_tri, seg) in enumerate(chunks, start=1):
+            opp_name = ALIAS_TO_TEAM.get(opp_tri, opp_tri)
+            label = f"Series {idx} · vs {opp_name}"
+            w = int((seg["WL"].astype(str).str.upper().str.startswith("W")).sum()) if "WL" in seg.columns else 0
+            el = int((seg["WL"].astype(str).str.upper().str.startswith("L")).sum()) if "WL" in seg.columns else 0
+            sm = summarize_playoff_logs(seg)
+            sm["TS_PCT"] = _true_shooting_pct(seg)
+            mom = _momentum_reading(seg)
+            cons, cons_note = _consistency_rating(seg["PTS"]) if "PTS" in seg.columns else (None, "—")
+            st.markdown(f"<div class='pp-card'><h4>{html.escape(label)} · {w}-{el} in log</h4>", unsafe_allow_html=True)
+            ts_part = f"{(sm.get('TS_PCT') * 100):.1f}%" if sm.get("TS_PCT") is not None else "—"
+            st.markdown(
+                f"<p class='pp-muted'><b>Line:</b> {sm.get('PTS',0):.1f} / {sm.get('REB',0):.1f} / {sm.get('AST',0):.1f} · "
+                f"STL/BLK {sm.get('STL',0):.1f}/{sm.get('BLK',0):.1f} · TS% {ts_part}</p>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"<p class='pp-muted'><b>Momentum:</b> {mom}</p>", unsafe_allow_html=True)
+            if cons is not None:
+                st.markdown(
+                    f"<p class='pp-muted'><b>Consistency rating:</b> {cons}/100 — {cons_note}</p>",
+                    unsafe_allow_html=True,
+                )
+            if len(seg) >= 2:
+                seg_scored = seg.copy()
+                seg_scored["_impact"] = seg_scored.apply(_game_impact_score, axis=1)
+                top = seg_scored.sort_values("_impact", ascending=False).head(2)
+                bits = []
+                for _, rr in top.iterrows():
+                    bits.append(
+                        f"{safe_float(rr.get('PTS')):.0f} PTS ({str(rr.get('GAME_DATE',''))}) vs {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)}"
+                    )
+                st.markdown("<p class='pp-muted'><b>Biggest games (impact blend):</b> " + " · ".join(bits) + "</p>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- 3 · Pressure meters ---
+    st.markdown("<div class='pp-sec'>3 · Pressure & legacy meters</div>", unsafe_allow_html=True)
+    expectation = "title-or-bust heat" if seed <= 2 else "real contender expectations" if seed <= 4 else "prove-it underdog energy"
+    pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
+    rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
+    stakes = min(100, 35 + _round_narrative_weight(rnd) + (12 if status == "Active" else 0))
+    elim_pressure = min(100, 22 + _bounce_back_games(df) * 14 + (10 if any(str(x).upper().startswith("L") for x in df.get("WL", [])) else 0))
+
+    def meter_bar(label, val, klass=""):
+        v = max(0, min(100, int(val)))
+        return f"<div class='pp-card'><h4>{html.escape(label)}</h4><div class='pp-meter'><span class='{klass}' style='width:{v}%'></span></div><p class='pp-muted'>{v}/100 · heuristic blend from seed, round, role, and this log.</p></div>"
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(meter_bar("Pressure level", pressure_base, ""), unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='pp-card'><h4>Playoff expectations</h4><p class='pp-muted'>For a <b>seed-{seed}</b> {fan_nick(team_name)} run in the <b>{rnd}</b> window, the crowd reads this as <b>{expectation}</b> — fair or not, that noise attaches to the best players first.</p></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(meter_bar("Reputation swing (short-term)", rep, "gold"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(meter_bar("Championship stakes (narrative)", stakes, "ember"), unsafe_allow_html=True)
+        st.markdown(meter_bar("Elimination / bounce-back pressure", elim_pressure, "gold"), unsafe_allow_html=True)
+        st.markdown(
+            "<div class='pp-card'><h4>Legacy note</h4><p class='pp-muted'>"
+            + html.escape(prof.get("team_context", "Each round rewrites how fans file this run in franchise memory."))
+            + "</p></div>",
+            unsafe_allow_html=True,
+        )
+
+    # --- 4 · Historical comparisons ---
+    st.markdown("<div class='pp-sec'>4 · Historical comparison engine</div>", unsafe_allow_html=True)
+    for line in _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower):
+        with st.container(border=True):
+            st.markdown(line)
+    if prev_summary:
+        st.caption(f"Prior playoff sample: **{prev_season}** ({prev_summary.get('GP', 0)} games) used only when the API returned a log.")
+
+    # --- 5 · Clutch impact ---
+    st.markdown("<div class='pp-sec'>5 · Clutch impact</div>", unsafe_allow_html=True)
+    df_c = df.copy()
+    df_c["_impact"] = df_c.apply(_game_impact_score, axis=1)
+    df_c = df_c.sort_values("_impact", ascending=False)
+    st.markdown("<div class='pp-card'><h4>Late-game / takeover proxies</h4>", unsafe_allow_html=True)
+    st.markdown(
+        "<p class='pp-muted'>Quarter splits are not in standard season game logs here — instead we rank <b>playoff takeover games</b> by a weighted blend of points, playmaking, stocks, and plus/minus.</p>",
+        unsafe_allow_html=True,
+    )
+    if not df_c.empty:
+        top3 = df_c.head(3)
+        lines = []
+        for _, rr in top3.iterrows():
+            lines.append(
+                f"{html.escape(str(rr.get('GAME_DATE','')))}: {safe_float(rr.get('PTS')):.0f} PTS, "
+                f"+/- {safe_float(rr.get('PLUS_MINUS')):+.0f} vs {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)}"
+            )
+        st.markdown("<p class='pp-muted'><b>Top takeover games:</b><br/>" + "<br/>".join(lines) + "</p>", unsafe_allow_html=True)
+    takeover = min(100, int(38 + 2.2 * (cur_summary.get("PTS", 0)) + 4.5 * (cur_summary.get("STL", 0) + cur_summary.get("BLK", 0)) + 1.1 * max(0, cur_summary.get("PLUS_MINUS", 0))))
+    st.markdown(
+        f"<p class='pp-muted'><b>Playoff takeover rating (heuristic):</b> {takeover}/100 — rewards volume + defensive event creation + positive on-court margin in the log.</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- 6 · Narratives ---
+    st.markdown("<div class='pp-sec'>6 · Narrative storylines</div>", unsafe_allow_html=True)
+    for s in _narrative_storylines(player, team_name, cur_summary, reg_avg, prev_summary, prof):
+        with st.container(border=True):
+            st.markdown(s)
+
+    # --- 7 · Visuals ---
+    st.markdown("<div class='pp-sec'>7 · Progression & raw log</div>", unsafe_allow_html=True)
+    tcol1, tcol2 = st.columns((1, 1))
+    with tcol1:
+        st.markdown("<div class='pp-card'><h4>Game-by-game progression</h4>", unsafe_allow_html=True)
+        chart_df = df.copy()
+        chart_df["Game #"] = np.arange(1, len(chart_df) + 1)
+        if "PLUS_MINUS" in chart_df.columns and "PTS" in chart_df.columns:
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(
+                go.Scatter(x=chart_df["Game #"], y=chart_df["PTS"], name="PTS", mode="lines+markers", line=dict(color="#0ea5e9")),
+                secondary_y=False,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Game #"],
+                    y=chart_df["PLUS_MINUS"],
+                    name="+/-",
+                    mode="lines+markers",
+                    line=dict(color="#6366f1", dash="dot"),
+                    marker=dict(size=7),
+                ),
+                secondary_y=True,
+            )
+            fig.update_yaxes(title_text="PTS", secondary_y=False)
+            fig.update_yaxes(title_text="+/-", secondary_y=True, zeroline=True, zerolinewidth=1, zerolinecolor="#94a3b8")
+        else:
+            fig = go.Figure()
+            if "PTS" in chart_df.columns:
+                fig.add_trace(go.Scatter(x=chart_df["Game #"], y=chart_df["PTS"], name="PTS", mode="lines+markers", line=dict(color="#0ea5e9")))
+        fig.update_layout(
+            height=320,
+            margin=dict(l=20, r=20, t=40, b=36),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            yaxis=dict(title=""),
+            xaxis=dict(title="Chronological playoff game #"),
+            paper_bgcolor="#fafafa",
+            plot_bgcolor="#fafafa",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with tcol2:
+        st.markdown("<div class='pp-card'><h4>Playoff timeline</h4>", unsafe_allow_html=True)
+        items = []
+        for _, rr in df.iterrows():
+            wl = str(rr.get("WL", "—"))
+            items.append(
+                f"<div class='pp-tl-item'><b>{html.escape(str(rr.get('GAME_DATE','')))}</b> · {html.escape(wl)} · "
+                f"{safe_float(rr.get('PTS')):.0f} PTS · {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)}</div>"
+            )
+        st.markdown("<div class='pp-timeline'>" + "".join(items) + "</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    stat_opts = [c for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "PLUS_MINUS", "MIN"] if c in df.columns]
+    if stat_opts:
+        stat = st.selectbox("Overlay single-stat line", stat_opts, index=0, key="pp_hub_stat")
+        cdf = df.copy()
+        cdf["Game #"] = np.arange(1, len(cdf) + 1)
+        st.plotly_chart(
+            px.line(cdf, x="Game #", y=stat, markers=True, title=f"{player} · {stat} by playoff game"),
+            use_container_width=True,
+        )
+
+    show_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS"] if c in df.columns]
+    with st.expander("Full playoff game log (table)"):
+        st.dataframe(df[show_cols], use_container_width=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 # ==========================================================
 # Analysis / visualization helpers
 # ==========================================================
@@ -4504,23 +5218,7 @@ elif page == "Live Game Center":
 
 elif page == "Player Playoff Tracker":
     render_matchup_header(favorite_team)
-    plist=current_roster_names(favorite_team)
-    st.caption("Player list is pulled from NBA API current roster/rotation when available. Hard-coded names are used only as backup.")
-    player=st.selectbox("Choose player", plist); season=st.selectbox("Season", [CURRENT_NBA_SEASON,"2024-25","2023-24"], index=0)
-    if not NBA_STATS_AVAILABLE: st.error("nba_api stats endpoints unavailable.")
-    else:
-        pid=get_player_id(player)
-        if not pid: st.warning(f"Could not find player ID for {player}.")
-        else:
-            try: logs=playergamelog.PlayerGameLog(player_id=pid, season=season, season_type_all_star="Playoffs").get_data_frames()[0]
-            except Exception: logs=pd.DataFrame()
-            if logs.empty: st.warning(f"No playoff logs found for {player} in {season}.")
-            else:
-                cols=[c for c in ["GAME_DATE","MATCHUP","WL","MIN","PTS","REB","AST","STL","BLK","TOV","FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"] if c in logs.columns]
-                st.dataframe(logs[cols], use_container_width=True)
-                stat=st.selectbox("Choose stat", [c for c in ["PTS","REB","AST","STL","BLK","TOV","FG_PCT","FG3_PCT","PLUS_MINUS","MIN"] if c in logs.columns])
-                chart=logs.copy(); chart["Game Number"]=range(1,len(chart)+1)
-                st.plotly_chart(px.line(chart,x="Game Number",y=stat,markers=True,title=f"{player} {stat} — Playoffs"), use_container_width=True)
+    render_player_playoff_story_hub(favorite_team, profile)
 
 elif page == "Legacy Tracker":
     render_matchup_header(favorite_team)
