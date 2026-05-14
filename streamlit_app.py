@@ -730,8 +730,11 @@ def fan_nick(team_name):
     return str(team_name).split()[-1]
 
 
-def series_status_text(team_name):
-    _, s = series_for_team(team_name)
+def series_status_text(team_name, series_obj=None):
+    if series_obj is not None:
+        s = series_obj
+    else:
+        _, s = series_for_team(team_name)
     if not s:
         nick = fan_nick(team_name)
         _, semi = second_round_series_for_team(team_name)
@@ -759,8 +762,11 @@ def series_status_text(team_name):
     return f"{rnd}: {ledger}{source_note}"
 
 
-def historic_series_context(team_name):
-    _, s = series_for_team(team_name)
+def historic_series_context(team_name, series_obj=None):
+    if series_obj is not None:
+        s = series_obj
+    else:
+        _, s = series_for_team(team_name)
     if not s:
         return pd.DataFrame()
     a, b = s["a"], s["b"]
@@ -790,7 +796,7 @@ def historic_series_context(team_name):
     return pd.DataFrame(
         [
             {
-                "Series Status": series_status_text(team_name),
+                "Series Status": series_status_text(team_name, s),
                 "Data Source": s.get("source", ""),
                 "Historical Context": note + latest_note,
             }
@@ -1203,7 +1209,7 @@ def get_live_games():
         return []
     try:
         try:
-            return scoreboard.ScoreBoard(timeout=8).get_dict().get("scoreboard", {}).get("games", []) or []
+            return scoreboard.ScoreBoard(timeout=5).get_dict().get("scoreboard", {}).get("games", []) or []
         except TypeError:
             return scoreboard.ScoreBoard().get_dict().get("scoreboard", {}).get("games", []) or []
     except Exception:
@@ -1364,7 +1370,7 @@ def _seconds_to_tipoff(g):
     return (tip.astimezone(timezone.utc) - now).total_seconds()
 
 
-def _pick_featured_game_for_team(team_name):
+def _pick_featured_game_for_team_uncached(team_name):
     """Prefer in-progress, then tipoff soon, then most recent final, else next scheduled."""
     games = _gather_team_scoreboard_games(team_name)
     if not games:
@@ -1391,13 +1397,24 @@ def _pick_featured_game_for_team(team_name):
     return normalize_scoreboard_game(dict(games[0]))
 
 
+@st.cache_data(ttl=22)
+def _pick_featured_game_for_team_cached(team_name: str):
+    """Cached featured row — home hub + live strip should not re-merge the full ET window every rerun."""
+    return _pick_featured_game_for_team_uncached(team_name)
+
+
+def _pick_featured_game_for_team(team_name):
+    return _pick_featured_game_for_team_cached(team_name)
+
+
 def find_live_game_for_team(team_name):
     """Best scoreboard row for sidebar team (live CDN + scoreboardv2 window)."""
     return _pick_featured_game_for_team(team_name)
 
 
-def featured_broadcast_state(team_name):
-    """Single merged scoreboard row for Live Game Center + Home hub (CDN + stats, normalized)."""
+@st.cache_data(ttl=22)
+def featured_broadcast_state_cached(team_name: str):
+    """Normalize featured row for hub + live center — cached separately from raw pick."""
     try:
         g = find_live_game_for_team(team_name)
         if not g:
@@ -1417,7 +1434,12 @@ def featured_broadcast_state(team_name):
         }
 
 
-def get_live_game_detection_context(team_name):
+def featured_broadcast_state(team_name):
+    """Single merged scoreboard row for Live Game Center + Home hub (CDN + stats, normalized)."""
+    return featured_broadcast_state_cached(team_name)
+
+
+def get_live_game_detection_context_impl(team_name):
     """When the merged featured pick is empty: classify today ET vs window using CDN + scoreboardv2 (no false 'no game')."""
     featured = find_live_game_for_team(team_name)
     if featured is not None:
@@ -1501,6 +1523,17 @@ def get_live_game_detection_context(team_name):
         "best_stub_game": best_stub,
         "featured": None,
     }
+
+
+@st.cache_data(ttl=28)
+def get_live_game_detection_context_cached(team_name: str):
+    """ET-window detection is expensive (multi-day scoreboard pulls) — cache briefly for Home + strips."""
+    return get_live_game_detection_context_impl(team_name)
+
+
+def get_live_game_detection_context(team_name):
+    return get_live_game_detection_context_cached(team_name)
+
 
 @st.cache_data(ttl=30)
 def get_live_boxscore(game_id):
@@ -1616,7 +1649,7 @@ def season_averages(name):
     if not pid or not NBA_STATS_AVAILABLE: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
     try:
         try:
-            df = playercareerstats.PlayerCareerStats(player_id=pid, timeout=12).get_data_frames()[0]
+            df = playercareerstats.PlayerCareerStats(player_id=pid, timeout=6).get_data_frames()[0]
         except TypeError:
             df = playercareerstats.PlayerCareerStats(player_id=pid).get_data_frames()[0]
         if df.empty: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
@@ -1628,7 +1661,7 @@ def headshot(name):
     pid = get_player_id(name)
     return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png" if pid else "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
 
-@st.cache_data(ttl=1200)
+@st.cache_data(ttl=180)
 def fetch_espn_injury_report(team_name):
     """Fetch current injury report from ESPN team injury page.
 
@@ -1648,7 +1681,7 @@ def fetch_espn_injury_report(team_name):
         "Accept-Language": "en-US,en;q=0.9",
     }
     try:
-        html = requests.get(url, headers=headers, timeout=8).text
+        html = requests.get(url, headers=headers, timeout=4).text
     except Exception as e:
         return pd.DataFrame(), f"ESPN request failed: {e}"
 
@@ -1727,6 +1760,12 @@ def injury_impact_note(player, status, injury, team_name):
     return base
 
 def get_injury_report(team_name):
+    return get_injury_report_cached(str(team_name))
+
+
+@st.cache_data(ttl=120)
+def get_injury_report_cached(team_name: str):
+    """Injury rows + fallback — cached so Home + hero strip do not hammer ESPN every rerun."""
     df, source = fetch_espn_injury_report(team_name)
     if df is not None and not df.empty:
         return df, source
@@ -3456,7 +3495,7 @@ def next_round_context_for_team(team_name):
         "paired_series": paired,
     }
 
-def resolve_home_matchup_context(team_name):
+def resolve_home_matchup_context_impl(team_name):
     """Resolve current matchup / round for the Home Dashboard (no Streamlit output)."""
     profile = TEAM_PROFILES[team_name]
     _k, s = series_for_team(team_name)
@@ -3497,6 +3536,16 @@ def resolve_home_matchup_context(team_name):
         "bracket_series": False,
         "ctx": ctx,
     }
+
+
+@st.cache_data(ttl=45)
+def resolve_home_matchup_context_cached(team_name: str):
+    """Home hub context — bracket shells + opponent fields rarely change minute-to-minute."""
+    return resolve_home_matchup_context_impl(team_name)
+
+
+def resolve_home_matchup_context(team_name):
+    return resolve_home_matchup_context_cached(team_name)
 
 
 # --- Home dashboard: team lens + playoff situation (dynamic ordering / copy) ---
@@ -3598,6 +3647,20 @@ def _dashboard_injury_signal(team_name, profile):
     return "elevated"
 
 
+def _dashboard_injury_signal_fast(team_name, profile):
+    """Ordering signal without ESPN — uses bundled fallback rows only (instant)."""
+    fb_list = FALLBACK_INJURY_REPORT.get(team_name, []) or []
+    starters = [str(x).lower() for x in (profile.get("starters") or [])[:6]]
+    for row in fb_list:
+        pl = str(row.get("Player", "")).lower()
+        st = str(row.get("Status", "")).lower()
+        if not starters or not any(s in pl or pl in s for s in starters):
+            continue
+        if any(x in st for x in ["out", "doubt", "question", "game"]):
+            return "high"
+    return "low"
+
+
 def _dashboard_section_order(
     elimination_trailing,
     injury_level,
@@ -3627,12 +3690,14 @@ def _dashboard_section_order(
     return ["snapshot", "injuries", "stars", "momentum", "legacy", "next_game", "stories", "last_game", "outlook"]
 
 
-def build_dashboard_playoff_context(team_name, hctx):
+def build_dashboard_playoff_context(team_name, hctx, series_board=None):
     profile = TEAM_PROFILES[team_name]
     lens = team_dashboard_lens(team_name)
     fb = featured_broadcast_state(team_name)
-    live = find_live_game_for_team(team_name)
-    s = hctx.get("series")
+    live = None
+    if isinstance(fb, dict) and fb.get("game"):
+        live = fb["game"]
+    s = hctx.get("series") or series_board
     mode = hctx.get("mode")
     tw = ow = 0
     opp = None
@@ -3663,7 +3728,7 @@ def build_dashboard_playoff_context(team_name, hctx):
     phase_pregame = bool(fb and fb.get("game") and fb.get("phase") == "pregame")
     pregame_soon = bool(fb and fb.get("starting_soon"))
 
-    injury_level = _dashboard_injury_signal(team_name, profile)
+    injury_level = _dashboard_injury_signal_fast(team_name, profile)
     flagship = _dashboard_pick_flagship(profile, lens)
     high_legacy = int(lens.get("legacy_weight") or 0) >= 2
 
@@ -3982,42 +4047,35 @@ def _home_series_win_probability(team_name, hctx, live):
     return int(max(12, min(88, base)))
 
 
-def _home_injury_hero_snippet(team_name, opponents):
-    teams = [team_name]
-    if isinstance(opponents, (list, tuple, set)):
-        teams.extend([t for t in opponents if t and t not in teams])
-    elif opponents and opponents not in teams:
-        teams.append(opponents)
-    parts = []
-    for tm in teams[:3]:
-        df, _ = get_injury_report(tm)
-        if df is None or df.empty:
-            continue
-        row = df.iloc[0]
-        parts.append(
-            f"<strong>{html.escape(tm)}</strong>: {html.escape(str(row.get('Player','?')))} "
-            f"<span style='opacity:.85'>({html.escape(str(row.get('Status','?')))})</span>"
+def _home_injury_hero_snippet(team_name):
+    """One-team snippet for hero load — opponent rows load in the injuries expander."""
+    df, _ = get_injury_report(team_name)
+    if df is None or df.empty:
+        return (
+            f"Injury feed for {html.escape(fan_nick(team_name))} loads when available — "
+            f"open <strong>Key injuries & full availability</strong> below for the full board."
         )
-    if not parts:
-        return f"Injuries for {html.escape(fan_nick(team_name))} & opponents load from ESPN when available — scroll to <strong>Key injuries</strong> below."
-    return " · ".join(parts)
+    row = df.iloc[0]
+    return (
+        f"<strong>{html.escape(team_name)}</strong>: {html.escape(str(row.get('Player', '?')))} "
+        f"<span style='opacity:.85'>({html.escape(str(row.get('Status', '?')))})</span>"
+    )
 
 
 def _home_command_center_hero_html(team_name, hctx, pctx=None):
     if pctx is None:
-        pctx = build_dashboard_playoff_context(team_name, hctx)
+        pctx = build_dashboard_playoff_context(team_name, hctx, None)
     pal = live_hero_palette(team_name)
     esc = html.escape
     profile = TEAM_PROFILES[team_name]
-    s = hctx.get("series")
+    s = hctx.get("series") or (pctx.get("series") if pctx else None)
     live = pctx.get("live")
     fb = pctx.get("fb")
     prob = _home_series_win_probability(team_name, hctx, live)
     headline = _home_storyline_headline(team_name, hctx, pctx)
     lens = pctx.get("lens") or team_dashboard_lens(team_name)
     kicker_dom = f"{esc(lens.get('hero_kicker', 'Playoff command center'))} · {esc(fan_nick(team_name))}"
-    opps = home_injury_opponents(team_name)
-    inj = _home_injury_hero_snippet(team_name, opps)
+    inj = _home_injury_hero_snippet(team_name)
     left_logo = TEAM_LOGOS.get(team_name, "")
 
     if hctx.get("mode") == "waiting_cf":
@@ -4138,7 +4196,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None):
 """
 
 def render_home_live_hub_strip(team_name):
-    """Prominent Home Dashboard strip when a playoff window game exists (live / soon / final / schedule fallback)."""
+    """Home strip when a merged playoff-window game exists (live / soon / final). No extra hub detection on Home."""
     fb = featured_broadcast_state(team_name)
     if fb and fb.get("game"):
         g = fb["game"]
@@ -4196,111 +4254,85 @@ def render_home_live_hub_strip(team_name):
             st.rerun()
         return
 
-    det = get_live_game_detection_context(team_name)
-    tier = det.get("tier")
-    if tier in ("ok", "no_game_window"):
-        return
-    stub = det.get("best_stub_game")
-    if not stub:
-        return
-    g = stub
-    home = g.get("homeTeam", {}) or {}
-    away = g.get("awayTeam", {}) or {}
-    away_n = _live_team_full_name(_tricode_from_team_dict(away) or away.get("teamTricode", ""), away)
-    home_n = _live_team_full_name(_tricode_from_team_dict(home) or home.get("teamTricode", ""), home)
-    hs = safe_int(home.get("score", 0))
-    aws = safe_int(away.get("score", 0))
-    stt = (g.get("gameStatusText") or "")[:56]
-    nick = fan_nick(team_name)
-    if tier == "likely_live_feed_gap":
-        mod = "home-live-strip home-live-strip--soon"
-        title = "⚠️ GAME MAY BE LIVE — FEED NOT MERGED YET"
-    elif tier == "scheduled_today":
-        mod = "home-live-strip home-live-strip--soon"
-        title = "📅 GAME TODAY (ET) — OPEN LIVE HUB"
-    else:
-        mod = "home-live-strip"
-        title = "🗓️ GAME IN ET WINDOW — CHECK LIVE HUB"
-    sub = f"{html.escape(away_n)} @ {html.escape(home_n)}"
-    if stt:
-        sub += " · " + html.escape(stt)
-    msg = html.escape((det.get("message") or "")[:320])
-    st.markdown(
-        f"""
-<div class="{mod}">
-  <div class="home-live-strip-title">{title}</div>
-  <div class="home-live-strip-score">{html.escape(f'{aws} — {hs}')}</div>
-  <div class="home-live-strip-sub">{sub}</div>
-  <div style="margin-top:10px;font-size:12px;color:#94a3b8">{msg}</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-    if st.button("🏀 Go to Live Game Center", key="home_strip_fallback_open"):
-        st.session_state["page_override"] = "🏀 Live Game Center"
-        st.rerun()
+    # No merged game row: skip scoreboard detection here (avoids blocking Home on NBA hub calls).
+    # Live Game Center still runs full detection when the user opens it.
 
 
 def render_playoff_command_center(team_name):
     _inject_home_command_center_css()
     hctx = resolve_home_matchup_context(team_name)
-    pctx = build_dashboard_playoff_context(team_name, hctx)
+    _, s_active = series_for_team(team_name)
+    pctx = build_dashboard_playoff_context(team_name, hctx, s_active)
     profile = pctx["profile"]
 
     render_home_live_hub_strip(team_name)
     st.markdown(_home_command_center_hero_html(team_name, hctx, pctx), unsafe_allow_html=True)
     st.markdown(_dashboard_emphasis_html(team_name, pctx), unsafe_allow_html=True)
 
-    _DASH_TITLES = {
-        "snapshot": "Series board",
-        "injuries": "Injury & availability",
-        "stars": "Carry workload",
-        "momentum": "Series leverage",
-        "legacy": "Marquee playoff line",
-        "next_game": "Runway to tip",
-        "stories": "What the bracket is asking",
-        "last_game": "Last game's swing piece",
-        "outlook": "Big-picture outlook",
-    }
-
-    def sec_snapshot():
-        snap_cols = st.columns(4)
-        status_txt = series_status_text(team_name)
-        adv_like = hctx.get("advanced") or hctx.get("bracket_series")
-        snap_cols[0].metric("Playoff status", "Advanced" if adv_like else profile.get("status", "—"))
-        snap_cols[1].metric("Seed", profile.get("seed", "—"))
-        snap_cols[2].metric("Round on the board", (hctx.get("series") or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"))
-        fb = pctx.get("fb") or featured_broadcast_state(team_name)
-        if fb and fb.get("game") and fb.get("phase") == "live":
-            edge = "🔴 LIVE on the board"
-        elif fb and fb.get("game") and fb.get("starting_soon"):
-            edge = "Tip soon — runway"
-        elif fb and fb.get("game") and fb.get("phase") == "pregame":
-            edge = "Pregame data live"
-        elif fb and fb.get("game") and fb.get("phase") == "postgame":
-            edge = "Final logged — wrap in hub"
-        else:
-            det = get_live_game_detection_context(team_name)
-            if det.get("likely_feed_gap"):
-                edge = "⚠️ May be live — feed gap"
-            elif det.get("has_today_et"):
-                edge = "📅 Game today (ET)"
-            elif det.get("window_has_team"):
-                edge = "Slate in ET window"
-            else:
-                edge = "Tracking next tip"
-        snap_cols[3].metric("Tonight's edge", edge)
-        st.markdown(
-            f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
-            unsafe_allow_html=True,
+    st.markdown('<div class="cmd-sec">1 · Series board</div>', unsafe_allow_html=True)
+    snap_cols = st.columns(4)
+    status_txt = series_status_text(team_name, s_active)
+    adv_like = hctx.get("advanced") or hctx.get("bracket_series")
+    snap_cols[0].metric("Playoff status", "Advanced" if adv_like else profile.get("status", "—"))
+    snap_cols[1].metric("Seed", profile.get("seed", "—"))
+    s_disp = hctx.get("series") or s_active
+    snap_cols[2].metric(
+        "Round on the board",
+        (s_disp or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"),
+    )
+    fb = pctx.get("fb")
+    if fb and fb.get("game") and fb.get("phase") == "live":
+        edge = "🔴 LIVE on the board"
+    elif fb and fb.get("game") and fb.get("starting_soon"):
+        edge = "Tip soon — runway"
+    elif fb and fb.get("game") and fb.get("phase") == "pregame":
+        edge = "Pregame data live"
+    elif fb and fb.get("game") and fb.get("phase") == "postgame":
+        edge = "Final logged — wrap in hub"
+    else:
+        edge = "Tracking next tip"
+    snap_cols[3].metric("Tonight's edge", edge)
+    st.markdown(
+        f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
+        unsafe_allow_html=True,
+    )
+    s_table = hctx.get("series") or s_active
+    if s_table and s_table.get("games"):
+        st.dataframe(
+            pd.DataFrame(s_table["games"]),
+            use_container_width=True,
+            height=min(220, 38 + 28 * len(s_table["games"])),
         )
-        s = hctx.get("series")
-        if s and s.get("games"):
-            st.dataframe(pd.DataFrame(s["games"]), use_container_width=True, height=min(220, 38 + 28 * len(s["games"])))
-        elif hctx.get("advanced"):
-            st.info("Through the second round — Conference Finals pairings populate once both semis finish.")
-        elif s and s.get("round") in ("Conference Finals", "NBA Finals"):
-            st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
+    elif hctx.get("advanced"):
+        st.info("Through the second round — Conference Finals pairings populate once both semis finish.")
+    elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
+        st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
+
+    st.markdown('<div class="cmd-sec">2 · Runway to tip</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        live = pctx.get("live")
+        if live:
+            home = live.get("homeTeam", {}) or {}
+            away = live.get("awayTeam", {}) or {}
+            st.markdown(
+                f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
+            )
+        else:
+            opp = profile.get("current_opponent")
+            st.info(
+                f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — live tip and countdown post when the NBA schedule feed lists the game."
+            )
+
+    st.markdown('<div class="cmd-sec">3 · Quick outlook</div>', unsafe_allow_html=True)
+    render_team_outlook(team_name, compact_home=True, series_obj=s_active)
+
+    st.markdown('<div class="cmd-sec">4 · Injury snapshot</div>', unsafe_allow_html=True)
+    df_inj, _ = get_injury_report(team_name)
+    if df_inj is not None and not df_inj.empty:
+        st.dataframe(df_inj.head(5), use_container_width=True, hide_index=True)
+        st.caption("Top rows for your team — opponents and full notes load in the expander.")
+    else:
+        st.caption("No injury rows in the merged feed yet — open **Key injuries** for fallback boards.")
 
     def sec_injuries():
         with st.container(border=True):
@@ -4337,21 +4369,20 @@ def render_playoff_command_center(team_name):
                         st.caption(f"REB {sa.get('REB','—')} · AST {sa.get('AST','—')}")
 
     def sec_momentum():
-        hist = historic_series_context(team_name)
+        hist = historic_series_context(team_name, s_active)
         if not hist.empty:
             st.markdown(
                 f"<div style='font-size:13px;color:#cbd5e1;line-height:1.45'>{hist.iloc[0].get('Historical Context','')}</div>",
                 unsafe_allow_html=True,
             )
         m1, m2, m3 = st.columns(3)
-        _, s2 = series_for_team(team_name)
-        if s2:
-            a, b = s2["a"], s2["b"]
-            tw = int(s2["a_wins"]) if team_name == a else int(s2["b_wins"])
-            ow = int(s2["b_wins"]) if team_name == a else int(s2["a_wins"])
+        if s_active:
+            a, b = s_active["a"], s_active["b"]
+            tw = int(s_active["a_wins"]) if team_name == a else int(s_active["b_wins"])
+            ow = int(s_active["b_wins"]) if team_name == a else int(s_active["a_wins"])
             m1.metric("Series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
             m2.metric("Games played", tw + ow)
-            m3.metric("Data source", (s2.get("source") or "—")[:18])
+            m3.metric("Data source", (s_active.get("source") or "—")[:18])
         else:
             m1.metric("Series edge", "—")
             m2.metric("Games played", "—")
@@ -4368,21 +4399,6 @@ def render_playoff_command_center(team_name):
             c3.metric("AST", sm.get("AST", 0))
         st.caption("Scenario sliders and ceilings: **Legacy Tracker** page.")
 
-    def sec_next_game():
-        with st.container(border=True):
-            live = pctx.get("live") or find_live_game_for_team(team_name)
-            if live:
-                home = live.get("homeTeam", {}) or {}
-                away = live.get("awayTeam", {}) or {}
-                st.markdown(
-                    f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
-                )
-            else:
-                opp = profile.get("current_opponent")
-                st.info(
-                    f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — live tip and countdown post when the NBA schedule feed lists the game."
-                )
-
     def sec_stories():
         story_cols = st.columns(3)
         for col, (t, b) in zip(story_cols, _dashboard_story_cards(team_name, pctx)):
@@ -4392,45 +4408,41 @@ def render_playoff_command_center(team_name):
                     st.caption(b)
 
     def sec_last_game():
-        _, s3 = series_for_team(team_name)
-        if s3 and s3.get("games"):
-            last = s3["games"][-1]
-            opp = s3["b"] if team_name == s3["a"] else s3["a"]
+        if s_active and s_active.get("games"):
+            last = s_active["games"][-1]
+            opp = s_active["b"] if team_name == s_active["a"] else s_active["a"]
             gn = last.get("Game") if isinstance(last.get("Game"), int) else str(last.get("Game", "Game")).replace("Game ", "")
             try:
                 gn_i = int(str(gn).replace("Game ", ""))
             except Exception:
-                gn_i = len(s3["games"])
+                gn_i = len(s_active["games"])
             mvp, why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
             st.success(f"**{mvp}** — _{why}_")
             st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
         else:
             st.caption("MVP tag unlocks when the most recent game row hits the log for this matchup.")
 
-    def sec_outlook():
-        render_team_outlook(team_name)
+    def sec_outlook_full():
+        render_team_outlook(team_name, compact_home=False, series_obj=s_active)
 
-    render_map = {
-        "snapshot": sec_snapshot,
-        "injuries": sec_injuries,
-        "stars": sec_stars,
-        "momentum": sec_momentum,
-        "legacy": sec_legacy,
-        "next_game": sec_next_game,
-        "stories": sec_stories,
-        "last_game": sec_last_game,
-        "outlook": sec_outlook,
-    }
+    with st.expander("Key injuries & full availability (all teams in lens)", expanded=False):
+        sec_injuries()
+    with st.expander("Star workload & season touches (loads NBA stats)", expanded=False):
+        sec_stars()
+    with st.expander("Series leverage & historical read", expanded=False):
+        sec_momentum()
+    with st.expander("Last game's swing piece", expanded=False):
+        sec_last_game()
+    with st.expander("What the bracket is asking (story cards)", expanded=False):
+        sec_stories()
+    with st.expander("Marquee playoff line & legacy game totals", expanded=False):
+        sec_legacy()
+    with st.expander("Full team outlook & worry list", expanded=False):
+        sec_outlook_full()
 
-    for idx, key in enumerate(pctx.get("section_order") or [], start=1):
-        fn = render_map.get(key)
-        if not fn:
-            continue
-        title = html.escape(_DASH_TITLES.get(key, key.replace("_", " ").title()))
-        st.markdown(f'<div class="cmd-sec">{idx} · {title}</div>', unsafe_allow_html=True)
-        fn()
-
-    st.caption(f"Auto-updated bracket series + API where available · Refreshed {datetime.now().strftime('%b %d %I:%M %p')}")
+    st.caption(
+        f"Auto-updated bracket series + API where available · Refreshed {datetime.now().strftime('%b %d %I:%M %p')}"
+    )
 
 def home_injury_opponents(team_name):
     ctx = next_round_context_for_team(team_name)
@@ -4990,8 +5002,11 @@ def render_bracket():
         )
 
 
-def latest_game_note(team):
-    _, s = series_for_team(team)
+def latest_game_note(team, series_obj=None):
+    if series_obj is not None:
+        s = series_obj
+    else:
+        _, s = series_for_team(team)
     if not s or not s.get("games"):
         return "No completed current-series game is in the log yet — check back after tip."
     last = s["games"][-1]
@@ -5006,12 +5021,23 @@ def latest_game_note(team):
         f"{last.get('Score','score unavailable')}. You {result} that one. {vibe}"
     )
 
-def render_team_outlook(team):
+def render_team_outlook(team, compact_home=False, series_obj=None):
     p = TEAM_PROFILES[team]
     nick = fan_nick(team)
+    if compact_home:
+        st.markdown(f"##### Quick outlook · {nick}")
+        st.markdown(
+            f"<div class='big-status' style='margin:0 0 8px'>{series_status_text(team, series_obj)}</div>",
+            unsafe_allow_html=True,
+        )
+        st.info(latest_game_note(team, series_obj))
+        tops = p.get("strengths") or []
+        if tops:
+            st.caption("Strengths — " + " · ".join(str(x) for x in tops[:2]))
+        return
     st.subheader(f"Team outlook · {nick} fan lens")
-    st.markdown(f"<div class='big-status'>{series_status_text(team)}</div>", unsafe_allow_html=True)
-    st.info(latest_game_note(team))
+    st.markdown(f"<div class='big-status'>{series_status_text(team, series_obj)}</div>", unsafe_allow_html=True)
+    st.info(latest_game_note(team, series_obj))
     st.markdown("### What you should feel good about")
     for s in p["strengths"]:
         if team == "New York Knicks" and "Towns" in s:
