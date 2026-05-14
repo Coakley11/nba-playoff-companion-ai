@@ -242,6 +242,509 @@ ELIMINATED_INFO = [
 for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
     TEAM_PROFILES[name] = {"seed":seed,"conference":conf,"status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":opp,"first_round_result":result,"starters":starters,"subs":subs,"strengths":["main star creation","transition chances","playoff experience"],"concerns":["series ended in first round","needs depth/defense improvements","late-game consistency"]}
 
+
+def _generic_offseason_outlook(team_name):
+    """Fallback offseason copy when a team is eliminated but not in the detailed table."""
+    nick = fan_nick(team_name)
+    prof = TEAM_PROFILES.get(team_name) or {}
+    opp = prof.get("first_round_opponent") or "their opponent"
+    res = prof.get("first_round_result") or "playoff series"
+    return {
+        "reflection": {
+            "went_right": f"{nick} still reached the postseason — the regular season showed enough to earn a seven-game stage against {fan_nick(opp)}.",
+            "elimination_cause": f"The first round ended with {res}; the tighter margins in May usually go to the group that wins late-clock execution and depth minutes.",
+            "playoff_strengths": [
+                "Moments where the main creators bent the defense and generated clean looks.",
+                "Home energy and the ability to stay in games when the shot diet tightened.",
+            ],
+            "playoff_weaknesses": [
+                "Role-player production when the opponent shrank the floor to the stars.",
+                "Consistency on defense across four quarters as the series lengthened.",
+            ],
+        },
+        "priorities": [
+            "Secondary shot creation when defenses load to the primary initiator.",
+            "Wing size and versatility to survive cross-matches in a deep East/West.",
+            "Bench scoring that does not crater the margin when starters sit.",
+            "Spacing and decision-making against switching defenses.",
+        ],
+        "roster": {
+            "summary": f"The core that got {nick} here is still the starting point — summer is about who fits around that core under real cap rules.",
+            "bullets": [
+                "Free agency: identify which rotation pieces are worth paying vs. replacing on the margin.",
+                "Veterans: decide who returns on value contracts versus who needs a fresh role elsewhere.",
+                "Trades: explore upgrades that address the holes this series exposed without stripping the identity.",
+                "Extensions: align young contracts with the timeline you want to chase.",
+                "Young players: internal development is still the cheapest way to raise the ceiling.",
+                "Cap: one expensive mistake can lock you out of flexibility for multiple summers.",
+            ],
+        },
+        "future": [
+            f"The next step for {nick} is turning regular-season proof into repeatable May basketball — that is as much roster construction as it is coaching.",
+            "Conference rivals are not standing still; every improvement has to answer a specific matchup problem.",
+        ],
+        "draft_assets": [
+            "Draft capital depends on protections and swaps already on the books — treat picks as trade currency or developmental bets, not magic beans.",
+            "If picks are outgoing, the pressure rises to hit on minimum-salary contributors and undrafted finds.",
+        ],
+        "archetypes": [
+            "Two-way wing who can guard multiple positions without hiding on offense.",
+            "Secondary creator who keeps the offense organized when the defense traps the star.",
+            "Stretch big or movement shooter who opens the paint without bleeding points on the other end.",
+        ],
+        "direction": {
+            "label": "Uncertain direction",
+            "blurb": f"The honest read: {nick} are neither clearly rebuilding nor clearly a finished product — the summer meetings will define which path they take.",
+        },
+    }
+
+
+OFFSEASON_OUTLOOK_BY_TEAM = {
+    "Atlanta Hawks": {
+        "reflection": {
+            "went_right": "Atlanta still played meaningful playoff minutes with a younger supporting cast around Trae Young — there were stretches where pace, screening, and shot-making looked like a modern offense.",
+            "elimination_cause": "New York controlled the glass and physicality in too many fourth quarters; when the Knicks shrank the floor to Young, Atlanta did not generate enough clean secondary shots or enough stops in succession to extend the series.",
+            "playoff_strengths": [
+                "Young’s pull-up gravity and passing still bent defenses even when blitzed.",
+                "Okongwu’s minutes often stabilized the paint on both ends when he could stay on the floor.",
+                "Transition opportunities when turnovers turned into early offense.",
+            ],
+            "playoff_weaknesses": [
+                "Perimeter size against bigger Knicks wings — contests and closeouts were a half-step late in key moments.",
+                "Half-court shot quality when the game slowed; too many late-clock heaves under pressure.",
+                "Bench scoring dry spells when the starters’ minutes spiked.",
+            ],
+        },
+        "priorities": [
+            "Perimeter defense and length on the wing without sacrificing spacing.",
+            "Secondary shot creation beside Young — a reliable pick-and-roll partner or downhill scorer.",
+            "Rim protection and rebounding from the big rotation in playoff minutes.",
+            "Bench depth that can survive 8–9 man playoff rotations.",
+            "Late-game execution packages when defenses trap the ball-handler.",
+        ],
+        "roster": {
+            "summary": "The roster core still has offensive identity, but the wing rotation needs more playoff-grade size and fewer defensive leaks.",
+            "bullets": [
+                "Key free agents / options: audit who among rotation wings and bigs returns on value vs. cap relief.",
+                "Veterans: decide which short-contract vets are culture fits versus roster churn.",
+                "Trade candidates: expiring or redundant skill sets that could consolidate into one higher-minute upgrade.",
+                "Young players: Jalen Johnson and Onyeka Okongwu development curves should influence how aggressive the front office is on win-now trades.",
+                "Cap flexibility: Atlanta’s summer is less about one max slot and more about stacking 2–3 reliable playoff pieces without punting future picks.",
+            ],
+        },
+        "future": [
+            "The window is not a single-season sprint — it is about whether Young’s prime years align with a defense that can survive three playoff rounds.",
+            "The East is deep with size at the wing; Atlanta’s contender case depends on closing the talent gap without mortgaging every future pick.",
+        ],
+        "draft_assets": [
+            "Treat future firsts and swaps as conditional trade ammo only if the return solves a clear playoff problem (wing size, rim protection, secondary creation).",
+            "If picks stay home, prioritize ready-to-contribute shooters or switchable defenders rather than duplicate skill sets.",
+        ],
+        "archetypes": [
+            "Two-way wing with real size (6–7+ wingspan) who can guard New York-style matchups.",
+            "Secondary creator who can run pick-and-roll when Young is trapped.",
+            "Backup rim protector who does not kill spacing in short roll minutes.",
+            "High-volume movement shooter who punishes help off Young drives.",
+        ],
+        "direction": {"label": "Retooling around a star", "blurb": "Atlanta is not starting over — the front office is one or two correct upgrades away from feeling dangerous in a seven-game series again."},
+    },
+    "Boston Celtics": {
+        "reflection": {
+            "went_right": "Boston still looked like a championship-caliber regular-season team for long stretches — spacing, scheme discipline, and two-way talent were obvious when the offense flowed.",
+            "elimination_cause": "Philadelphia won the possession war in the games that mattered most: extra possessions, timely shot-making from role players, and critical late-quarter execution when the margin was one or two possessions.",
+            "playoff_strengths": [
+                "Tatum and Brown’s ability to generate efficient looks against set defenses.",
+                "Switchable perimeter defense when healthy lineups were available.",
+                "Payton Pritchard–led bench sparks that kept home-court energy alive.",
+            ],
+            "playoff_weaknesses": [
+                "Depth behind the stars when rotations shortened and fouls or fatigue stacked.",
+                "Interior answers when Embiid’s gravity collapsed the paint.",
+                "Turnover stretches that fed Philly run-outs.",
+            ],
+        },
+        "priorities": [
+            "Big-man depth and playoff-ready interior size behind the starting frontcourt.",
+            "Ball-handling relief so late-game offense is not only isolation-heavy.",
+            "Health management and minute plans for a core that has deep playoff mileage.",
+            "Bench shooting that holds up when defenses run shooters off the line.",
+        ],
+        "roster": {
+            "summary": "The championship core is still elite on paper — the summer is about whether the front office refreshes the middle of the roster or reshapes bigger pieces.",
+            "bullets": [
+                "Free agents: evaluate backup center and wing depth on short, flexible deals.",
+                "Veterans: Al Horford–era minutes require succession planning even if leadership returns.",
+                "Trade candidates: any consolidation that upgrades playoff reliability without gutting identity.",
+                "Extensions: align Jaylen/Jayson timeline decisions with tax apron realities.",
+                "Young players: continue developing late-first developmental wings into rotation defense.",
+                "Cap / tax: Boston’s moves are often about small edges at the margins while staying title-or-bust competitive.",
+            ],
+        },
+        "future": [
+            "The next two seasons still represent a real title window if health and depth answers arrive.",
+            "Conference competition is brutal — Milwaukee, New York, and emerging East teams force constant roster sharpening.",
+        ],
+        "draft_assets": [
+            "Future picks are more likely trade chips than lottery tickets — protected swaps matter when chasing a veteran upgrade.",
+            "If picks convey, hit on low-cost shooters or switchable defenders who can survive playoff minutes.",
+        ],
+        "archetypes": [
+            "Backup rim protector who can survive Embiid-style physicality for stretches.",
+            "Veteran point guard or connector who organizes second units without turning it over.",
+            "Stretch big who can pick-and-pop without being targeted every switch.",
+        ],
+        "direction": {"label": "Championship contender (health-dependent)", "blurb": "Boston’s direction is still title-first — this exit is a roster and execution postmortem, not a rebuild signal."},
+    },
+    "Orlando Magic": {
+        "reflection": {
+            "went_right": "Orlando proved its defense-first identity travels — length, activity, and scheme buy-in made Detroit work for late-clock looks in multiple games.",
+            "elimination_cause": "Detroit’s half-court creation and physicality won the war of attrition; Orlando’s offense could not generate enough easy baskets when possessions slowed and shooting variance swung cold.",
+            "playoff_strengths": [
+                "Paolo Banchero’s downhill scoring gravity in isolation and early post touches.",
+                "Franz Wagner’s complementary shot-making when the floor opened.",
+                "Team defense forcing tough twos and contested late-clock shots.",
+            ],
+            "playoff_weaknesses": [
+                "Three-point reliability when defenses packed the paint.",
+                "Playmaking under trap pressure — turnovers fed Detroit run-outs.",
+                "Bench offensive creation when starters rested.",
+            ],
+        },
+        "priorities": [
+            "Spacing and shooting around Banchero without giving back too much defense.",
+            "Secondary creator who can run pick-and-roll when defenses load to Paolo.",
+            "Veteran leadership and playoff poise in close games.",
+            "Shot creation in late-clock situations — fewer contested isolations.",
+        ],
+        "roster": {
+            "summary": "The young core is the asset — the question is how many veterans you add before you crowd developmental minutes.",
+            "bullets": [
+                "Free agents: target movement shooters and backup point guard stability.",
+                "Veterans: decide which short deals teach winning habits without blocking minutes for Black/Anthony/Isaac pathways.",
+                "Trade candidates: redundant defensive profiles could consolidate into one offensive upgrade.",
+                "Extensions: Banchero/Wagner timelines should drive cap planning.",
+                "Young players: Anthony Black and Jett Howard development changes how aggressive Orlando is on the trade market.",
+                "Cap: Orlando can still operate with flexibility if it avoids long-term dead money on the middle class.",
+            ],
+        },
+        "future": [
+            "The young core suggests long-term sustainability — this exit is a skill-development checkpoint, not a ceiling statement.",
+            "The East is getting younger and longer; Orlando’s path is internal growth plus selective veteran shooting.",
+        ],
+        "draft_assets": [
+            "Orlando can still draft-and-develop if picks stay — prioritize shooting variance reducers (elite FT%, mechanical repeatability).",
+            "Pick swaps outgoing could limit flexibility; if swaps are incoming, treat them as opportunistic trade windows.",
+        ],
+        "archetypes": [
+            "Movement shooter who can defend enough to stay on the floor in a switching scheme.",
+            "Veteran backup point guard who limits turnovers under pressure.",
+            "Stretch big who opens driving lanes without being hunted every switch.",
+        ],
+        "direction": {"label": "Rising young team", "blurb": "Orlando’s arrow still points up — the offseason is about turning defense into a playoff offense without losing identity."},
+    },
+    "Toronto Raptors": {
+        "reflection": {
+            "went_right": "Toronto showed competitive spirit in a seven-game rock fight — Quickley’s pace, Barnes’ two-way flashes, and home swings kept Cleveland from walking the series.",
+            "elimination_cause": "Cleveland’s star shot-making and playoff experience won the tight moments; Toronto’s half-court offense stalled when spacing tightened and turnovers fed run-outs.",
+            "playoff_strengths": [
+                "Scottie Barnes’ defensive versatility and transition finishing.",
+                "Quickley’s pick-and-roll manipulation when the floor was spaced.",
+                "Poeltl’s interior presence on the glass in stretches.",
+            ],
+            "playoff_weaknesses": [
+                "Half-court scoring against set defenses — too many late-clock contested twos.",
+                "Perimeter shot-making consistency from the supporting cast.",
+                "Defending Cleveland’s guard scoring without over-helping off shooters.",
+            ],
+        },
+        "priorities": [
+            "Spacing and high-volume three-point reliability.",
+            "Secondary scoring when Barnes is blitzed or doubled.",
+            "Rim protection behind aggressive perimeter defense.",
+            "Bench depth that does not bleed points in non-starter minutes.",
+        ],
+        "roster": {
+            "summary": "Toronto is in a retooling sweet spot — enough young talent to dream on, enough questions to justify aggressive cap creativity.",
+            "bullets": [
+                "Free agents: add shooting specialists on short deals if the price is right.",
+                "Veterans: evaluate Bruce Brown–type contracts for trade value versus fit.",
+                "Trade candidates: consolidate overlapping wings into one higher-end creator if the market allows.",
+                "Extensions: Barnes is the compass — align every move with his timeline.",
+                "Young players: Gradey Dick and wing development determine how much shooting you must buy.",
+                "Cap: Toronto can chase flexibility or consolidation; the direction choice is the real story.",
+            ],
+        },
+        "future": [
+            "The conference is crowded with playoff-tested teams — Toronto’s climb requires star-level leap from Barnes or an external infusion.",
+            "Coaching stability helps development teams; roster churn should not outpace scheme continuity.",
+        ],
+        "draft_assets": [
+            "If Toronto holds picks, prioritize shooting and size at the wing — the playoff tape screamed for both.",
+            "Outgoing protections on past trades can quietly shrink room; audit every owed pick before chasing a star.",
+        ],
+        "archetypes": [
+            "High-volume shooter who can relocate and punish helps off Barnes drives.",
+            "Perimeter stopper with length who can survive multiple assignments.",
+            "Secondary creator who can run offense when Quickley sits.",
+        ],
+        "direction": {"label": "Retooling", "blurb": "Toronto is not tanking outright — the franchise is trying to turn competitive minutes into a clearer star pathway."},
+    },
+    "Phoenix Suns": {
+        "reflection": {
+            "went_right": "Phoenix still had stretches where star shot-making looked playoff-real — Booker’s pull-up gravity and Durant’s late-clock shot quality kept scoreboard pressure on OKC for moments.",
+            "elimination_cause": "Oklahoma City’s depth, pace, and defensive activity overwhelmed a thin rotation; the sweep math reflects turnovers, rebounding, and the Thunder winning the non-star minutes decisively.",
+            "playoff_strengths": [
+                "Booker’s ability to bend defenses in pick-and-roll and mid-range.",
+                "Durant’s isolation scoring when matchups allowed single coverage.",
+                "Grayson Allen’s movement shooting when he could get clean launches.",
+            ],
+            "playoff_weaknesses": [
+                "Rebounding and transition defense when OKC turned misses into sprints.",
+                "Bench survivability — the Suns could not sustain minutes when stars rested.",
+                "Rim protection and interior size against OKC’s drivers.",
+            ],
+        },
+        "priorities": [
+            "Bench depth and playable wings who do not shrink the margin.",
+            "Rebounding and physicality without killing spacing.",
+            "Younger athletic wings who can switch and survive in space.",
+            "Financial flexibility — hard choices on multi-star cap stacking.",
+        ],
+        "roster": {
+            "summary": "The core is expensive and older — the summer is as much accounting as it is basketball.",
+            "bullets": [
+                "Free agents: limited room unless moves clear salary — target minimum contributors who defend.",
+                "Veterans: Durant/Booker/Beal realities force trade conversations if the tax bill is untenable.",
+                "Trade candidates: any non-core salary becomes a puzzle piece in consolidation trades.",
+                "Extensions: younger pieces (if any) become trade sweeteners more than extension priorities.",
+                "Young players: internal growth is critical because premium picks may be outgoing.",
+                "Cap: Phoenix may be forced toward veteran-focused upgrades on the margin, not another max.",
+            ],
+        },
+        "future": [
+            "The championship window is real but narrow — every season of age and tax compounds the urgency.",
+            "Western contenders are younger and deeper; Phoenix must solve non-star minutes or repeat early exits.",
+        ],
+        "draft_assets": [
+            "Limited draft flexibility may force the front office toward veteran minimums and second-round hits.",
+            "If any future picks remain unencumbered, treat them as precious — do not spend them on marginal upgrades.",
+        ],
+        "archetypes": [
+            "Two-way wing who can defend multiple positions and hit open threes.",
+            "Backup rim protector who can play 12–16 playoff minutes without being hunted.",
+            "Athletic bench wing who raises transition defense and offensive rebounding.",
+        ],
+        "direction": {"label": "Aging contender", "blurb": "Phoenix is still trying to win now — but the path is increasingly about financial surgery and finding playable depth."},
+    },
+    "Portland Trail Blazers": {
+        "reflection": {
+            "went_right": "Portland showed young guard scoring flashes — Henderson and Simons could heat up in bursts, and the roster competed early before San Antonio’s length took over.",
+            "elimination_cause": "San Antonio’s defense keyed on drivers and the paint; Portland could not match Wembanyama’s rim influence or generate enough clean late-clock shots when possessions slowed.",
+            "playoff_strengths": [
+                "Simons’ shot-making gravity when he got downhill.",
+                "Sharpe’s athletic scoring flashes in transition.",
+                "Grant’s veteran shot diet in half-court isolations.",
+            ],
+            "playoff_weaknesses": [
+                "Turnovers and decision-making against length.",
+                "Interior defense and rebounding against a tall, disciplined front line.",
+                "Half-court execution when the game became a half-court wrestling match.",
+            ],
+        },
+        "priorities": [
+            "Rim protection and interior size behind the starting big.",
+            "Veteran point guard stability to reduce live-ball turnovers.",
+            "Spacing around young guards without bleeding points defensively.",
+            "Bench depth that can survive physical playoff minutes.",
+        ],
+        "roster": {
+            "summary": "Portland is still building — the playoff exit clarifies which young pieces are keepers versus trade candidates.",
+            "bullets": [
+                "Free agents: short veteran deals on defense-first wings or backup bigs.",
+                "Veterans: Grant’s contract is a natural trade discussion if the timeline shifts younger.",
+                "Trade candidates: consolidate overlapping guard minutes if a two-way wing upgrade appears.",
+                "Extensions: align Scoot/Sharpe timelines with draft capital usage.",
+                "Young players: Camara and defensive-minded wings are the cheap growth path.",
+                "Cap: Portland can stay flexible if it avoids long-term middle-class clutter.",
+            ],
+        },
+        "future": [
+            "The young core suggests long-term sustainability if defense and decision-making mature on schedule.",
+            "The West is unforgiving — Portland’s contender clock starts when the defense becomes playoff-real, not just exciting.",
+        ],
+        "draft_assets": [
+            "Multiple future picks (when unencumbered) give Portland flexibility to pursue another star or to keep drafting defense-first profiles.",
+            "If picks are outgoing from prior deals, the margin for error on development hits shrinks.",
+        ],
+        "archetypes": [
+            "Backup rim protector who can contest without fouling.",
+            "Veteran point guard who organizes half court and limits turnovers.",
+            "Two-way wing who raises the defensive floor around young scorers.",
+        ],
+        "direction": {"label": "Rebuilding with upside", "blurb": "Portland is not pretending to be finished — the offseason is about collecting real defensive answers while the young guards grow."},
+    },
+    "Denver Nuggets": {
+        "reflection": {
+            "went_right": "Denver still showed why Jokic is the system — elite half-court offense, two-man game mastery, and clutch shot quality kept Minnesota honest for stretches.",
+            "elimination_cause": "Minnesota’s length and defensive activity won the possession battle; Denver’s supporting shot-making and wing defense wobbled when rotations shortened and the Wolves pressured passing lanes.",
+            "playoff_strengths": [
+                "Jokic’s passing geometry and scoring efficiency against switches.",
+                "Murray’s shot-making in big moments when rhythm was right.",
+                "Aaron Gordon’s defensive versatility on forwards.",
+            ],
+            "playoff_weaknesses": [
+                "Perimeter defense against athletic wings.",
+                "Bench scoring when the starters’ minutes spiked.",
+                "Turnovers under pressure when Minnesota loaded the ball-handler.",
+            ],
+        },
+        "priorities": [
+            "Wing defense and size without killing Jokic spacing.",
+            "Bench scoring and shot creation when Murray sits.",
+            "Athleticism on the wing to survive West playoff matchups.",
+            "Health and minute management for a core with deep mileage.",
+        ],
+        "roster": {
+            "summary": "The championship core is still elite — the summer is about patching the holes this series exposed without breaking chemistry.",
+            "bullets": [
+                "Free agents: target playable wings and backup offense on value.",
+                "Veterans: Reggie Jackson–type minutes may need an upgrade path.",
+                "Trade candidates: Porter Jr. conversations return whenever tax and fit tension rises — only move if the return solves defense.",
+                "Extensions: align young pieces with tax apron realities.",
+                "Young players: Peyton Watson development changes how many veterans you must buy.",
+                "Cap: Denver is often trading marginal salary for marginal upgrades at the tax line.",
+            ],
+        },
+        "future": [
+            "Jokic’s prime is the window — Denver remains a contender if wing defense and bench offense improve.",
+            "The West is loaded with size and athleticism; every summer is an arms race on the wing.",
+        ],
+        "draft_assets": [
+            "Late picks and swaps are trade sweeteners more than lottery tickets — use them to chase a defensive wing upgrade.",
+            "If picks convey out, development staff has to hit on undrafted two-way types.",
+        ],
+        "archetypes": [
+            "Perimeter stopper with size who can survive switching onto wings.",
+            "Secondary creator who can run offense when Murray is trapped.",
+            "Stretch big who can spot minutes without being targeted defensively.",
+        ],
+        "direction": {"label": "Championship contender", "blurb": "Denver is still in the inner circle — this exit is about roster edges, not existential doubt."},
+    },
+    "Houston Rockets": {
+        "reflection": {
+            "went_right": "Houston showed why the league fears its young talent — transition pressure, offensive rebounding, and Sengun’s interior craft kept the Lakers from coasting.",
+            "elimination_cause": "Los Angeles’ playoff experience, half-court shotmaking, and Anthony Davis’ rim presence won the late-game math; Houston’s half-court offense stalled when spacing tightened and turnovers fed Laker run-outs.",
+            "playoff_strengths": [
+                "Alperen Sengun’s post playmaking and touch around the rim.",
+                "Amen Thompson’s defensive disruption and transition attacks.",
+                "Physicality and offensive rebounding that shortened possessions for LA.",
+            ],
+            "playoff_weaknesses": [
+                "Three-point consistency and spacing against set defenses.",
+                "Late-clock execution when defenses loaded to the ball-handler.",
+                "Defensive discipline on closeouts against LeBron/AD–style leverage.",
+            ],
+        },
+        "priorities": [
+            "Spacing and high-volume shooting around the young core.",
+            "Veteran leadership and playoff poise in tight games.",
+            "Secondary shot creation when defenses shrink the floor.",
+            "Bench depth that can hold leads when stars sit.",
+        ],
+        "roster": {
+            "summary": "The core is young and exciting — the summer is about turning potential into playoff shot quality without losing defensive identity.",
+            "bullets": [
+                "Free agents: add shooters and backup point guard stability if price fits.",
+                "Veterans: Fred VanVleet’s leadership vs. long-term cap allocation is a real conversation.",
+                "Trade candidates: Dillon Brooks–type contracts can be moved if the return raises ceiling.",
+                "Extensions: align Sengun/Green timelines with how aggressive Houston wants to be.",
+                "Young players: Amen and Jabari growth determines how much shooting you must buy externally.",
+                "Cap: Houston can still operate with room if it avoids toxic long-term deals.",
+            ],
+        },
+        "future": [
+            "The next two seasons may represent the peak growth window before extension math tightens the rotation choices.",
+            "The West is deep — Houston’s contender case depends on shooting development plus selective veteran adds.",
+        ],
+        "draft_assets": [
+            "If picks remain, prioritize shooting and switchable defense — the playoff tape asked for both.",
+            "Pick swaps can be outgoing from prior deals; audit obligations before chasing a star trade.",
+        ],
+        "archetypes": [
+            "Stretch big or movement shooter who opens the paint for Sengun.",
+            "Veteran point guard who reduces turnovers under playoff pressure.",
+            "Two-way wing who raises spacing without hiding on defense.",
+        ],
+        "direction": {"label": "Rising young team", "blurb": "Houston is one clear offensive upgrade away from feeling dangerous in a seven-game series — the summer is about finding that upgrade without mortgaging the defense."},
+    },
+}
+
+
+def get_offseason_outlook(team_name):
+    """Team-specific offseason / future outlook copy for eliminated franchises."""
+    return OFFSEASON_OUTLOOK_BY_TEAM.get(team_name) or _generic_offseason_outlook(team_name)
+
+
+def render_offseason_future_outlook_sections(team_name):
+    """Home Dashboard: full offseason analysis blocks (eliminated teams only)."""
+    od = get_offseason_outlook(team_name)
+    ref = od["reflection"]
+    nick = fan_nick(team_name)
+
+    st.markdown('<div class="cmd-sec">Offseason & future outlook</div>', unsafe_allow_html=True)
+    st.caption(
+        f"Postmortem mode for **{nick}** — built from the first-round result, roster construction realities, and how the playoff tape looked."
+    )
+
+    st.markdown("##### 1 · Season reflection")
+    with st.container(border=True):
+        st.markdown(f"**What went right**\n\n{ref['went_right']}")
+        st.markdown(f"**What drove elimination**\n\n{ref['elimination_cause']}")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Playoff strengths (on tape)**")
+            for line in ref["playoff_strengths"]:
+                st.markdown(f"- {line}")
+        with c2:
+            st.markdown("**Weaknesses exposed**")
+            for line in ref["playoff_weaknesses"]:
+                st.markdown(f"- {line}")
+
+    st.markdown("##### 2 · Offseason priorities")
+    with st.container(border=True):
+        for p in od["priorities"]:
+            st.markdown(f"- {p}")
+
+    st.markdown("##### 3 · Roster outlook")
+    ro = od["roster"]
+    with st.container(border=True):
+        st.markdown(ro["summary"])
+        for b in ro["bullets"]:
+            st.markdown(f"- {b}")
+
+    st.markdown("##### 4 · Future contender outlook")
+    with st.container(border=True):
+        for para in od["future"]:
+            st.markdown(para)
+
+    st.markdown("##### 5 · Draft picks & assets")
+    with st.container(border=True):
+        for line in od["draft_assets"]:
+            st.markdown(f"- {line}")
+
+    st.markdown("##### 6 · Ideal player archetypes to target")
+    with st.container(border=True):
+        st.caption("Archetypes — not a shopping list of random names — describe the *type* of player who fixes what this series exposed.")
+        for a in od["archetypes"]:
+            st.markdown(f"- {a}")
+
+    st.markdown("##### 7 · Direction of the franchise")
+    d = od["direction"]
+    with st.container(border=True):
+        st.markdown(f"**{d['label']}**")
+        st.markdown(d["blurb"])
+
+
 FIRST_ROUND_SERIES = {
     "DET-ORL": {"conf":"East","a":"Detroit Pistons","b":"Orlando Magic","a_wins":4,"b_wins":3,"winner":"Detroit Pistons"},
     "CLE-TOR": {"conf":"East","a":"Cleveland Cavaliers","b":"Toronto Raptors","a_wins":4,"b_wins":3,"winner":"Cleveland Cavaliers"},
@@ -4157,6 +4660,18 @@ def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_liv
 
 def _dashboard_story_cards(team_name, pctx):
     nick = fan_nick(team_name)
+    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+        od = get_offseason_outlook(team_name)
+        d = od.get("direction") or {}
+        tape = od["reflection"]["elimination_cause"]
+        if len(tape) > 300:
+            tape = tape[:297] + "…"
+        pri2 = od["priorities"][1] if len(od.get("priorities", [])) > 1 else (od["priorities"][0] if od.get("priorities") else "Cap and roster alignment")
+        return [
+            ("Tape room", tape),
+            ("Front-office lever", pri2),
+            ("Franchise compass", f"{d.get('label', 'Direction')}: {d.get('blurb', '')}"),
+        ]
     lens = pctx["lens"]
     ax = lens.get("identity_axes") or ("Execution", "Defense", "Margins")
     tw, ow = pctx["tw"], pctx["ow"]
@@ -4215,6 +4730,26 @@ def _dashboard_story_cards(team_name, pctx):
 def _dashboard_emphasis_html(team_name, pctx):
     """Three HTML tiles under the hero: situation tag + identity axis + scoreboard."""
     esc = html.escape
+    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+        od = get_offseason_outlook(team_name)
+        cause = od["reflection"]["elimination_cause"]
+        if len(cause) > 240:
+            cause = cause[:237] + "…"
+        pri = od["priorities"][0] if od.get("priorities") else "Roster and cap decisions"
+        d = od.get("direction") or {}
+        label = esc(str(d.get("label", "Offseason")))
+        blurb = d.get("blurb", "")
+        if len(blurb) > 200:
+            blurb = blurb[:197] + "…"
+        blurb_e = esc(blurb)
+        tw, ow = pctx["tw"], pctx["ow"]
+        on = esc(fan_nick(pctx["opp"])) if pctx.get("opp") else esc("opponent")
+        return f"""<div class="cmd-emph-shell"><div class="cmd-emph-grid">
+  <div class="cmd-emph-card"><div class="cmd-emph-k">POSTMORTEM</div><div class="cmd-emph-v">{esc(cause)}</div></div>
+  <div class="cmd-emph-card"><div class="cmd-emph-k">OFFSEASON PRIORITY</div><div class="cmd-emph-v">{esc(pri)}</div><div class="cmd-emph-s">Tied to what broke in the playoff tape — not a generic checklist.</div></div>
+  <div class="cmd-emph-card"><div class="cmd-emph-k">FRANCHISE COMPASS</div><div class="cmd-emph-v">{label}</div><div class="cmd-emph-s">{blurb_e}</div><div class="cmd-emph-s">Final ledger: {tw}–{ow} vs {on}</div></div>
+</div></div>"""
+
     nick = esc(fan_nick(team_name))
     lens = pctx["lens"]
     ax = lens.get("identity_axes") or ("Execution", "Defense", "Margins")
@@ -4464,14 +4999,22 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
     pal = live_hero_palette(team_name)
     esc = html.escape
     profile = TEAM_PROFILES[team_name]
+    offseason = profile.get("status") == "Eliminated"
     s = hctx.get("series") or (pctx.get("series") if pctx else None)
     live = pctx.get("live")
     fb = pctx.get("fb")
     prob = _home_series_win_probability(team_name, hctx, live)
+    prob_display = f"{prob}%"
     headline = _home_storyline_headline(team_name, hctx, pctx)
     lens = pctx.get("lens") or team_dashboard_lens(team_name)
     kicker_dom = f"{esc(lens.get('hero_kicker', 'Playoff command center'))} · {esc(fan_nick(team_name))}"
+    if offseason:
+        kicker_dom = f"OFFSEASON OUTLOOK · {esc(fan_nick(team_name))}"
     inj = _home_injury_hero_snippet(team_name, use_live_feed=injury_use_live)
+    if offseason:
+        inj = esc(
+            "Summer health and availability still swing extension and trade math — open Injury Report below if you want the detailed board."
+        )
     left_logo = TEAM_LOGOS.get(team_name, "")
 
     if hctx.get("mode") == "waiting_cf":
@@ -4518,6 +5061,8 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
             or hctx.get("round_label")
             or profile.get("round", "Playoffs")
         )
+        if offseason:
+            rnd = esc("First round · complete — offseason mode")
 
     next_line = ""
     if live:
@@ -4544,6 +5089,12 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
             f"{esc(hctx.get('opponent_display', profile.get('current_opponent') or 'opponent TBA'))} "
             f"— tip data when NBA schedule loads."
         )
+    if offseason:
+        res = profile.get("first_round_result") or "Series complete"
+        next_line = (
+            f"{esc(res)} — The runway is now the front office: roster fit, picks, extensions, "
+            f"and how {esc(fan_nick(team_name))} close the gap in a loaded conference."
+        )
 
     pulse = "Next tip tracking"
     prob_lab = "Tilt meter"
@@ -4562,6 +5113,13 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
             pulse = "📼 Final — full wrap in hub"
             prob_lab = "Tonight's result tilt"
 
+    if offseason:
+        pulse = "Draft · cap · trade board"
+        prob_lab = "Playoff ledger"
+        prob_display = "closed"
+
+    next_title = "What's next" if offseason else "Next game"
+
     return f"""
 <div class="cmd-shell" style="--cmd-bg0:{pal['bg0']};--cmd-bg1:{pal['bg1']};--cmd-accent:{pal['accent']};--cmd-accent-soft:{pal['accent_soft']};">
 <div class="cmd-hero">
@@ -4574,7 +5132,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
         <div class="cmd-match">{matchup}</div>
         <div class="cmd-scoreline">{score_txt}</div>
         <div class="cmd-rail">
-          <span class="cmd-pill cmd-pill--accent">{esc(prob_lab)} · {prob}%</span>
+          <span class="cmd-pill cmd-pill--accent">{esc(prob_lab)} · {esc(prob_display)}</span>
           <span class="cmd-pill">{esc(pulse)}</span>
         </div>
       </div>
@@ -4583,7 +5141,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
     <div class="cmd-headline">{esc(headline)}</div>
     <div class="cmd-inj">🩹 {inj}</div>
     <div class="cmd-next" style="margin-top:14px">
-      <div class="cmd-next-title">Next game</div>
+      <div class="cmd-next-title">{esc(next_title)}</div>
       <div style="font-size:14px;font-weight:700;color:#e2e8f0">{next_line}</div>
     </div>
   </div>
@@ -4705,11 +5263,25 @@ def render_playoff_command_center(team_name):
     sections = []
     st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
     live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
+    is_eliminated = TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated"
+    if is_eliminated and st.session_state.get(HOME_DASH_LIVE_UPDATES):
+        st.session_state[HOME_DASH_LIVE_UPDATES] = False
+        live_on = False
+    effective_live = live_on and not is_eliminated
 
     st.markdown("#### Home Dashboard")
+    if is_eliminated:
+        st.info(
+            f"**{fan_nick(team_name)}** are out of the 2026 playoff bracket — Home is in **offseason / future outlook** mode. "
+            "Live game tracking is de-emphasized; the sections below read like a postmortem and front-office strategy discussion."
+        )
     b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
     with b1:
-        if st.button("Load live API updates", key="home_btn_live_apis", disabled=live_on, help="Scoreboard merge, ESPN injuries, and full bracket APIs"):
+        if is_eliminated:
+            st.caption(
+                "Live playoff API bundle is hidden for eliminated teams — open **Live Game Center** from the sidebar for league-wide games."
+            )
+        elif st.button("Load live API updates", key="home_btn_live_apis", disabled=live_on, help="Scoreboard merge, ESPN injuries, and full bracket APIs"):
             st.session_state[HOME_DASH_LIVE_UPDATES] = True
             st.rerun()
     with b2:
@@ -4741,7 +5313,7 @@ def render_playoff_command_center(team_name):
     hctx, s_active, pctx = fast_hctx, fast_s, fast_p
     injury_live = False
 
-    if live_on:
+    if effective_live:
         sections.append("live_bundle_start")
         bundle = None
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -4776,7 +5348,7 @@ def render_playoff_command_center(team_name):
             api_calls = 1
             injury_live = True
             hero_slot.markdown(
-                _home_command_center_hero_html(team_name, hctx, pctx, injury_use_live=True),
+                _home_command_center_hero_html(team_name, hctx, pctx, injury_use_live=not is_eliminated),
                 unsafe_allow_html=True,
             )
             emph_slot.markdown(_dashboard_emphasis_html(team_name, pctx), unsafe_allow_html=True)
@@ -4787,10 +5359,14 @@ def render_playoff_command_center(team_name):
 
     profile = pctx["profile"]
 
-    if live_on and isinstance(pctx.get("fb"), dict) and pctx["fb"].get("game"):
+    if is_eliminated:
+        render_offseason_future_outlook_sections(team_name)
+        sections.append("offseason_outlook")
+
+    if effective_live and isinstance(pctx.get("fb"), dict) and pctx["fb"].get("game"):
         render_home_live_hub_strip(team_name, pctx.get("fb"))
         sections.append("live_strip")
-    elif live_on:
+    elif effective_live:
         sections.append("live_strip_no_row")
     else:
         sections.append("live_strip_skipped_fast")
@@ -4798,7 +5374,8 @@ def render_playoff_command_center(team_name):
     sections.append("hero")
     sections.append("emphasis_strip")
 
-    st.markdown('<div class="cmd-sec">1 · Series board</div>', unsafe_allow_html=True)
+    sec1_title = "1 · Postmortem — final series log" if is_eliminated else "1 · Series board"
+    st.markdown(f'<div class="cmd-sec">{html.escape(sec1_title)}</div>', unsafe_allow_html=True)
     snap_cols = st.columns(4)
     status_txt = series_status_text(team_name, s_active)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
@@ -4819,8 +5396,11 @@ def render_playoff_command_center(team_name):
     elif fb and fb.get("game") and fb.get("phase") == "postgame":
         edge = "Final logged — wrap in hub"
     else:
-        edge = "Local / static (no live scoreboard merge)" if not live_on else "Tracking next tip"
-    snap_cols[3].metric("Tonight's edge", edge)
+        edge = "Local / static (no live scoreboard merge)" if not effective_live else "Tracking next tip"
+    edge_metric = "Dashboard focus" if is_eliminated else "Tonight's edge"
+    if is_eliminated:
+        edge = "Offseason · roster, draft & cap"
+    snap_cols[3].metric(edge_metric, edge)
     st.markdown(
         f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
         unsafe_allow_html=True,
@@ -4839,24 +5419,32 @@ def render_playoff_command_center(team_name):
     sections.append("series_board")
 
     st.markdown('<div class="cmd-sec">2 · Runway to tip</div>', unsafe_allow_html=True)
-    with st.container(border=True):
-        live = pctx.get("live")
-        if live:
-            home = live.get("homeTeam", {}) or {}
-            away = live.get("awayTeam", {}) or {}
-            st.markdown(
-                f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
-            )
-        else:
-            opp = profile.get("current_opponent")
-            st.info(
-                f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
-                + (
-                    "Live scoreboard row appears after **Load live API updates**."
-                    if not live_on
-                    else "Live tip and countdown post when the NBA schedule feed lists the game."
+    if is_eliminated:
+        with st.expander("Playoff schedule archive (no upcoming tip for this team)", expanded=False):
+            with st.container(border=True):
+                st.caption(
+                    f"{fan_nick(team_name)}'s postseason ended with **{profile.get('first_round_result', 'first-round exit')}**. "
+                    "Use **Live Game Center** in the sidebar if you want league-wide games still in progress."
                 )
-            )
+    else:
+        with st.container(border=True):
+            live = pctx.get("live")
+            if live:
+                home = live.get("homeTeam", {}) or {}
+                away = live.get("awayTeam", {}) or {}
+                st.markdown(
+                    f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
+                )
+            else:
+                opp = profile.get("current_opponent")
+                st.info(
+                    f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
+                    + (
+                        "Live scoreboard row appears after **Load live API updates**."
+                        if not live_on
+                        else "Live tip and countdown post when the NBA schedule feed lists the game."
+                    )
+                )
     sections.append("runway")
 
     st.markdown('<div class="cmd-sec">3 · Quick outlook</div>', unsafe_allow_html=True)
@@ -5026,7 +5614,10 @@ def render_playoff_command_center(team_name):
     sections.append("footer_caption")
 
     live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
-    if live_flag and api_calls:
+    perf_fast = (not live_flag) or is_eliminated
+    if is_eliminated:
+        api_display = "0 (offseason mode — no automatic live playoff bundle on Home)"
+    elif live_flag and api_calls:
         api_display = "1 × live_bundle (resolve_home_matchup + series_for_team + featured_broadcast_state)"
     elif live_flag:
         api_display = "0 (live bundle did not complete)"
@@ -5036,7 +5627,7 @@ def render_playoff_command_center(team_name):
     _home_dashboard_perf_footer(
         t0,
         sections,
-        fast_mode=not live_flag,
+        fast_mode=perf_fast,
         api_calls=api_display,
         skipped_note=skip_note,
     )
