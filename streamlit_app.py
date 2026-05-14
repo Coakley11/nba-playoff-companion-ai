@@ -243,6 +243,25 @@ for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
     TEAM_PROFILES[name] = {"seed":seed,"conference":conf,"status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":opp,"first_round_result":result,"starters":starters,"subs":subs,"strengths":["main star creation","transition chances","playoff experience"],"concerns":["series ended in first round","needs depth/defense improvements","late-game consistency"]}
 
 
+def _is_home_eliminated(team_name):
+    """True when Home Dashboard should show offseason / future outlook (not live playoff chase mode)."""
+    p = TEAM_PROFILES.get(team_name) or {}
+    if not p:
+        return False
+    if p.get("status") == "Eliminated":
+        return True
+    stt = str(p.get("status") or "").strip().lower()
+    if "eliminat" in stt:
+        return True
+    rnd = str(p.get("round") or "").lower()
+    if "lost" in rnd and "round" in rnd:
+        return True
+    res = str(p.get("first_round_result") or "")
+    if p.get("current_opponent") is None and res.startswith("Lost"):
+        return True
+    return False
+
+
 def _generic_offseason_outlook(team_name):
     """Fallback offseason copy when a team is eliminated but not in the detailed table."""
     nick = fan_nick(team_name)
@@ -286,6 +305,12 @@ def _generic_offseason_outlook(team_name):
         "draft_assets": [
             "Draft capital depends on protections and swaps already on the books — treat picks as trade currency or developmental bets, not magic beans.",
             "If picks are outgoing, the pressure rises to hit on minimum-salary contributors and undrafted finds.",
+        ],
+        "players_outlook": [
+            "Free agency: map every player option and cap hold before you shop outside names — your own free agents often eat the room first.",
+            "Veterans on short deals are the fastest turnover layer; decide who is culture glue vs. who is blocking a developmental minute path.",
+            "Trade candidates usually overlap with redundant skill sets, expiring money, or contracts that no longer match the timeline.",
+            "Cap and tax lines determine whether you can take salary back in a deal or have to match money in smaller moves.",
         ],
         "archetypes": [
             "Two-way wing who can guard multiple positions without hiding on offense.",
@@ -685,64 +710,115 @@ def get_offseason_outlook(team_name):
     return OFFSEASON_OUTLOOK_BY_TEAM.get(team_name) or _generic_offseason_outlook(team_name)
 
 
+def _offseason_players_out_bullets(od):
+    """Bullets for 'Players / contracts who may not return' — explicit list or roster-line extraction."""
+    raw = od.get("players_outlook")
+    if isinstance(raw, list) and raw:
+        return raw
+    hits = []
+    for b in od.get("roster", {}).get("bullets", []):
+        b = str(b)
+        if any(
+            b.startswith(k)
+            for k in (
+                "Free agents",
+                "Free agency",
+                "Veterans",
+                "Trade candidates",
+                "Extensions",
+                "Young players",
+                "Cap",
+                "Key free agents",
+            )
+        ):
+            hits.append(b)
+    return hits if hits else [
+        "Every exit summer starts with a hard list: who is a free agent, who has a player/team option, and who is extension-eligible.",
+        "Trade noise usually follows redundant roles or money that no longer matches the competitive timeline.",
+        "Veterans on expiring or short deals are the first layer that can turn over without touching the core identity.",
+    ]
+
+
 def render_offseason_future_outlook_sections(team_name):
-    """Home Dashboard: full offseason analysis blocks (eliminated teams only)."""
+    """Home Dashboard: high-visibility offseason analysis (eliminated teams only)."""
     od = get_offseason_outlook(team_name)
     ref = od["reflection"]
     nick = fan_nick(team_name)
+    prof = TEAM_PROFILES.get(team_name) or {}
+    exit_line = prof.get("first_round_result") or "Playoff exit"
 
-    st.markdown('<div class="cmd-sec">Offseason & future outlook</div>', unsafe_allow_html=True)
-    st.caption(
-        f"Postmortem mode for **{nick}** — built from the first-round result, roster construction realities, and how the playoff tape looked."
+    st.markdown(
+        """
+<div style="padding:16px 18px;border-radius:16px;border:2px solid rgba(251,191,36,0.65);
+background:linear-gradient(135deg,rgba(120,53,15,0.55) 0%,rgba(30,41,59,0.95) 55%,#0f172a 100%);
+margin:0 0 18px 0;box-shadow:0 12px 40px rgba(0,0,0,0.35)">
+  <div style="font-size:11px;font-weight:900;letter-spacing:0.18em;color:#fde68a;text-transform:uppercase;margin-bottom:8px">
+    Offseason mode · Home Dashboard</div>
+  <div style="font-size:1.35rem;font-weight:900;color:#fffbeb;line-height:1.2;margin-bottom:8px">Postmortem & future outlook</div>
+  <div style="font-size:0.98rem;color:#fef3c7;line-height:1.5;opacity:0.95">
+    Live chase mode is off for this club. Below is a front-office style read: what broke in the playoffs,
+    what the roster needs next, draft and trade assets, and who might not be back.</div>
+</div>
+""",
+        unsafe_allow_html=True,
     )
+    st.caption(f"**{exit_line}** · Analysis is team-specific and tied to this postseason run.")
 
-    st.markdown("##### 1 · Season reflection")
+    st.markdown("### 1 · Season reflection")
     with st.container(border=True):
         st.markdown(f"**What went right**\n\n{ref['went_right']}")
-        st.markdown(f"**What drove elimination**\n\n{ref['elimination_cause']}")
+        st.markdown(f"**What caused elimination**\n\n{ref['elimination_cause']}")
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**Playoff strengths (on tape)**")
             for line in ref["playoff_strengths"]:
                 st.markdown(f"- {line}")
         with c2:
-            st.markdown("**Weaknesses exposed**")
+            st.markdown("**Playoff weaknesses exposed**")
             for line in ref["playoff_weaknesses"]:
                 st.markdown(f"- {line}")
 
-    st.markdown("##### 2 · Offseason priorities")
+    st.markdown("### 2 · Offseason priorities & roster construction")
     with st.container(border=True):
+        st.markdown("**What the roster needs next** (from how this series looked)")
         for p in od["priorities"]:
             st.markdown(f"- {p}")
-
-    st.markdown("##### 3 · Roster outlook")
-    ro = od["roster"]
-    with st.container(border=True):
+        ro = od["roster"]
+        st.markdown("**Roster construction snapshot**")
         st.markdown(ro["summary"])
         for b in ro["bullets"]:
             st.markdown(f"- {b}")
 
-    st.markdown("##### 4 · Future contender outlook")
+    st.markdown("### 3 · Future outlook")
     with st.container(border=True):
         for para in od["future"]:
             st.markdown(para)
+        d = od["direction"]
+        st.markdown(f"**Direction: {d['label']}**")
+        st.markdown(d["blurb"])
+        st.caption(
+            "Championship window, young core vs. aging curve, and whether the path is contender / retool / rebuild — summarized in the direction line above plus these paragraphs."
+        )
 
-    st.markdown("##### 5 · Draft picks & assets")
+    st.markdown("### 4 · Draft picks & asset outlook")
     with st.container(border=True):
         for line in od["draft_assets"]:
             st.markdown(f"- {line}")
+        st.caption("Future picks, swaps, protections, and trade flexibility — how strong the war chest is for the next star chase or depth upgrade.")
 
-    st.markdown("##### 6 · Ideal player archetypes to target")
+    st.markdown("### 5 · Players who may not return (contracts & movement)")
     with st.container(border=True):
-        st.caption("Archetypes — not a shopping list of random names — describe the *type* of player who fixes what this series exposed.")
+        for line in _offseason_players_out_bullets(od):
+            st.markdown(f"- {line}")
+        st.caption("Free agents, trade candidates, extension decisions, and cap pressure — not predictions, but the real questions the front office has to answer.")
+
+    st.markdown("### 6 · Ideal player types to add")
+    with st.container(border=True):
+        st.markdown(
+            "Archetypes that fit the holes above — **defensive wing**, **secondary scorer**, **rim protector**, **bench shooting**, **backup creator**, etc."
+        )
         for a in od["archetypes"]:
             st.markdown(f"- {a}")
-
-    st.markdown("##### 7 · Direction of the franchise")
-    d = od["direction"]
-    with st.container(border=True):
-        st.markdown(f"**{d['label']}**")
-        st.markdown(d["blurb"])
 
 
 FIRST_ROUND_SERIES = {
@@ -4660,7 +4736,7 @@ def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_liv
 
 def _dashboard_story_cards(team_name, pctx):
     nick = fan_nick(team_name)
-    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+    if _is_home_eliminated(team_name):
         od = get_offseason_outlook(team_name)
         d = od.get("direction") or {}
         tape = od["reflection"]["elimination_cause"]
@@ -4730,7 +4806,7 @@ def _dashboard_story_cards(team_name, pctx):
 def _dashboard_emphasis_html(team_name, pctx):
     """Three HTML tiles under the hero: situation tag + identity axis + scoreboard."""
     esc = html.escape
-    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+    if _is_home_eliminated(team_name):
         od = get_offseason_outlook(team_name)
         cause = od["reflection"]["elimination_cause"]
         if len(cause) > 240:
@@ -4999,7 +5075,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
     pal = live_hero_palette(team_name)
     esc = html.escape
     profile = TEAM_PROFILES[team_name]
-    offseason = profile.get("status") == "Eliminated"
+    offseason = _is_home_eliminated(team_name)
     s = hctx.get("series") or (pctx.get("series") if pctx else None)
     live = pctx.get("live")
     fb = pctx.get("fb")
@@ -5263,7 +5339,7 @@ def render_playoff_command_center(team_name):
     sections = []
     st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
     live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
-    is_eliminated = TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated"
+    is_eliminated = _is_home_eliminated(team_name)
     if is_eliminated and st.session_state.get(HOME_DASH_LIVE_UPDATES):
         st.session_state[HOME_DASH_LIVE_UPDATES] = False
         live_on = False
@@ -5271,9 +5347,8 @@ def render_playoff_command_center(team_name):
 
     st.markdown("#### Home Dashboard")
     if is_eliminated:
-        st.info(
-            f"**{fan_nick(team_name)}** are out of the 2026 playoff bracket — Home is in **offseason / future outlook** mode. "
-            "Live game tracking is de-emphasized; the sections below read like a postmortem and front-office strategy discussion."
+        st.success(
+            f"**{fan_nick(team_name)}** — offseason / future outlook mode is on. Scroll for the gold **Postmortem** header and six analysis sections directly below the controls."
         )
     b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
     with b1:
@@ -5296,6 +5371,10 @@ def render_playoff_command_center(team_name):
 
     _inject_home_command_center_css()
     sections.append("inject_css")
+
+    if is_eliminated:
+        render_offseason_future_outlook_sections(team_name)
+        sections.append("offseason_outlook_top")
 
     api_calls = 0
     skip_note = ""
@@ -5358,10 +5437,6 @@ def render_playoff_command_center(team_name):
         sections.append("fast_path")
 
     profile = pctx["profile"]
-
-    if is_eliminated:
-        render_offseason_future_outlook_sections(team_name)
-        sections.append("offseason_outlook")
 
     if effective_live and isinstance(pctx.get("fb"), dict) and pctx["fb"].get("game"):
         render_home_live_hub_strip(team_name, pctx.get("fb"))
