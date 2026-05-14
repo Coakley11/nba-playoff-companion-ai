@@ -35,6 +35,13 @@ try:
 except Exception:
     NBA_STATS_AVAILABLE = False
 
+try:
+    from nba_api.stats.endpoints import scoreboardv3
+    NBA_SCOREBOARD_V3_AVAILABLE = True
+except Exception:
+    scoreboardv3 = None  # type: ignore
+    NBA_SCOREBOARD_V3_AVAILABLE = False
+
 
 try:
     import requests
@@ -42,9 +49,15 @@ try:
 except Exception:
     REQUESTS_AVAILABLE = False
 
-# Live Game Center: merge CDN + scoreboardv2 for **today (Eastern)** only so first paint stays fast.
-# Set False to restore yesterday→tomorrow merges (better for late-night / travel slates, slower).
-LIVE_GC_MERGE_TODAY_ET_ONLY = True
+# Browser-like headers for stats.nba.com (some environments block generic clients).
+NBA_STATS_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 NBAPlayoffCompanion/1.0"
+    ),
+    "Referer": "https://www.nba.com/",
+    "Accept": "application/json, text/plain, */*",
+}
 
 try:
     from bs4 import BeautifulSoup
@@ -755,25 +768,37 @@ def _nba_et_zone():
     return None
 
 
-def _nba_calendar_dates_window(days_each_side=1):
-    """Dates to scan on the NBA calendar (Eastern) so late-night / global users still see today's slate."""
+def _nba_et_now():
+    """Current instant in NBA Eastern (IANA) or a UTC-offset fallback if tz data is missing."""
     et = _nba_et_zone()
     if et:
-        base = datetime.now(et).date()
-    else:
-        base = datetime.now().date()
+        try:
+            return datetime.now(et)
+        except Exception:
+            pass
+    u = datetime.now(timezone.utc)
+    mo, dy = u.month, u.day
+    # Rough US Eastern DST window (NBA playoffs are EDT): not exact on transition Sundays.
+    dst_like = (mo > 3 or (mo == 3 and dy >= 12)) and (mo < 11 or (mo == 11 and dy <= 5))
+    off = -4 if dst_like else -5
+    return u + timedelta(hours=off)
+
+
+def _nba_calendar_dates_window(days_each_side=1):
+    """Yesterday / today / tomorrow on the NBA calendar (Eastern when available)."""
+    try:
+        base = _nba_et_now().date()
+    except Exception:
+        base = datetime.now(timezone.utc).date()
     return [base + timedelta(days=d) for d in range(-days_each_side, days_each_side + 1)]
 
 
 def _nba_et_date_today():
-    """Today's calendar date in America/New_York (NBA scoreboard day)."""
-    et = _nba_et_zone()
-    if et:
-        try:
-            return datetime.now(et).date()
-        except Exception:
-            pass
-    return datetime.now().date()
+    """Today's calendar date for NBA scoreboard pulls (America/New_York when possible)."""
+    try:
+        return _nba_et_now().date()
+    except Exception:
+        return datetime.now(timezone.utc).date()
 
 
 def _tricode_from_team_dict(t):
@@ -883,6 +908,256 @@ def _coarse_live_signal_v2(g):
     return any(m in txt for m in markers) and "final" not in txt
 
 
+def _line_v2_total_pts(lr):
+    """Total points from ScoreboardV2 line score row (PTS may be null pregame)."""
+    if lr is None:
+        return 0
+    try:
+        raw = lr.get("PTS")
+        if raw is not None and str(raw).strip() != "" and str(raw).lower() != "nan":
+            return safe_int(raw, 0)
+    except Exception:
+        pass
+    s = 0
+    for i in range(1, 5):
+        s += safe_int(lr.get(f"PTS_QTR{i}"), 0)
+    for j in range(1, 11):
+        s += safe_int(lr.get(f"PTS_OT{j}"), 0)
+    return s
+
+
+def _v2_team_dict_from_line(lr, tid):
+    tri = str(lr.get("TEAM_ABBREVIATION", "") or "").strip().upper()
+    city = str(lr.get("TEAM_CITY_NAME", "") or "")
+    nick = str(lr.get("TEAM_NAME", "") or "")
+    full = (ALIAS_TO_TEAM.get(tri) or f"{city} {nick}".strip() or tri)
+    if " " in full:
+        tcity, tnick = full.rsplit(" ", 1)[0], full.rsplit(" ", 1)[1]
+    else:
+        tcity, tnick = city, nick
+    return {
+        "teamId": safe_int(tid, 0),
+        "teamTricode": tri,
+        "teamName": tnick,
+        "teamCity": tcity,
+        "score": _line_v2_total_pts(lr),
+    }
+
+
+def _v3_home_away_rows(ts_df, game_code_full):
+    """Pick home/away line rows; gameCode tail is usually awayTri(3)+homeTri(3), e.g. CLEDET."""
+    tail = str(game_code_full or "").split("/")[-1].strip().upper()
+    up = {str(r.get("teamTricode") or "").strip().upper(): r for _, r in ts_df.iterrows()}
+    if len(tail) >= 6:
+        a_tri, h_tri = tail[:3], tail[3:6]
+        ar, hr = up.get(a_tri), up.get(h_tri)
+        if ar is not None and hr is not None:
+            return hr, ar
+    if len(ts_df) >= 2:
+        return ts_df.iloc[0], ts_df.iloc[1]
+    return None, None
+
+
+def _pseudo_games_from_scoreboard_v3(game_date):
+    if not (NBA_STATS_AVAILABLE and NBA_SCOREBOARD_V3_AVAILABLE and scoreboardv3):
+        return []
+    out = []
+    d = game_date if hasattr(game_date, "strftime") else datetime.strptime(str(game_date)[:10], "%Y-%m-%d").date()
+    fmts = (d.strftime("%Y-%m-%d"), d.strftime("%m/%d/%Y"))
+    for fmt in fmts:
+        for attempt in range(2):
+            try:
+                try:
+                    dfs = scoreboardv3.ScoreboardV3(
+                        game_date=fmt, league_id="00", headers=NBA_STATS_HEADERS, timeout=10
+                    ).get_data_frames()
+                except TypeError:
+                    try:
+                        dfs = scoreboardv3.ScoreboardV3(game_date=fmt, league_id="00", timeout=10).get_data_frames()
+                    except TypeError:
+                        dfs = scoreboardv3.ScoreboardV3(game_date=fmt, league_id="00").get_data_frames()
+            except Exception:
+                continue
+            if dfs is None or len(dfs) < 3 or dfs[1].empty or dfs[2].empty:
+                break
+            games_hdr, teams_df = dfs[1], dfs[2]
+            for _, gr in games_hdr.iterrows():
+                gid = str(gr.get("gameId") or "")
+                if not gid:
+                    continue
+                ts = teams_df[teams_df["gameId"].astype(str) == gid]
+                if ts.shape[0] < 2:
+                    continue
+                home_lr, away_lr = _v3_home_away_rows(ts, gr.get("gameCode", ""))
+                if home_lr is None or away_lr is None:
+                    continue
+                hid = safe_int(home_lr.get("teamId"), 0)
+                aid = safe_int(away_lr.get("teamId"), 0)
+                gst = str(gr.get("gameStatusText") or "")
+                gst_l = gst.lower()
+                gsi = safe_int(gr.get("gameStatus"), 0)
+                per = safe_int(gr.get("period"), 0)
+                live_like = gsi == 2 or (
+                    per >= 1
+                    and "final" not in gst_l
+                    and any(
+                        x in gst_l
+                        for x in (
+                            "q1", "q2", "q3", "q4", "q5", "ot", "half", "halftime",
+                            "1st", "2nd", "3rd", "4th", "overtime",
+                        )
+                    )
+                )
+                if gsi == 3 or "final" in gst_l:
+                    cdn_st = 3
+                elif live_like:
+                    cdn_st = 2
+                else:
+                    cdn_st = 1
+                period = per if per > 0 else (4 if cdn_st == 3 else 1)
+                clock = str(gr.get("gameClock") or "")
+                h_tri = str(home_lr.get("teamTricode") or "").upper()
+                a_tri = str(away_lr.get("teamTricode") or "").upper()
+                pseudo = {
+                    "gameId": gid,
+                    "gameStatus": cdn_st,
+                    "gameStatusText": gst,
+                    "period": period,
+                    "gameClock": clock,
+                    "gameTimeUTC": gr.get("gameTimeUTC"),
+                    "gameEt": str(gr.get("gameEt") or ""),
+                    "seriesText": str(gr.get("seriesText") or gr.get("gameLabel") or ""),
+                    "_source": "scoreboardv3",
+                    "_game_date_est": d.strftime("%Y-%m-%d"),
+                    "homeTeam": {
+                        "teamId": hid,
+                        "teamTricode": h_tri,
+                        "teamName": str(home_lr.get("teamName") or ""),
+                        "teamCity": str(home_lr.get("teamCity") or ""),
+                        "score": safe_int(home_lr.get("score"), 0),
+                    },
+                    "awayTeam": {
+                        "teamId": aid,
+                        "teamTricode": a_tri,
+                        "teamName": str(away_lr.get("teamName") or ""),
+                        "teamCity": str(away_lr.get("teamCity") or ""),
+                        "score": safe_int(away_lr.get("score"), 0),
+                    },
+                }
+                out.append(pseudo)
+            if out:
+                return out
+            break
+    return out
+
+
+def _pseudo_games_from_scoreboard_v2(game_date):
+    """ScoreboardV2 fallback — never drops a game solely because TEAM_IDS is incomplete."""
+    if not NBA_STATS_AVAILABLE:
+        return []
+    out = []
+    d = game_date if hasattr(game_date, "strftime") else datetime.strptime(str(game_date)[:10], "%Y-%m-%d").date()
+    for fmt in (d.strftime("%m/%d/%Y"), d.strftime("%Y-%m-%d")):
+        try:
+            try:
+                dfs = scoreboardv2.ScoreboardV2(
+                    game_date=fmt, league_id="00", day_offset=0, headers=NBA_STATS_HEADERS, timeout=8
+                ).get_data_frames()
+            except TypeError:
+                try:
+                    dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0, timeout=8).get_data_frames()
+                except TypeError:
+                    dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0).get_data_frames()
+        except Exception:
+            continue
+        if dfs is None or len(dfs) < 2 or dfs[0].empty:
+            continue
+        hdr, lines = dfs[0], dfs[1]
+        lines_by_gid = {}
+        if lines is not None and not lines.empty:
+            for _, lr in lines.iterrows():
+                gid = str(lr.get("GAME_ID", ""))
+                if gid:
+                    lines_by_gid.setdefault(gid, []).append(lr)
+        for _, r in hdr.iterrows():
+            gid = str(r.get("GAME_ID", ""))
+            if not gid:
+                continue
+            hid, vid = safe_int(r.get("HOME_TEAM_ID")), safe_int(r.get("VISITOR_TEAM_ID"))
+            lr_h = next((x for x in lines_by_gid.get(gid, []) if safe_int(x.get("TEAM_ID")) == hid), None)
+            lr_a = next((x for x in lines_by_gid.get(gid, []) if safe_int(x.get("TEAM_ID")) == vid), None)
+            ht, at = ID_TO_TEAM.get(hid), ID_TO_TEAM.get(vid)
+            if ht and at:
+                h_tri, a_tri = TEAM_ALIASES.get(ht, ""), TEAM_ALIASES.get(at, "")
+                hpts = _line_v2_total_pts(lr_h) if lr_h is not None else 0
+                apts = _line_v2_total_pts(lr_a) if lr_a is not None else 0
+            elif lr_h is not None and lr_a is not None:
+                h_tri = str(lr_h.get("TEAM_ABBREVIATION", "") or "").upper()
+                a_tri = str(lr_a.get("TEAM_ABBREVIATION", "") or "").upper()
+                hpts, apts = _line_v2_total_pts(lr_h), _line_v2_total_pts(lr_a)
+            else:
+                continue
+            live_period = safe_int(r.get("LIVE_PERIOD"), 0)
+            gst = str(r.get("GAME_STATUS_TEXT", "") or "")
+            gst_l = gst.lower()
+            gsi = safe_int(r.get("GAME_STATUS_ID"), 0)
+            live_like = (
+                gsi == 2
+                or live_period >= 1
+                or any(
+                    x in gst_l
+                    for x in (
+                        "q1", "q2", "q3", "q4", "q5", "ot", "half", "halftime",
+                        "1st", "2nd", "3rd", "4th", "overtime",
+                    )
+                )
+            )
+            if gsi == 3 or "final" in gst_l:
+                cdn_st, _ph = 3, "final"
+            elif live_like and "final" not in gst_l:
+                cdn_st, _ph = 2, "live"
+            else:
+                cdn_st, _ph = 1, "scheduled"
+            period = live_period if live_period > 0 else (4 if cdn_st == 3 else 1)
+            clock = str(r.get("LIVE_PC_TIME") or "")
+            if ht and at:
+                home_team = {
+                    "teamId": hid,
+                    "teamTricode": h_tri,
+                    "teamName": ht.split()[-1] if ht else "",
+                    "teamCity": " ".join(ht.split()[:-1]) if ht and " " in ht else "",
+                    "score": hpts,
+                }
+                away_team = {
+                    "teamId": vid,
+                    "teamTricode": a_tri,
+                    "teamName": at.split()[-1] if at else "",
+                    "teamCity": " ".join(at.split()[:-1]) if at and " " in at else "",
+                    "score": apts,
+                }
+            else:
+                home_team = _v2_team_dict_from_line(lr_h, hid)
+                away_team = _v2_team_dict_from_line(lr_a, vid)
+            pseudo = {
+                "gameId": gid,
+                "gameStatus": cdn_st,
+                "gameStatusText": gst,
+                "period": period,
+                "gameClock": clock,
+                "gameTimeUTC": None,
+                "gameEt": str(r.get("LIVE_PERIOD_TIME_BCAST") or ""),
+                "seriesText": str(r.get("GAMECODE", "") or ""),
+                "_source": "scoreboardv2",
+                "_game_date_est": str(r.get("GAME_DATE_EST", "")),
+                "homeTeam": home_team,
+                "awayTeam": away_team,
+            }
+            out.append(pseudo)
+        if out:
+            break
+    return out
+
+
 @st.cache_data(ttl=22)
 def get_live_games():
     """Today's live CDN scoreboard (NBA 'today' in ET). Cached ~20s to balance freshness vs load."""
@@ -899,103 +1174,13 @@ def get_live_games():
 
 @st.cache_data(ttl=28)
 def _scoreboard_v2_games_for_date(game_date):
-    """Stats scoreboard for one calendar date → pseudo-live dicts (deduped with CDN by gameId)."""
+    """Stats scoreboard for one calendar date → pseudo-live dicts (ScoreboardV3 first, then fixed V2)."""
     if not NBA_STATS_AVAILABLE:
         return []
-    out = []
-    d = game_date if hasattr(game_date, "strftime") else datetime.strptime(str(game_date)[:10], "%Y-%m-%d").date()
-    for fmt in (d.strftime("%m/%d/%Y"), d.strftime("%Y-%m-%d")):
-        try:
-            try:
-                dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0, timeout=8).get_data_frames()
-            except TypeError:
-                dfs = scoreboardv2.ScoreboardV2(game_date=fmt, league_id="00", day_offset=0).get_data_frames()
-        except Exception:
-            continue
-        if dfs is None or len(dfs) < 2 or dfs[0].empty:
-            continue
-        hdr, lines = dfs[0], dfs[1]
-        pts_map = {}
-        if lines is not None and not lines.empty:
-            for _, lr in lines.iterrows():
-                gid = str(lr.get("GAME_ID", ""))
-                ab = str(lr.get("TEAM_ABBREVIATION", ""))
-                pts_map[(gid, ab)] = safe_int(lr.get("PTS"))
-        for _, r in hdr.iterrows():
-            gid = str(r.get("GAME_ID", ""))
-            if not gid:
-                continue
-            hid, vid = safe_int(r.get("HOME_TEAM_ID")), safe_int(r.get("VISITOR_TEAM_ID"))
-            ht, at = ID_TO_TEAM.get(hid), ID_TO_TEAM.get(vid)
-            if not ht or not at:
-                continue
-            h_tri, a_tri = TEAM_ALIASES.get(ht, ""), TEAM_ALIASES.get(at, "")
-            hpts = pts_map.get((gid, h_tri), 0)
-            apts = pts_map.get((gid, a_tri), 0)
-            live_period = safe_int(r.get("LIVE_PERIOD"), 0)
-            gst = str(r.get("GAME_STATUS_TEXT", "") or "")
-            gst_l = gst.lower()
-            gsi = safe_int(r.get("GAME_STATUS_ID"), 0)
-            live_like = (
-                gsi == 2
-                or live_period >= 1
-                or any(
-                    x in gst_l
-                    for x in (
-                        "q1",
-                        "q2",
-                        "q3",
-                        "q4",
-                        "q5",
-                        "ot",
-                        "half",
-                        "halftime",
-                        "1st",
-                        "2nd",
-                        "3rd",
-                        "4th",
-                        "overtime",
-                    )
-                )
-            )
-            if gsi == 3 or "final" in gst_l:
-                cdn_st, phase = 3, "final"
-            elif live_like and "final" not in gst_l:
-                cdn_st, phase = 2, "live"
-            else:
-                cdn_st, phase = 1, "scheduled"
-            period = live_period if live_period > 0 else (4 if phase == "final" else 1)
-            clock = str(r.get("LIVE_PC_TIME") or "")
-            pseudo = {
-                "gameId": gid,
-                "gameStatus": cdn_st,
-                "gameStatusText": gst,
-                "period": period,
-                "gameClock": clock,
-                "gameTimeUTC": None,
-                "gameEt": str(r.get("LIVE_PERIOD_TIME_BCAST") or ""),
-                "seriesText": str(r.get("GAMECODE", "") or ""),
-                "_source": "scoreboardv2",
-                "_game_date_est": str(r.get("GAME_DATE_EST", "")),
-                "homeTeam": {
-                    "teamId": hid,
-                    "teamTricode": h_tri,
-                    "teamName": ht.split()[-1] if ht else "",
-                    "teamCity": " ".join(ht.split()[:-1]) if ht and " " in ht else "",
-                    "score": hpts,
-                },
-                "awayTeam": {
-                    "teamId": vid,
-                    "teamTricode": a_tri,
-                    "teamName": at.split()[-1] if at else "",
-                    "teamCity": " ".join(at.split()[:-1]) if at and " " in at else "",
-                    "score": apts,
-                },
-            }
-            out.append(pseudo)
-        if out:
-            break
-    return out
+    v3 = _pseudo_games_from_scoreboard_v3(game_date)
+    if v3:
+        return v3
+    return _pseudo_games_from_scoreboard_v2(game_date)
 
 
 def _gather_team_scoreboard_games(team_name):
@@ -1024,6 +1209,55 @@ def _gather_team_scoreboard_games(team_name):
         if _game_involves_team(g2, team_name) or (opponent and _game_involves_team(g2, opponent)):
             out.append(g2)
     return out
+
+
+@st.cache_data(ttl=22)
+def _merged_stats_games_et_window():
+    """All stats scoreboard games for yesterday→tomorrow Eastern (deduped by gameId). CDN not used."""
+    if not NBA_STATS_AVAILABLE:
+        return []
+    merged = {}
+    try:
+        for d in _nba_calendar_dates_window(1):
+            for g in _scoreboard_v2_games_for_date(d):
+                gid = str((g or {}).get("gameId") or "")
+                if gid:
+                    merged[gid] = dict(g)
+        return [normalize_scoreboard_game(dict(x)) for x in merged.values()]
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=35)
+def _scoreboard_pipeline_debug_report():
+    """Raw shapes for ScoreboardV3/V2 — for the Live Game Center debug panel."""
+    rows = []
+    rows.append(f"nba_et_now={_nba_et_now().isoformat()}")
+    rows.append(f"et_window_dates={[d.isoformat() for d in _nba_calendar_dates_window(1)]}")
+    rows.append(f"NBA_SCOREBOARD_V3_AVAILABLE={NBA_SCOREBOARD_V3_AVAILABLE}")
+    for d in _nba_calendar_dates_window(1):
+        ds = d.isoformat()
+        if NBA_SCOREBOARD_V3_AVAILABLE and scoreboardv3:
+            for fmt in (d.strftime("%Y-%m-%d"), d.strftime("%m/%d/%Y")):
+                try:
+                    try:
+                        dfs = scoreboardv3.ScoreboardV3(
+                            game_date=fmt, league_id="00", headers=NBA_STATS_HEADERS, timeout=10
+                        ).get_data_frames()
+                    except TypeError:
+                        dfs = scoreboardv3.ScoreboardV3(game_date=fmt, league_id="00", timeout=10).get_data_frames()
+                    rows.append(f"v3 date={ds} fmt={fmt} n_frames={len(dfs)} shapes={[x.shape for x in dfs]}")
+                    if dfs and len(dfs) > 1 and hasattr(dfs[1], "columns"):
+                        rows.append(f"v3 date={ds} game_row_columns={list(dfs[1].columns)}")
+                    break
+                except Exception as e:
+                    rows.append(f"v3 date={ds} fmt={fmt} ERROR {e!r}")
+        try:
+            n_merged = len(_scoreboard_v2_games_for_date(d))
+            rows.append(f"pseudo_games_after_merge(date={ds}) count={n_merged}")
+        except Exception as e:
+            rows.append(f"pseudo_games(date={ds}) ERROR {e!r}")
+    return "\n".join(rows)
 
 
 def _live_broadcast_phase(g):
@@ -3871,8 +4105,27 @@ def _pregame_pressure_lines(favorite_team, opp_name, series_line, profile):
     return lines
 
 
+def _profile_playoff_sched_hint(team_name, profile):
+    p = profile or TEAM_PROFILES.get(team_name) or {}
+    opp = p.get("current_opponent")
+    if opp and p.get("status") == "Active":
+        return (
+            f"**Bracket profile (offline):** {team_name} vs **{opp}** — {p.get('round', 'Playoffs')}. "
+            "Typical playoff tips are **7:00–8:30 PM ET** when the league has a night game."
+        )
+    return ""
+
+
+def _short_matchup_tris(g):
+    h = g.get("homeTeam") or {}
+    a = g.get("awayTeam") or {}
+    at = _tricode_from_team_dict(a) or str(a.get("teamTricode") or "?")
+    ht = _tricode_from_team_dict(h) or str(h.get("teamTricode") or "?")
+    return f"{at} @ {ht}"
+
+
 def _live_center_debug_probe():
-    """Light probe for debug UI; must not raise."""
+    """Probe CDN + merged stats slate (yesterday→tomorrow ET); must not raise."""
     errs = []
     n_cdn = -999
     try:
@@ -3884,17 +4137,16 @@ def _live_center_debug_probe():
     except Exception as e:
         n_cdn = -1
         errs.append(f"live scoreboard: {e!r}")
-    n_v2 = -999
+    n_stats_window = -999
     try:
         if NBA_STATS_AVAILABLE:
-            vg = _scoreboard_v2_games_for_date(_nba_et_date_today())
-            n_v2 = len(vg) if isinstance(vg, list) else -1
+            n_stats_window = len(_merged_stats_games_et_window())
         else:
-            n_v2 = -1
+            n_stats_window = -1
     except Exception as e:
-        n_v2 = -1
-        errs.append(f"scoreboardv2 (today ET): {e!r}")
-    return n_cdn, n_v2, errs
+        n_stats_window = -1
+        errs.append(f"stats scoreboard (ET window): {e!r}")
+    return n_cdn, n_stats_window, errs
 
 
 def render_live_game_center(favorite_team, profile):
@@ -3913,6 +4165,13 @@ def render_live_game_center(favorite_team, profile):
 
     alias = TEAM_ALIASES.get(favorite_team, "—")
 
+    n_cdn, n_stats, probe_errs = _live_center_debug_probe()
+    try:
+        slate_games = _merged_stats_games_et_window()
+    except Exception:
+        slate_games = []
+    fav_slate = [g for g in slate_games if _game_involves_team(g, favorite_team)]
+
     featured_err = None
     raw_fb = None
     try:
@@ -3923,27 +4182,59 @@ def render_live_game_center(favorite_team, profile):
     if isinstance(raw_fb, dict) and raw_fb.get("_merge_error"):
         featured_err = featured_err or raw_fb["_merge_error"]
 
-    n_cdn, n_v2, probe_errs = _live_center_debug_probe()
-
     cdn_got = (n_cdn >= 0) and (n_cdn > 0)
-    v2_got = (n_v2 >= 0) and (n_v2 > 0)
+    stats_got = (n_stats >= 0) and (n_stats > 0)
+
+    with st.container(border=True):
+        st.markdown("##### Scoreboard status (Eastern window: yesterday → tomorrow)")
+        hint = _profile_playoff_sched_hint(favorite_team, profile)
+        if fav_slate:
+            g0 = fav_slate[0]
+            gst = (g0.get("gameStatusText") or "status TBD").strip()
+            st.success(f"**{fan_nick(favorite_team)}** on the stats slate: **{_short_matchup_tris(g0)}** — **{gst}**")
+            if len(fav_slate) > 1:
+                st.caption(f"Multiple rows include your team today ({len(fav_slate)}); merge picks the best broadcast state.")
+        elif stats_got:
+            st.info(
+                f"**{n_stats} NBA game(s)** on the merged stats board for the Eastern 3-day window — "
+                f"your sidebar team (**{favorite_team}**) is not listed on those rows yet."
+            )
+        elif not cdn_got and not stats_got:
+            st.warning(
+                "**No live feed detected** — both the live CDN board and the stats scoreboard returned **zero** merged games. "
+                "Open **Raw scoreboard API debug** below if you need exact dates and dataframe shapes."
+            )
+        elif cdn_got and not stats_got:
+            st.warning("CDN returned games but the **stats merge is empty** — check raw debug (stats may be blocked or mis-parsed).")
+        else:
+            st.caption("Feeds responded; see metrics below for counts.")
+        if hint:
+            st.caption(hint)
+        m1, m2 = st.columns(2)
+        m1.metric("Live CDN (today in ET)", str(n_cdn) if n_cdn >= 0 else "err")
+        m2.metric("Stats slate (deduped, 3 ET days)", str(n_stats) if n_stats >= 0 else "err")
 
     with st.expander("🔧 Live Game Center debug (read first if the page misbehaves)", expanded=True):
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("NBA_LIVE_AVAILABLE", "yes" if NBA_LIVE_AVAILABLE else "no")
         d2.metric("NBA_STATS_AVAILABLE", "yes" if NBA_STATS_AVAILABLE else "no")
         d3.metric("Live CDN games (count)", str(n_cdn) if n_cdn >= 0 else "err")
-        d4.metric("scoreboardv2 today (rows)", str(n_v2) if n_v2 >= 0 else "err")
+        d4.metric("Stats slate (3-day ET)", str(n_stats) if n_stats >= 0 else "err")
         d5, d6 = st.columns(2)
         d5.metric("Live scoreboard returned games", "yes" if cdn_got else ("no" if n_cdn == 0 else "err"))
         d6.metric("Merged row for favorite", "yes" if state and state.get("game") else "no")
-        st.write(f"**Selected team:** {favorite_team} · **alias:** `{alias}`")
+        st.write(f"**Selected team:** {favorite_team} · **alias:** `{alias}` · **ET now:** `{_nba_et_now().isoformat()}`")
         if featured_err:
             st.warning(f"**Merge / featured error:** `{featured_err}`")
         if probe_errs:
             st.error("Probe errors:\n" + "\n".join(probe_errs))
-        elif not probe_errs:
+        else:
             st.success("Probe completed without exceptions.")
+        with st.expander("Raw scoreboard API debug (dates, V3 frame shapes, per-date game counts)", expanded=False):
+            try:
+                st.code(_scoreboard_pipeline_debug_report(), language="text")
+            except Exception as e:
+                st.write(f"(debug report failed: {e!r})")
 
     opp_prof = profile.get("current_opponent") or "—"
     try:
@@ -3969,7 +4260,7 @@ def render_live_game_center(favorite_team, profile):
         )
         st.info(
             f"**Feeds:** live CDN returned **{'games' if cdn_got else 'zero games'}**; "
-            f"scoreboardv2 (today ET) returned **{'rows' if v2_got else 'zero rows'}**."
+            f"stats scoreboard (merged **yesterday→tomorrow ET**) returned **{n_stats if n_stats >= 0 else 'err'}** game row(s)."
         )
         if AUTOREFRESH_AVAILABLE:
             st.caption("Auto-refresh paused in minimal mode when no game row.")
@@ -4000,15 +4291,15 @@ def render_live_game_center(favorite_team, profile):
     st.write(f"**Phase:** `{phase}`")
     st.caption(f"gameId: `{gid}`")
 
-    games_in_probe = (n_cdn > 0) or (n_v2 > 0)
+    games_in_probe = (n_cdn > 0) or (n_stats > 0)
     st.info(
         f"**Live API availability:** live CDN JSON = **{'yes' if NBA_LIVE_AVAILABLE else 'no'}**; "
         f"stats (nba_api) = **{'yes' if NBA_STATS_AVAILABLE else 'no'}**. "
-        f"Probe: **{n_cdn}** CDN games, **{n_v2}** scoreboardv2 rows (today ET). "
-        f"Merged row for favorite: **{'yes' if live else 'no'}**."
+        f"Counts: **{n_cdn}** CDN games · **{n_stats}** stats slate games (3 ET days, deduped). "
+        f"Merged featured row for favorite: **{'yes' if live else 'no'}**."
     )
     if not games_in_probe and not live:
-        st.warning("Neither probe nor merge returned games — feeds may be down or slate empty for this ET day.")
+        st.warning("Neither CDN nor stats slate returned games — feeds may be down for this Eastern window.")
 
     if AUTOREFRESH_AVAILABLE and phase == "live":
         st_autorefresh(interval=12000, key="live_refresh_minimal")
