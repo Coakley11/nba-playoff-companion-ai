@@ -2360,6 +2360,185 @@ def _bounce_back_games(df):
     return n
 
 
+def _pp_hub_pressure_legacy_narratives(
+    team_name,
+    player,
+    seed,
+    rnd,
+    status,
+    opp,
+    pressure_base,
+    rep,
+    stakes,
+    elim_pressure,
+    cur_summary,
+    df,
+    prof,
+):
+    """Plain-language copy for Player Playoff Hub · section 3 (pressure, stakes, perception, legacy)."""
+    nick = fan_nick(team_name)
+    last = player.rsplit(" ", 1)[-1] if player else "They"
+    rnd_disp = rnd or "the playoffs"
+    rl = (rnd or "").lower()
+    pts = float(cur_summary.get("PTS") or 0)
+    pm = safe_float(cur_summary.get("PLUS_MINUS"))
+    gp = int(cur_summary.get("GP") or (len(df) if df is not None else 0))
+    bounces = _bounce_back_games(df) if df is not None else 0
+    has_loss = False
+    if df is not None and not df.empty and "WL" in df.columns:
+        has_loss = any(str(x).upper().startswith("L") for x in df["WL"].astype(str).tolist())
+
+    v_p = max(0, min(100, int(pressure_base)))
+    if v_p >= 82:
+        heat = "Pressure is extremely high right now"
+    elif v_p >= 68:
+        heat = "Pressure is very high"
+    elif v_p >= 52:
+        heat = "Pressure is real and rising"
+    elif v_p >= 38:
+        heat = "There is steady playoff heat on this group"
+    else:
+        heat = "The emotional temperature is a notch lower than a headline series, but the games still matter"
+
+    seed_bits = []
+    if seed <= 2:
+        seed_bits.append(
+            f"{nick} entered the postseason with real title-or-deep-run expectations—every loss gets picked apart on national TV"
+        )
+    elif seed <= 4:
+        seed_bits.append(
+            f"as a top-four seed, {nick} are supposed to look like a threat, not just happy to be here"
+        )
+    else:
+        seed_bits.append(
+            f"from the {seed} seed, {nick} are often written off early—until they win, then the spotlight flips overnight"
+        )
+
+    if "nba final" in rl or ("final" in rl and "conference" not in rl):
+        seed_bits.append(
+            "the Finals shrink the story to a handful of stars and moments everyone replays for years"
+        )
+    elif "conference" in rl and "final" in rl:
+        seed_bits.append(
+            "conference finals basketball is where reputations get stamped—win or lose, people remember who showed"
+        )
+    elif "second" in rl:
+        seed_bits.append(
+            "the second round is where matchups, scouting, and shot quality separate good teams from great ones"
+        )
+    else:
+        seed_bits.append(
+            "even early rounds swing fast; there is no truly quiet game in a seven-game series"
+        )
+
+    if pts >= 24:
+        seed_bits.append(
+            f"{last} is carrying a heavy scoring load in this sample ({pts:.1f} PPG over {gp} games), so fans naturally tie the result to his nights"
+        )
+    elif pts >= 18:
+        seed_bits.append(
+            f"{last} is still a visible part of the box score ({pts:.1f} PPG), so the crowd notices when the offense flows through him"
+        )
+
+    if status == "Active" and opp:
+        seed_bits.append(f"with {fan_nick(opp)} on the other side, every game is a referendum on who can impose their style")
+
+    pressure = f"{heat} ({v_p} on our 0–100 scale). " + " ".join(seed_bits[:3])
+
+    if seed <= 2:
+        expectations = (
+            f"Realistic read: people expect {nick} to play deep into May and feel like a championship threat. "
+            f"An early exit would feel disappointing after the regular season they put together."
+        )
+    elif seed <= 4:
+        expectations = (
+            f"Realistic read: fans expect {nick} to win a series and push whoever they draw next. "
+            f"A second-round exit can still sting because it closes the window on this roster's best punch."
+        )
+    else:
+        expectations = (
+            f"Realistic read: from seed {seed}, {nick} get room to play free—but every round they steal rewrites the story. "
+            f"A quick exit still hurts because it ends the year without a signature playoff chapter."
+        )
+    if status != "Active":
+        expectations += " With the run over, this is about whether the finish matched what reasonable people expected going in."
+
+    v_rep = max(0, min(100, int(rep)))
+    if v_rep >= 72:
+        swing = "How much this playoff run could change public perception: a lot. "
+    elif v_rep >= 52:
+        swing = "How much this playoff run could change public perception: a meaningful amount. "
+    else:
+        swing = "How much this playoff run could change public perception: some, mostly around consistency and big-game moments. "
+    if pm >= 4:
+        swing += (
+            f"In this log, {last} has often been on the right side of the margin—nights like that turn into 'he showed up when it mattered.'"
+        )
+    elif pm <= -3:
+        swing += (
+            f"In this log, the team margin on {last}'s minutes has been shaky—one cold shooting night gets framed as 'disappearing,' fair or not."
+        )
+    else:
+        swing += (
+            "Playoff TV and social chatter move fast: a loud scoring night or a quiet one can swing the conversation for a week."
+        )
+
+    v_st = max(0, min(100, int(stakes)))
+    if v_st >= 78:
+        stakes_txt = (
+            f"What's at stake this postseason for {nick}: a chance to play for a title—or the ache of falling just short after raising expectations."
+        )
+    elif v_st >= 60:
+        stakes_txt = (
+            f"What's at stake for {nick}: proving this core belongs with the league's elite, not just the regular-season leaderboard."
+        )
+    else:
+        stakes_txt = (
+            f"What's at stake for {nick}: building proof for next summer—who stays, who goes, and how this era gets remembered."
+        )
+    if status != "Active":
+        stakes_txt = (
+            f"With the run finished, what's at stake now is how this postseason gets filed: growth, disappointment, or something in between."
+        )
+
+    v_el = max(0, min(100, int(elim_pressure)))
+    if bounces >= 2:
+        elim = (
+            f"Series urgency is elevated ({v_el} on our 0–100 scale). {nick} have already had to answer after losses in this sample—"
+            "dropping another game can hand the opponent all the emotional momentum."
+        )
+    elif has_loss and bounces == 0:
+        elim = (
+            f"Series urgency is real ({v_el} on our 0–100 scale). They've taken losses without a bounce-back win in this log yet—"
+            "the next game starts to feel like a must-win even when the math still allows room."
+        )
+    elif has_loss:
+        elim = (
+            f"Series urgency sits around {v_el} on our 0–100 scale: they've traded wins and losses, so the next game can swing who controls the series tone."
+        )
+    else:
+        elim = (
+            f"Series urgency is moderate ({v_el} on our 0–100 scale) while the ledger in this log stays clean—but one off night resets the entire feel of the matchup."
+        )
+
+    legacy_default = (
+        f"A deep run with {nick} becomes one of the signature chapters people use to describe this era of the franchise—"
+        "especially if the best players author clear moments in close games."
+    )
+    legacy_body = (prof or {}).get("team_context") or legacy_default
+    if not isinstance(legacy_body, str) or len(legacy_body.strip()) < 8:
+        legacy_body = legacy_default
+
+    return {
+        "pressure": pressure,
+        "expectations": expectations,
+        "reputation": swing,
+        "stakes": stakes_txt,
+        "elimination": elim,
+        "legacy": legacy_body,
+    }
+
+
 def _franchise_playoff_touchstones(team_name):
     return {
         "New York Knicks": [
@@ -2730,32 +2909,68 @@ def render_player_playoff_story_hub(team_name, profile):
                 st.markdown("<p class='pp-muted'><b>Biggest games (impact blend):</b> " + " · ".join(bits) + "</p>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- 3 · Pressure meters ---
-    st.markdown("<div class='pp-sec'>3 · Pressure & legacy meters</div>", unsafe_allow_html=True)
-    expectation = "title-or-bust heat" if seed <= 2 else "real contender expectations" if seed <= 4 else "prove-it underdog energy"
+    # --- 3 · Pressure & legacy ---
+    st.markdown("<div class='pp-sec'>3 · Pressure & legacy</div>", unsafe_allow_html=True)
     pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
     rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
     stakes = min(100, 35 + _round_narrative_weight(rnd) + (12 if status == "Active" else 0))
     elim_pressure = min(100, 22 + _bounce_back_games(df) * 14 + (10 if any(str(x).upper().startswith("L") for x in df.get("WL", [])) else 0))
 
-    def meter_bar(label, val, klass=""):
+    nar = _pp_hub_pressure_legacy_narratives(
+        team_name,
+        player,
+        seed,
+        rnd,
+        status,
+        opp,
+        pressure_base,
+        rep,
+        stakes,
+        elim_pressure,
+        cur_summary,
+        df,
+        prof,
+    )
+
+    def meter_bar(label, val, klass, body_text):
         v = max(0, min(100, int(val)))
-        return f"<div class='pp-card'><h4>{html.escape(label)}</h4><div class='pp-meter'><span class='{klass}' style='width:{v}%'></span></div><p class='pp-muted'>{v}/100 · heuristic blend from seed, round, role, and this log.</p></div>"
+        safe_cls = klass if klass in ("", "gold", "ember") else ""
+        return (
+            f"<div class='pp-card'><h4>{html.escape(label)}</h4>"
+            f"<div class='pp-meter'><span class='{safe_cls}' style='width:{v}%'></span></div>"
+            f"<p class='pp-muted'>{html.escape(body_text)}</p></div>"
+        )
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(meter_bar("Pressure level", pressure_base, ""), unsafe_allow_html=True)
+        st.markdown(meter_bar("Pressure level", pressure_base, "", nar["pressure"]), unsafe_allow_html=True)
         st.markdown(
-            f"<div class='pp-card'><h4>Playoff expectations</h4><p class='pp-muted'>For a <b>seed-{seed}</b> {fan_nick(team_name)} run in the <b>{rnd}</b> window, the crowd reads this as <b>{expectation}</b> — fair or not, that noise attaches to the best players first.</p></div>",
+            f"<div class='pp-card'><h4>Playoff expectations</h4><p class='pp-muted'>{html.escape(nar['expectations'])}</p></div>",
             unsafe_allow_html=True,
         )
-        st.markdown(meter_bar("Reputation swing (short-term)", rep, "gold"), unsafe_allow_html=True)
-    with c2:
-        st.markdown(meter_bar("Championship stakes (narrative)", stakes, "ember"), unsafe_allow_html=True)
-        st.markdown(meter_bar("Elimination / bounce-back pressure", elim_pressure, "gold"), unsafe_allow_html=True)
         st.markdown(
-            "<div class='pp-card'><h4>Legacy note</h4><p class='pp-muted'>"
-            + html.escape(prof.get("team_context", "Each round rewrites how fans file this run in franchise memory."))
+            meter_bar(
+                "How much this run could change perception",
+                rep,
+                "gold",
+                nar["reputation"],
+            ),
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(meter_bar("What's at stake this postseason", stakes, "ember", nar["stakes"]), unsafe_allow_html=True)
+        st.markdown(
+            meter_bar(
+                "Elimination & bounce-back pressure",
+                elim_pressure,
+                "gold",
+                nar["elimination"],
+            ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div class='pp-card'><h4>What this playoff run could mean historically</h4><p class='pp-muted'>"
+            + html.escape(nar["legacy"])
             + "</p></div>",
             unsafe_allow_html=True,
         )
@@ -2789,7 +3004,8 @@ def render_player_playoff_story_hub(team_name, profile):
         st.markdown("<p class='pp-muted'><b>Top takeover games:</b><br/>" + "<br/>".join(lines) + "</p>", unsafe_allow_html=True)
     takeover = min(100, int(38 + 2.2 * (cur_summary.get("PTS", 0)) + 4.5 * (cur_summary.get("STL", 0) + cur_summary.get("BLK", 0)) + 1.1 * max(0, cur_summary.get("PLUS_MINUS", 0))))
     st.markdown(
-        f"<p class='pp-muted'><b>Playoff takeover rating (heuristic):</b> {takeover}/100 — rewards volume + defensive event creation + positive on-court margin in the log.</p>",
+        f"<p class='pp-muted'><b>Playoff takeover rating:</b> {takeover}/100 — "
+        f"big scoring nights plus steals, blocks, and winning margin in this log push this number up.</p>",
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
