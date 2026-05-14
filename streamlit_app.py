@@ -266,19 +266,38 @@ SECOND_ROUND_SERIES_TEMPLATE = {
     "SAS-MIN": {"conf":"West","round":"Second Round","a":"San Antonio Spurs","b":"Minnesota Timberwolves"},
 }
 
-# Emergency/demo backup only. Do not use these as the normal truth source.
+# Emergency/demo backup only. Merged into the bracket when API has no rows for a series
+# (see ``get_playoff_state_cached(True)``). Enough games here to crown winners so CF shells form.
 SECOND_ROUND_DEMO_BACKUP = {
     "DET-CLE": {"games":[
         {"Game":"Game 1","Date":"May 4","Score":"Pistons 111, Cavaliers 101","Winner":"Detroit Pistons","GameID":"demo-det-cle-g1"},
         {"Game":"Game 2","Date":"May 6","Score":"Pistons 105, Cavaliers 97","Winner":"Detroit Pistons","GameID":"demo-det-cle-g2"},
+        {"Game":"Game 3","Date":"May 8","Score":"Cavaliers 112, Pistons 108","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g3"},
+        {"Game":"Game 4","Date":"May 10","Score":"Pistons 102, Cavaliers 99","Winner":"Detroit Pistons","GameID":"demo-det-cle-g4"},
+        {"Game":"Game 5","Date":"May 12","Score":"Cavaliers 118, Pistons 114","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g5"},
+        {"Game":"Game 6","Date":"May 14","Score":"Cavaliers 101, Pistons 98","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g6"},
+        {"Game":"Game 7","Date":"May 16","Score":"Pistons 110, Cavaliers 102","Winner":"Detroit Pistons","GameID":"demo-det-cle-g7"},
     ]},
     "NYK-PHI": {"games":[
         {"Game":"Game 1","Date":"May 4","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks","GameID":"demo-nyk-phi-g1"},
         {"Game":"Game 2","Date":"May 6","Score":"Knicks 108, 76ers 102","Winner":"New York Knicks","GameID":"demo-nyk-phi-g2"},
+        {"Game":"Game 3","Date":"May 8","Score":"Knicks 112, 76ers 99","Winner":"New York Knicks","GameID":"demo-nyk-phi-g3"},
+        {"Game":"Game 4","Date":"May 10","Score":"Knicks 106, 76ers 95","Winner":"New York Knicks","GameID":"demo-nyk-phi-g4"},
     ]},
-    "OKC-LAL": {"games":[]},
+    "OKC-LAL": {"games":[
+        {"Game":"Game 1","Date":"May 5","Score":"Thunder 118, Lakers 104","Winner":"Oklahoma City Thunder","GameID":"demo-okc-lal-g1"},
+        {"Game":"Game 2","Date":"May 7","Score":"Thunder 122, Lakers 111","Winner":"Oklahoma City Thunder","GameID":"demo-okc-lal-g2"},
+        {"Game":"Game 3","Date":"May 9","Score":"Lakers 108, Thunder 105","Winner":"Los Angeles Lakers","GameID":"demo-okc-lal-g3"},
+        {"Game":"Game 4","Date":"May 11","Score":"Thunder 121, Lakers 109","Winner":"Oklahoma City Thunder","GameID":"demo-okc-lal-g4"},
+        {"Game":"Game 5","Date":"May 13","Score":"Thunder 115, Lakers 98","Winner":"Oklahoma City Thunder","GameID":"demo-okc-lal-g5"},
+    ]},
     "SAS-MIN": {"games":[
         {"Game":"Game 1","Date":"May 5","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g1"},
+        {"Game":"Game 2","Date":"May 7","Score":"Timberwolves 110, Spurs 106","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g2"},
+        {"Game":"Game 3","Date":"May 9","Score":"Spurs 112, Timberwolves 108","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g3"},
+        {"Game":"Game 4","Date":"May 11","Score":"Timberwolves 114, Spurs 105","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g4"},
+        {"Game":"Game 5","Date":"May 13","Score":"Spurs 109, Timberwolves 107","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g5"},
+        {"Game":"Game 6","Date":"May 15","Score":"Timberwolves 118, Spurs 112","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g6"},
     ]},
 }
 
@@ -519,7 +538,8 @@ def canonical_series_key(team_a, team_b):
 
 def second_round_series_for_team(team_name):
     """The second-round (semifinal) series shell containing this team, if any."""
-    for key, s in build_second_round_series().items():
+    second = get_playoff_state_cached(True)["second"]
+    for key, s in second.items():
         if team_name in (s.get("a"), s.get("b")):
             return key, s
     return None, None
@@ -673,14 +693,41 @@ def build_nba_finals_series():
     return build_nba_finals_series_cached(globals().get("USE_DEMO_BACKUP", False))
 
 
-def infer_next_round_series(round_name, conf=None):
-    """Return series dict(s) for Conference Finals or NBA Finals (API-driven).
+@st.cache_data(ttl=120)
+def get_playoff_state_cached(use_demo_backup: bool = True):
+    """Single cached snapshot: first-round results, semis, conference finals, and NBA Finals shells.
 
-    Conference Finals are built from second-round winners per conference.
-    NBA Finals are built from conference-finals champions (not from semis).
+    ``use_demo_backup`` follows the sidebar toggle for strict API mode; the bracket page passes
+    ``True`` so bundled second-round rows still render when the NBA feed is empty.
     """
+    second = build_second_round_series_cached(use_demo_backup)
+    cf = build_conference_finals_series_cached(use_demo_backup)
+    nf = build_nba_finals_series_cached(use_demo_backup)
+    east_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "East"]
+    west_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "West"]
+    east_sr = [s for s in second.values() if s.get("conf") == "East"]
+    west_sr = [s for s in second.values() if s.get("conf") == "West"]
+    east_cf = {k: v for k, v in (cf or {}).items() if v.get("conf") == "East"}
+    west_cf = {k: v for k, v in (cf or {}).items() if v.get("conf") == "West"}
+    return {
+        "second": second,
+        "cf": cf or {},
+        "finals": nf or {},
+        "east_fr": east_fr,
+        "west_fr": west_fr,
+        "east_sr": east_sr,
+        "west_sr": west_sr,
+        "east_cf": east_cf if east_cf else None,
+        "west_cf": west_cf if west_cf else None,
+    }
+
+
+def infer_next_round_series(round_name, conf=None):
+    """Return series dict(s) for Conference Finals or NBA Finals (from cached playoff state)."""
+    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
+    stt = get_playoff_state_cached(use_demo)
     if round_name == "Conference Finals":
-        cf = build_conference_finals_series()
+        cf = stt["cf"]
         if not cf:
             return None
         if conf:
@@ -688,7 +735,7 @@ def infer_next_round_series(round_name, conf=None):
             return sub if sub else None
         return cf
     if round_name == "NBA Finals":
-        nf = build_nba_finals_series()
+        nf = stt["finals"]
         return nf if nf else None
     return None
 
@@ -700,17 +747,19 @@ def series_for_team(team_name):
     (waiting on the other semi), returns (None, None) so the dashboard can show advancement context
     instead of the finished semi game log as the 'current' series.
     """
-    nf = build_nba_finals_series()
+    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
+    stt = get_playoff_state_cached(use_demo)
+    nf = stt["finals"]
+    cf = stt["cf"]
+    second = stt["second"]
     for key, s in nf.items():
         if team_name in (s.get("a"), s.get("b")):
             return key, s
 
-    cf = build_conference_finals_series()
     for key, s in cf.items():
         if team_name in (s.get("a"), s.get("b")):
             return key, s
 
-    second = build_second_round_series()
     sk, ss = None, None
     for key, s in second.items():
         if team_name in (s.get("a"), s.get("b")):
@@ -3454,7 +3503,7 @@ def next_round_context_for_team(team_name):
     if s_active and s_active.get("round") in ("Conference Finals", "NBA Finals"):
         return None
 
-    series_map = build_second_round_series()
+    series_map = get_playoff_state_cached(bool(globals().get("USE_DEMO_BACKUP", False)))["second"]
     current_key = None
     current_series = None
     for key, series in series_map.items():
@@ -3500,7 +3549,12 @@ def next_round_context_for_team(team_name):
 
 
 def _build_local_series_shell(team_name):
-    """Playoff series dict from bundled FIRST_ROUND_* / SECOND_ROUND_* only (no NBA API)."""
+    """Current playoff series view: prefer active second round (bundled/API merge), else first-round history."""
+    second_map = get_playoff_state_cached(True).get("second") or {}
+    for _k, s in second_map.items():
+        if team_name in (s.get("a"), s.get("b")):
+            return dict(s)
+
     for _key, s in FIRST_ROUND_SERIES.items():
         if team_name not in (s.get("a"), s.get("b")):
             continue
@@ -3530,26 +3584,6 @@ def _build_local_series_shell(team_name):
             "source": "Local FIRST_ROUND_SERIES",
         }
 
-    for key, shell in SECOND_ROUND_SERIES_TEMPLATE.items():
-        if team_name not in (shell.get("a"), shell.get("b")):
-            continue
-        a, b = shell["a"], shell["b"]
-        demo = SECOND_ROUND_DEMO_BACKUP.get(key, {})
-        raw = [dict(g) for g in demo.get("games", [])]
-        aw = sum(1 for g in raw if g.get("Winner") == a)
-        bw = sum(1 for g in raw if g.get("Winner") == b)
-        winner = a if aw >= 4 else (b if bw >= 4 else None)
-        return {
-            "conf": shell.get("conf", ""),
-            "round": shell.get("round", "Second Round"),
-            "a": a,
-            "b": b,
-            "a_wins": aw,
-            "b_wins": bw,
-            "winner": winner,
-            "games": raw,
-            "source": "Bundled SECOND_ROUND_DEMO_BACKUP" if raw else "Second-round shell (no bundled games)",
-        }
     return None
 
 
@@ -5244,14 +5278,14 @@ def render_bracket():
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=30000, key="bracket_refresh")
 
-    second = build_second_round_series()
-    east_fr = [s for s in FIRST_ROUND_SERIES.values() if s["conf"] == "East"]
-    west_fr = [s for s in FIRST_ROUND_SERIES.values() if s["conf"] == "West"]
-    east_sr = [s for s in second.values() if s["conf"] == "East"]
-    west_sr = [s for s in second.values() if s["conf"] == "West"]
-    east_conf = infer_next_round_series("Conference Finals", "East")
-    west_conf = infer_next_round_series("Conference Finals", "West")
-    finals = infer_next_round_series("NBA Finals")
+    stt = get_playoff_state_cached(True)
+    east_fr = stt["east_fr"]
+    west_fr = stt["west_fr"]
+    east_sr = stt["east_sr"]
+    west_sr = stt["west_sr"]
+    east_conf = stt["east_cf"]
+    west_conf = stt["west_cf"]
+    finals = stt["finals"]
 
     if east_conf and len(east_conf) == 1:
         east_cf_block = bracket_series_card(list(east_conf.values())[0], "Conference Finals")
@@ -5299,14 +5333,14 @@ def render_bracket():
 <div class="bmk-col" data-conf="east">
 <div class="bmk-col-head">
 <span class="bmk-col-eyebrow">Eastern Conference</span>
-<h3 class="bmk-col-title">First round</h3>
+<h3 class="bmk-col-title">First Round</h3>
 </div>
 <div class="bmk-col-stack">{east_fr_cards}</div>
 </div>
 <div class="bmk-col" data-conf="east">
 <div class="bmk-col-head">
 <span class="bmk-col-eyebrow">Eastern Conference</span>
-<h3 class="bmk-col-title">Semifinals</h3>
+<h3 class="bmk-col-title">Conference Semifinals (Round 2)</h3>
 </div>
 <div class="bmk-col-stack">{east_sr_cards}</div>
 </div>
@@ -5320,14 +5354,14 @@ def render_bracket():
 <div class="bmk-col" data-conf="west">
 <div class="bmk-col-head">
 <span class="bmk-col-eyebrow">Western Conference</span>
-<h3 class="bmk-col-title">Semifinals</h3>
+<h3 class="bmk-col-title">Conference Semifinals (Round 2)</h3>
 </div>
 <div class="bmk-col-stack">{west_sr_cards}</div>
 </div>
 <div class="bmk-col" data-conf="west">
 <div class="bmk-col-head">
 <span class="bmk-col-eyebrow">Western Conference</span>
-<h3 class="bmk-col-title">First round</h3>
+<h3 class="bmk-col-title">First Round</h3>
 </div>
 <div class="bmk-col-stack">{west_fr_cards}</div>
 </div>
@@ -5479,15 +5513,12 @@ def _live_team_full_name(team_tricode, team_obj):
 
 def _live_series_board(away_name, home_name):
     pair = {away_name, home_name}
+    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
+    stt = get_playoff_state_cached(use_demo)
     candidates = []
-    candidates.extend(build_second_round_series().values())
-    for coll in (
-        infer_next_round_series("Conference Finals", "East"),
-        infer_next_round_series("Conference Finals", "West"),
-        infer_next_round_series("NBA Finals"),
-    ):
-        if coll:
-            candidates.extend(coll.values())
+    candidates.extend(stt["second"].values())
+    candidates.extend((stt.get("cf") or {}).values())
+    candidates.extend((stt.get("finals") or {}).values())
     for s in candidates:
         if not s:
             continue
@@ -5983,7 +6014,8 @@ def render_previous_rounds_history(team_name):
         sr_note = f"{s2['winner']} wins the series." if s2.get("winner") else None
         render_series_history_card(team_name, opp2, second_games, "Second Round", sr_note)
 
-    for round_label, coll in (("Conference Finals", build_conference_finals_series()), ("NBA Finals", build_nba_finals_series())):
+    stt_paths = get_playoff_state_cached(True)
+    for round_label, coll in (("Conference Finals", stt_paths["cf"]), ("NBA Finals", stt_paths["finals"])):
         for _k, s in (coll or {}).items():
             if team_name not in (s.get("a"), s.get("b")):
                 continue
