@@ -662,47 +662,80 @@ def series_for_team(team_name):
             return None, None
     return sk, ss
 
+
+def fan_nick(team_name):
+    """Short franchise handle for fan-first copy (e.g. Cleveland Cavaliers → Cavaliers)."""
+    if not team_name:
+        return "your team"
+    return str(team_name).split()[-1]
+
+
 def series_status_text(team_name):
     _, s = series_for_team(team_name)
     if not s:
+        nick = fan_nick(team_name)
         _, semi = second_round_series_for_team(team_name)
         if semi and semi.get("winner") == team_name:
-            return f"{TEAM_ALIASES[team_name]} clinched their second-round series — Conference Finals matchup forms when both conference semis finish."
+            return (
+                f"You clinched the second round — {nick} advance while the other semi decides your next opponent."
+            )
         if semi and semi.get("winner") and semi.get("winner") != team_name:
             w = semi["winner"]
-            return f"{TEAM_ALIASES[team_name]} eliminated by {TEAM_ALIASES[w]}."
-        return "No active series"
+            return f"That second-round run ended against {fan_nick(w)} — you're done for this postseason, but history pages still tell the story."
+        return f"No active series on the board for {nick} right now — check the bracket when the next round locks."
     a, b = s["a"], s["b"]
     aw, bw = s["a_wins"], s["b_wins"]
     team_w = aw if team_name == a else bw
     opp = b if team_name == a else a
     opp_w = bw if team_name == a else aw
-    verb = "leads" if team_w > opp_w else "trails" if team_w < opp_w else "tied"
     source_note = "" if s.get("source") == "NBA API" else f" ({s.get('source','')})"
     rnd = s.get("round", "Playoffs")
-    return f"{rnd}: {TEAM_ALIASES[team_name]} {verb} {team_w}-{opp_w} vs {TEAM_ALIASES[opp]}{source_note}"
+    if team_w > opp_w:
+        ledger = f"You're up {team_w}-{opp_w} on {fan_nick(opp)}"
+    elif team_w < opp_w:
+        ledger = f"You're down {team_w}-{opp_w} to {fan_nick(opp)} — still time to flip the script"
+    else:
+        ledger = f"You're deadlocked {team_w}-{opp_w} with {fan_nick(opp)}"
+    return f"{rnd}: {ledger}{source_note}"
+
 
 def historic_series_context(team_name):
     _, s = series_for_team(team_name)
-    if not s: return pd.DataFrame()
+    if not s:
+        return pd.DataFrame()
     a, b = s["a"], s["b"]
     tw = s["a_wins"] if team_name == a else s["b_wins"]
     ow = s["b_wins"] if team_name == a else s["a_wins"]
+    opp = b if team_name == a else a
+    nick = fan_nick(team_name)
+    on = fan_nick(opp)
     last = s.get("games", [])[-1] if s.get("games") else None
-    latest_note = f" Most recent completed game: {last.get('Game')} on {last.get('Date')}: {last.get('Score')}." if last else " No completed API game has been loaded yet."
+    latest_note = (
+        f" Last time out ({last.get('Game')} · {last.get('Date')}): {last.get('Score')}."
+        if last
+        else " Waiting on the first completed game in the feed."
+    )
     if tw == 1 and ow == 0:
-        note = "Winning Game 1 improves the series outlook; Game 2 can create a major 2-0 advantage."
+        note = f"You're ahead early — protect the next home game and you can really squeeze {on}."
     elif tw == 2 and ow == 0:
-        note = "A 2-0 lead is historically a very strong best-of-seven position."
+        note = f"2-0 is a monster spot for {nick} fans — one more punch and the math gets brutal for {on}."
     elif tw == 1 and ow == 1:
-        note = "At 1-1, the series is close to a reset; Game 3 becomes a swing game."
+        note = f"Split so far — treat the next game like a reset; whoever owns the first six minutes usually rides the crowd energy."
     elif tw < ow:
-        note = "The team is trailing and needs to change the series momentum quickly."
+        note = f"You're chasing {on} — the honest path back is a defensive tone-setter next, then steal a road game before panic sets in."
     elif tw == 0 and ow == 0:
-        note = "No completed game detected yet. Game 1 sets the tone."
+        note = f"Series hasn't hit the log yet — Game 1 is where {nick} stamps identity vs {on}."
     else:
-        note = "The team has the series edge, but must keep winning possession battles to close it out."
-    return pd.DataFrame([{"Series Status": series_status_text(team_name), "Data Source": s.get("source",""), "Historical Context": note + latest_note}])
+        note = f"You've got the edge on {on}, but close-out basketball is about rebounds, turnovers, and not gifting free points."
+    return pd.DataFrame(
+        [
+            {
+                "Series Status": series_status_text(team_name),
+                "Data Source": s.get("source", ""),
+                "Historical Context": note + latest_note,
+            }
+        ]
+    )
 
 @st.cache_data(ttl=30)
 def get_live_games():
@@ -911,10 +944,11 @@ def injury_impact_note(player, status, injury, team_name):
     status_l = str(status).lower()
     injury_l = str(injury).lower()
     star_names = set(TEAM_PROFILES.get(team_name, {}).get("starters", [])[:3])
+    nick = fan_nick(team_name)
     if player in star_names:
-        base = f"{player} is a major rotation piece for {team_name}; his status can change matchup planning and usage."
+        base = f"As a {nick} fan, watch {player} closely — availability swings your ceiling in this matchup."
     else:
-        base = f"{player}'s status mainly affects depth, bench minutes, and matchup flexibility."
+        base = f"For {nick}, {player} matters for depth minutes and matchup flexibility."
     if "out" in status_l:
         return base + " If out, expect the rotation to tighten and another player to absorb minutes."
     if "question" in status_l or "doubt" in status_l or "game" in status_l:
@@ -936,7 +970,7 @@ def get_injury_report(team_name):
         return out, source + "; showing fallback monitor list"
     return pd.DataFrame(columns=["Player","Status","Injury","Latest Update","Impact","Source"]), source
 
-def render_injury_report(team_name, opponent_name=None, show_page_header=True):
+def render_injury_report(team_name, opponent_name=None, show_page_header=True, fan_perspective_team=None):
     if show_page_header:
         st.subheader("Injury Report / Pregame Availability")
         st.caption("Live source: ESPN injury pages when reachable. nba_api does not reliably provide official injury reports, so fallback rows are clearly labeled. Key fallback monitor rows are included when live injury data is unavailable.")
@@ -950,6 +984,11 @@ def render_injury_report(team_name, opponent_name=None, show_page_header=True):
     for tm in teams:
         df, source = get_injury_report(tm)
         st.markdown(f"### {tm}")
+        if fan_perspective_team:
+            if tm == fan_perspective_team:
+                st.caption(f"Your {fan_nick(tm)} — who to monitor before you get emotionally invested at tipoff.")
+            else:
+                st.caption(f"Opponent ({fan_nick(tm)}) — what could swing the matchup against your {fan_nick(fan_perspective_team)}.")
         st.caption(f"Source/status: {source} · refreshed about every 30 minutes")
         if df.empty:
             st.success("No injury rows found from the live source right now.")
@@ -1215,11 +1254,12 @@ def legacy_takeaways(player, team, pts, reb, ast, stl, blk, fg, three, plus_minu
     archetype, comps = player_legacy_archetype(player)
     base = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 0, False, player, team)
     title = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 4, True, player, team)
+    nick = fan_nick(team)
     return [
-        prof["resume"],
-        prof["team_context"],
-        f"Comparison references for this player: {', '.join(comps[:4])}.",
-        f"With these slider settings, {player} moves from {player_specific_tier(base, player, team)} to {player_specific_tier(title, player, team)} if the run ends in a championship."
+        f"Through a {nick} lens: {prof['resume']}",
+        f"What this means for your franchise story: {prof['team_context']}",
+        f"If you're comparing résumés out loud, think about names like {', '.join(comps[:4])} — not identical players, but useful bar talk.",
+        f"With these sliders, {player} moves from **{player_specific_tier(base, player, team)}** toward **{player_specific_tier(title, player, team)}** if {nick} hang a banner. That's the fan fantasy path.",
     ]
 # ==========================================================
 # Analysis / visualization helpers
@@ -1328,13 +1368,22 @@ def previous_game_top_plays(team_name):
     return pd.DataFrame(FALLBACK_TOP_PLAYS.get(team_name, []))
 
 def game_story(team_name, margin, prob, box_df):
-    alias=TEAM_ALIASES[team_name]
-    if box_df.empty: return ["Live box score has not loaded yet."]
-    df=box_df[box_df["Team"]==alias]
-    lines=[]
-    lines.append(f"{team_name} is {'ahead' if margin>0 else 'tied' if margin==0 else 'behind'} by {abs(margin)}.")
-    lines.append(f"Tracked team line: {df['PTS'].sum()} points, {df['REB'].sum()} rebounds, {df['AST'].sum()} assists.")
-    lines.append("The next stretch should focus on stops, clean possessions, and avoiding foul trouble.")
+    alias = TEAM_ALIASES[team_name]
+    nick = fan_nick(team_name)
+    if box_df.empty:
+        return [f"{nick} live box score is still loading — hang tight for real numbers."]
+    df = box_df[box_df["Team"] == alias]
+    lines = []
+    if margin > 0:
+        lines.append(f"Right now you're up {margin} — ride the run but don't get careless with fouls or turnovers.")
+    elif margin == 0:
+        lines.append("Score is knotted — next mini-run swings the building noise and the refs' whistle tone.")
+    else:
+        lines.append(f"You're down {abs(margin)} — the comeback starts with one clean defensive stop chain, then a good shot.")
+    lines.append(
+        f"Your guys on the floor: {int(df['PTS'].sum())} pts, {int(df['REB'].sum())} reb, {int(df['AST'].sum())} ast tracked in this feed."
+    )
+    lines.append("What you want to see next: extra pass threes, no live-ball gifts, and the glass on your end.")
     return lines
 
 def matchup_advantages(team, opp):
@@ -1481,7 +1530,7 @@ def build_matchup_intelligence_sections(team_name):
     """Return nine analyst-style sections; inputs are series + profiles + injuries."""
     s, opp, games, tw, ow, rnd, mode = intel_games_opponent_and_record(team_name)
     if not opp or opp not in TEAM_PROFILES:
-        return None, "No resolved playoff opponent for this selection yet — try again after the bracket locks a series."
+        return None, "We need a locked opponent for your sidebar team — try again once the bracket ties this matchup."
 
     t_prof = TEAM_PROFILES[team_name]
     o_prof = TEAM_PROFILES[opp]
@@ -1503,25 +1552,27 @@ def build_matchup_intelligence_sections(team_name):
     x_name = (t_prof.get("subs") or t_prof.get("starters", [""]))[0] if t_prof.get("subs") else (t_prof.get("starters") or ["Rotation"])[-1]
 
     seed = f"{team_name}|{opp}|{tw}{ow}|{len(games)}"
+    Y = fan_nick(team_name)
+    O = fan_nick(opp)
 
-    # --- 1. Key matchup advantage ---
+    # --- 1. Key matchup advantage (your team's broadcast) ---
     if tw > ow:
         if margins:
             adv_body = _intel_variant(
                 seed + "adv",
                 [
-                    f"{team_name} is translating **{t_strengths[0] if t_strengths else 'its identity'}** into wins on the scoreboard ({tw}-{ow}). The tape priority for {opp} is to take that away early in the shot clock.",
-                    f"The series ledger ({tw}-{ow}) says {team_name} is winning the **physical and execution** battle that shows up in {t_strengths[1] if len(t_strengths) > 1 else (t_strengths[0] if t_strengths else 'half-court control')}.",
-                    f"With a {tw}-{ow} edge, {team_name} is getting the game played on its terms — especially **{t_strengths[0] if t_strengths else 'star creation'}** — and forcing {opp} into tougher late-clock possessions.",
+                    f"You're seeing **{Y}** turn **{t_strengths[0] if t_strengths else 'your identity'}** into wins — **{tw}-{ow}** on {O}. What you want on film review is {O} never getting comfortable early-clock.",
+                    f"The ledger **{tw}-{ow}** matches what you've felt: **{t_strengths[1] if len(t_strengths) > 1 else (t_strengths[0] if t_strengths else 'execution')}** is winning the physical battle for {Y}.",
+                    f"Up **{tw}-{ow}**, you're dictating terms — especially **{t_strengths[0] if t_strengths else 'star creation'}** — and making {O} take tougher late-clock shots.",
                 ],
             )
         else:
             adv_body = _intel_variant(
                 seed + "advnom",
                 [
-                    f"The bracket reads **{tw}-{ow}** for {team_name} — even without full box-score parsing, the story matches **{t_strengths[0] if t_strengths else 'their best habits'}** showing up in winning minutes.",
-                    f"Up {tw}-{ow}, {team_name} is ahead where it matters. {opp} has to steal **initiation** — who starts the offense clean after misses usually follows the scoreboard here.",
-                    f"{tw}-{ow} favors {team_name}; the counter-film for {opp} starts with taking away **{t_strengths[0] if t_strengths else 'easy paint touches'}** without giving up the arc.",
+                    f"Bracket says you're up **{tw}-{ow}** — even before full box parsing, it passes the eye test: **{t_strengths[0] if t_strengths else 'your best habits'}** are showing in winning minutes.",
+                    f"You're ahead **{tw}-{ow}** where it counts. {O} has to steal **first good look** after misses — you feel that swing in the building.",
+                    f"**{tw}-{ow}** favors {Y}; what you hope {O} never solves is taking away **{t_strengths[0] if t_strengths else 'paint touches'}** without giving up the arc.",
                 ],
             )
     elif ow > tw:
@@ -1529,85 +1580,83 @@ def build_matchup_intelligence_sections(team_name):
             adv_body = _intel_variant(
                 seed + "advo",
                 [
-                    f"{opp} is ahead {ow}-{tw} and is leaning on **{o_strengths[0] if o_strengths else 'its best habits'}**. {team_name} has to flip where the game is contested: fewer clean looks for {o_star.split()[-1] if o_star else 'their lead option'} and more second chances.",
-                    f"The {ow}-{tw} margin reflects {opp} winning the **{o_strengths[0] if o_strengths else 'scheme'}** battle. {team_name}'s clearest counter is to attack **{o_concerns[0] if o_concerns else 'their weak-side help'}** until the defense cracks.",
-                    f"{opp} has controlled the series ({ow}-{tw}) by making {team_name} defend **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'multiple actions')}** without loading up on cheap fouls.",
+                    f"Tough spot: **{O}** leads **{ow}-{tw}** leaning on **{o_strengths[0] if o_strengths else 'their best habits'}**. Your comeback map: fewer clean looks for **{o_star.split()[-1] if o_star else 'their star'}** and more **extra possessions**.",
+                    f"The **{ow}-{tw}** scoreboard reflects {O} winning the **{o_strengths[0] if o_strengths else 'scheme'}** battle. Honest counter for {Y} fans: attack **{o_concerns[0] if o_concerns else 'their weak-side help'}** until it cracks.",
+                    f"{O} has controlled **{ow}-{tw}** by making you defend **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'multiple actions')}** without fouling — still doable, just louder in the huddle.",
                 ],
             )
         else:
             adv_body = _intel_variant(
                 seed + "advonm",
                 [
-                    f"{opp} leads **{ow}-{tw}** on the ledger — {team_name} needs a cleaner **{t_strengths[0] if t_strengths else 'half-court'}** night and to stress **{o_concerns[0] if o_concerns else 'their turnover risk'}**.",
-                    f"Trailing {ow}-{tw}, {team_name} is chasing **{o_strengths[0] if o_strengths else 'their identity nights'}** with better **shot selection** and fewer **live-ball turnovers**.",
-                    f"The {ow}-{tw} hole means {team_name} should hunt **early mismatch switches** before {opp} can set its preferred **drop/tag** rules.",
+                    f"{O} sits **{ow}-{tw}** — you need a cleaner **{t_strengths[0] if t_strengths else 'half-court'}** night and to stress **{o_concerns[0] if o_concerns else 'their turnover risk'}**.",
+                    f"Trailing **{ow}-{tw}**, you're chasing **{o_strengths[0] if o_strengths else 'their best nights'}** with sharper **shot selection** and fewer **live-ball turnovers** — boring, but that's the door back in.",
+                    f"The **{ow}-{tw}** hole means hunting **early switches** before {O} sets its **drop/tag** comfort zone.",
                 ],
             )
     elif games:
         adv_body = _intel_variant(
             seed + "adv_even",
             [
-                f"At {tw}-{ow}, neither side has a cushion — the edge is whichever team turns **{t_strengths[0] if t_strengths else 'transition'}** into real points and limits live-ball turnovers.",
-                f"Knotted at {tw}-{ow}, the matchup is basically a **shot-quality race**: {team_name}'s **{t_strengths[0] if t_strengths else 'spacing'}** vs {opp}'s **{o_strengths[0] if o_strengths else 'rim protection'}**.",
-                f"{tw}-{ow} means the next game is a swing spot. {team_name} wants the game to look like **{t_strengths[0] if t_strengths else 'its pace'}**; {opp} wants to make it a **{o_strengths[0] if o_strengths else 'grind'}** night.",
+                f"Deadlocked **{tw}-{ow}** — you win the night when **{t_strengths[0] if t_strengths else 'transition'}** turns into real points and you kill live-ball turnovers.",
+                f"**{tw}-{ow}** is a **shot-quality race** for {Y} fans: your **{t_strengths[0] if t_strengths else 'spacing'}** vs their **{o_strengths[0] if o_strengths else 'rim protection'}**.",
+                f"Next game is a swing — you want **{t_strengths[0] if t_strengths else 'your pace'}**; {O} wants a **{o_strengths[0] if o_strengths else 'grind'}** mud fight.",
             ],
         )
     else:
         adv_body = (
-            f"Series games are not loaded yet for this matchup — the preview read still starts with **{t_strengths[0] if t_strengths else 'half-court execution'}** "
-            f"against **{o_strengths[0] if o_strengths else 'their set defense'}** once the first result posts."
+            f"Games aren't in the log yet — your preview heart still starts with **{t_strengths[0] if t_strengths else 'half-court execution'}** "
+            f"vs **{o_strengths[0] if o_strengths else 'their set defense'}** once Game 1 posts."
         )
 
     hook = MATCHUP_INTEL_PAIR_HOOKS.get(frozenset({team_name, opp}))
     if hook:
         adv_body = adv_body.rstrip() + " " + hook
     if blowouts_for >= 1 and any("rebound" in (x or "").lower() for x in t_strengths):
-        adv_body += f" Margin tape also supports **{team_name} owning the glass** when help stays home."
+        adv_body += f" You should feel good about **{Y} owning the glass** when help stays home."
     if blowouts_for >= 1 and any("pace" in (x or "").lower() or "transition" in (x or "").lower() for x in t_strengths):
-        adv_body += f" **Transition volume** has been a separator when {team_name} gets stops and runs."
+        adv_body += f" **Transition runs** off stops have been your separator — keep pushing that edge."
 
     # --- 2. Biggest tactical concern ---
     concern_bits = []
     if inj.get("headline"):
         tm_h, pl_h, tag_h = inj["headline"]
         concern_bits.append(
-            f"**{pl_h}** ({tm_h}) showing **{tag_h}** on the injury feed — rotation length and matchup choices tighten if that holds"
+            f"**{pl_h}** ({tm_h}) flagged **{tag_h}** — worth knowing so you're not blindsided at tip"
         )
     if inj["team_out"] or inj["team_q"]:
         concern_bits.append(
-            f"availability stress ({inj['team_out']} out / {inj['team_q']} questionable signals) for {team_name}"
+            f"your own room has stress (**{inj['team_out']}** out / **{inj['team_q']}** questionable signals)"
         )
     concern_bits.append(
-        f"{opp} can punish **{t_concerns[0] if t_concerns else 'slow rotations'}** with **{o_strengths[0] if o_strengths else 'shot creation'}**"
+        f"{O} can hurt you where you're thin: **{t_concerns[0] if t_concerns else 'slow rotations'}** vs their **{o_strengths[0] if o_strengths else 'shot creation'}**"
     )
-    concern_body = (
-        "The biggest tactical worry is " + " and ".join(concern_bits[:2]) + "."
-    )
+    concern_body = "What should worry you most: " + " and ".join(concern_bits[:2]) + "."
 
     # --- 3. X-factor ---
     x_body = _intel_variant(
         seed + "xf",
         [
-            f"**{x_name}** is the X-factor: bench minutes swing when starters sit, and {opp} tends to lose its edge when **{o_concerns[-1] if o_concerns else 'depth'}** gets tested in foul-trouble nights.",
-            f"Watch **{x_name}** — playoff series turn when a non-headline player provides **spacing, extra possessions, or defensive events** in a 6-minute second-quarter stretch.",
-            f"If **{x_name}** hits open shots and avoids defensive hunting targets, {team_name} keeps its main creators fresher for late **pick-and-roll** possessions.",
+            f"**{x_name}** is your sneaky swing piece — when starters sit, {O} often loses juice if **{o_concerns[-1] if o_concerns else 'their depth'}** gets tested in foul trouble.",
+            f"Keep eyes on **{x_name}** — these series flip when a non-headline guy bankrolls **spacing, extra possessions, or defensive plays** in a six-minute second-quarter stretch.",
+            f"If **{x_name}** hits and avoids getting hunted, your stars stay fresher for late **pick-and-roll** possessions.",
         ],
     )
 
     # --- 4. Most important adjustment ---
     if blowouts_against >= 2:
-        adj = f"{team_name} has been blown off the floor in multiple games — the urgent adjustment is **early help rules + transition get-backs** so {o_star.split()[-1] if o_star else opp} isn't getting runway in the open floor."
+        adj = f"You've been blown out multiple times — the fix you want to see is **early help rules + transition get-backs** so **{o_star.split()[-1] if o_star else O}** stops getting runway."
     elif blowouts_for >= 2:
-        adj = f"{team_name} has shown it can **run away** in this matchup. {opp}'s adjustment is to **slow the game**, shrink transition, and force {team_name} into **late-clock isolations** without easy kickouts."
+        adj = f"You've shown you can **run away** from {O} — expect them to **slow the game**, shrink transition, and try to strand you in **late-clock isolations**."
     elif close_games >= max(2, len(margins) - 1) and margins:
-        adj = f"With **{close_games}** tight-score games (avg margin ~{avg_abs} pts), the series is about **ATO execution, SLOB/BLOB clarity, and who wins the first 6 minutes after halftime**."
+        adj = f"**{close_games}** nail-biters (avg ~{avg_abs} pts) — your path is **ATO execution, SLOB/BLOB clarity, and winning the first six minutes after halftime**."
     else:
         adj = _intel_variant(
             seed + "adj",
             [
-                f"Small-ball vs double-big minutes will decide **rebounding vs switching** — whichever staff forces the opponent into its **backup coverage** first usually wins the middle quarters.",
-                f"Expect a **pick-and-roll coverage tweak** (show vs drop vs blitz) aimed at {o_star.split()[-1] if o_star else 'their lead guard'} when {team_name} goes cold from three.",
-                f"The adjustment game is **side pick-and-roll placement** and **weak-side tag timing** — {opp} will try to keep {t_star.split()[-1] if t_star else 'your star'} off the nail without giving free corner threes.",
+                f"Rotation chess — **rebounding vs switching** — whoever forces the other into **backup coverages** first usually owns the middle quarters.",
+                f"Watch for a **PnR coverage tweak** on **{o_star.split()[-1] if o_star else O}** when your three goes cold.",
+                f"**Side PnR placement** and **weak-side tag timing** — {O} wants **{t_star.split()[-1] if t_star else 'your star'}** off the nail without free corners.",
             ],
         )
 
@@ -1615,91 +1664,91 @@ def build_matchup_intelligence_sections(team_name):
     def_body = _intel_variant(
         seed + "def",
         [
-            f"{team_name} has to solve how {opp} uses **{o_strengths[0] if o_strengths else 'star touches'}** in **spread pick-and-roll** — the weak-side low man is getting pulled, and skip passes are generating **clean above-the-break threes**.",
-            f"Defensively, the stress point is **{o_star}** attacking **{t_concerns[0] if t_concerns else 'the point of attack'}** — that creates help rotations that open **offensive rebounds and dump-offs**.",
-            f"{opp}'s **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'half-court size')}** is the matchup problem: {team_name} either lives with **switch size mismatches** or risks **over-help rebounding holes**.",
+            f"You have to solve how {O} runs **{o_strengths[0] if o_strengths else 'star touches'}** in **spread PnR** — weak-side help is getting stretched and skips are turning into **clean threes**.",
+            f"The stress point is **{o_star}** attacking **{t_concerns[0] if t_concerns else 'your point of attack'}** — help opens **ORBs and dump-offs** that hurt on the second side.",
+            f"{O}'s **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'size')}** forces you to pick: **switch mismatches** or **over-help rebound holes**.",
         ],
     )
 
     # --- 6. Momentum shift ---
     if last_w == team_name and prev_w == team_name:
-        mom_txt = f"{team_name} has taken **back-to-back** — the run is real until {opp} lands a **counterpunch quarter**."
+        mom_txt = f"You're rolling — **back-to-back** wins for {Y} until {O} lands a **counterpunch quarter**."
         mom_class = "up"
     elif last_w == opp and prev_w == opp:
-        mom_txt = f"{opp} is stacking wins — {team_name} needs a **tone-setting defensive first quarter** next outing."
+        mom_txt = f"{O} is stacking Ws — you need a **tone-setting defensive first quarter** next time out to flip how this feels on the couch."
         mom_class = "down"
     elif last_w == team_name:
-        mom_txt = f"{team_name} grabbed the last game — **possession quality** and **defensive rebounding** are the carryover metrics to watch."
+        mom_txt = f"You took the last one — ride **possession quality** and **defensive rebounding** into the next tip."
         mom_class = "up"
     elif last_w == opp:
-        mom_txt = f"{opp} answered last time out — expect **scheme tweaks** and more **physicality on screens** early."
+        mom_txt = f"{O} answered last — expect **scheme tweaks** and **extra physicality on screens** early; that's your cue to punch first."
         mom_class = "down"
     else:
-        mom_txt = "Momentum is neutral until the next result posts — **Game 1 (or next game) sets the officiating and pace tone**."
+        mom_txt = f"Momentum resets until the next result — **Game 1 (or next game)** sets whistle tone and pace for {Y} fans."
         mom_class = "flat"
 
     # --- 7. Clutch-time edge ---
     if not margins:
-        clutch = "Once games are in the log, this panel reads **late-game shot quality** from margin patterns (tight vs blowout games)."
+        clutch = "Once games populate, this reads how **tight vs blowout** nights shape your late-game stress as a fan."
     elif close_games >= len(margins) // 2 + 1:
-        clutch = f"This series has lived in **single-possession** windows — **clutch edge** belongs to whichever team wins **FTs, turnovers, and ORB on late misses** (not just hero shots)."
+        clutch = f"This has been a **nail-biter series** for you — clutch belongs to whoever wins **FTs, turnovers, and ORB on late misses**, not just the last shot."
     else:
-        clutch = f"Several games have broken open — **clutch is less about one play** and more about **avoiding the avalanche quarter** (usually tied to **live-ball turnovers** or **transition threes**)."
+        clutch = f"Some nights have broken open — for {Y}, clutch is less about one play and more about **avoiding the avalanche quarter** (**live-ball turnovers**, **transition threes**)."
 
-    # --- 8. Pressure meter (higher = more heat on the selected team) ---
+    # --- 8. Pressure meter (higher = more heat on you as a fan) ---
     gp = tw + ow
     diff = tw - ow
     if mode == "eliminated":
         pressure = 88
         p_label = "Season-defining"
-        p_note = "Elimination context: evaluation mode — what broke schematically and what can carry forward."
+        p_note = "Honest mode: the run ended — what broke schematically and what still makes you proud of this group."
     elif gp == 0:
         pressure = 32
         p_label = "Pre-series"
-        p_note = "Sharpening after Game 1 posts — until then the index stays neutral-cool."
+        p_note = "Nerves are normal — the meter sharpens once Game 1 hits the log."
     elif abs(diff) >= 3 and gp >= 3:
         pressure = 22 if diff > 0 else 92
         p_label = "Series separation"
         p_note = (
-            f"{team_name} built a cushion; the opponent needs a schematic shock, not just shot-making variance."
+            f"You've built cushion — enjoy it, but stay sharp; {O} needs a schematic shock, not just makes."
             if diff > 0
-            else f"{team_name} needs a tone reset — usually **defensive first quarters** and **fewer live-ball turnovers**."
+            else f"You're in a hole — the believable comeback starts with **defense-first quarters** and **no live-ball gifts**."
         )
     elif diff <= -2 and max(tw, ow) >= 3:
         pressure = 86
         p_label = "Catch-up heat"
-        p_note = f"{team_name} is in scramble mode — timeouts, fouls, and rebounding carry playoff weight every trip."
+        p_note = f"Every trip feels loud — timeouts, fouls, and boards decide how you feel walking out."
     elif diff >= 2 and max(tw, ow) >= 3:
         pressure = 34
         p_label = "Close-out leverage"
-        p_note = f"{team_name} has margin — the risk flips to **complacency and officiating swings**, not talent."
+        p_note = f"You've got margin — complacency and whistle swings are the real villains now, not talent."
     elif tw == ow and gp >= 4:
         pressure = 58
         p_label = "Chess-match heat"
-        p_note = "Even series: counter lineups and health swings matter as much as star shot-making."
+        p_note = f"Even series — lineups, health, and one hot quarter swing how {Y} fans sleep."
     else:
         pressure = int(40 + min(22, gp * 5) + abs(diff) * 4)
         pressure = min(88, max(24, pressure))
         p_label = "Series calibration"
-        p_note = "Still establishing which side imposes pace and paint touches early in each half."
+        p_note = f"Still learning who imposes pace and paint touches early — that's the {Y} fan homework."
 
     # --- 9. Coaching chess match ---
     chess = _intel_variant(
         seed + "ch",
         [
-            f"It's a **timeout game**: {opp} will toggle **coverage on {t_star.split()[-1] if t_star else 'your star'}**, while {team_name} counters with **off-ball screens** to force **switch hunting**.",
-            f"Watch **rotation length** — the coach that first trusts a **shorter playoff rotation** without bleeding bench minutes usually stabilizes **defensive rebounding**.",
-            f"Series-long, the chess match is **who blinks on help-at-the-nail** vs **corner skip threes** — staff will sell out one to take away the other.",
+            f"Timeout chess: {O} toggles **coverage on {t_star.split()[-1] if t_star else 'your star'}**; you counter with **off-ball screens** to hunt **switches**.",
+            f"Rotation length — whoever shortens the bench without bleeding minutes usually stabilizes **your glass**.",
+            f"Series-long bet: **help at the nail** vs **corner skips** — coaches sell out one to steal the other.",
         ],
     )
 
-    # Star pressure (woven into pressure card subtitle)
+    # Star pressure (woven into pressure card)
     star_pressure = _intel_variant(
         seed + "sp",
         [
-            f"**{t_star}** sees the heaviest **trap/double decisions** when {team_name} stagnates; {opp} will live with rotations if it means **contested twos**.",
-            f"**{t_star}**'s **usage vs efficiency** tradeoff is the story — {opp} wants late clocks and **extra bodies at the level**.",
-            f"National narrative pressure sits on **{t_star}** in this matchup because {o_star} is the clearest **counter-star** on the other side.",
+            f"**{t_star}** carries your heaviest **trap/double** decisions when offense stalls; {O} lives with rotations if it means **contested twos**.",
+            f"**{t_star}**'s **usage vs efficiency** trade is the emotional ride — {O} wants late clocks and **bodies at the level**.",
+            f"The narrative pressure you feel on **{t_star}** is real because **{o_star}** is the clearest counter-star.",
         ],
     )
 
@@ -1766,9 +1815,9 @@ def render_matchup_intelligence(team_name):
     opp = meta["opp"]
     st.markdown(
         f"<div class='mi-wrap'><p style='color:#64748b;font-size:14px;margin:0 0 12px'>"
-        f"<strong style='color:#0f172a'>{html.escape(team_name)}</strong> vs "
-        f"<strong style='color:#0f172a'>{html.escape(opp)}</strong> · "
-        f"{html.escape(meta['round'])} · Series <strong>{meta['tw']}-{meta['ow']}</strong>"
+        f"<strong style='color:#0f172a'>Your {html.escape(fan_nick(team_name))}</strong> vs "
+        f"<strong style='color:#0f172a'>{html.escape(fan_nick(opp))}</strong> · "
+        f"{html.escape(meta['round'])} · You at <strong>{meta['tw']}-{meta['ow']}</strong>"
         f" · {meta['games_n']} games in log</p></div>",
         unsafe_allow_html=True,
     )
@@ -1792,7 +1841,7 @@ def render_matchup_intelligence(team_name):
         extra = ""
         if num == "8":
             pv = max(5, min(100, int(meta.get("pressure", 50))))
-            extra = f'<div class="mi-bar" title="Pressure on {html.escape(team_name)} (higher = more heat)"><span style="width:{pv}%"></span></div>'
+            extra = f'<div class="mi-bar" title="Fan stress meter for {html.escape(fan_nick(team_name))} (higher = heavier)"><span style="width:{pv}%"></span></div>'
         st.markdown(
             f"<div class='mi-card {cls}'><div class='mi-num'>SECTION {num}</div>"
             f"<div class='mi-title'>{safe_title}</div><div class='mi-body'>{b}</div>{extra}</div>",
@@ -1980,38 +2029,43 @@ def _inject_home_command_center_css():
 
 
 def _home_storyline_headline(team_name, hctx):
-    """One broadcast-style headline for the hero (rule-based, short)."""
+    """One broadcast-style headline for the hero — framed for the selected team's fans."""
     profile = TEAM_PROFILES[team_name]
     s = hctx.get("series")
     mode = hctx.get("mode")
+    nick = fan_nick(team_name)
     if mode == "waiting_cf" and hctx.get("ctx"):
-        return hctx["ctx"].get("status_text", f"{team_name} is waiting on the other conference semi.")
+        return hctx["ctx"].get(
+            "status_text",
+            f"{nick} are waiting on the other conference semi — you're still in the hunt while the bracket sorts itself.",
+        )
     if not s:
         if profile.get("status") == "Eliminated":
-            return f"{team_name}'s playoff run has ended — track legacy and film on other pages."
-        return f"{team_name} is set for the next chapter once the bracket updates."
+            return f"This playoff chapter is closed for {nick} — dig into legacy and film room pages to relive the run."
+        return f"{nick} are queued for the next bracket update — stay locked in for the next opponent reveal."
     rnd = s.get("round", "Playoffs")
     a, b = s["a"], s["b"]
     tw = s["a_wins"] if team_name == a else s["b_wins"]
     ow = s["b_wins"] if team_name == a else s["a_wins"]
     opp = b if team_name == a else a
+    on = fan_nick(opp)
     last = (s.get("games") or [])[-1] if s.get("games") else None
     lw = last.get("Winner") if last else None
     if s.get("winner") == team_name:
-        return f"{team_name} wins the series — {tw}-{ow} over {opp}."
+        return f"You did it — {nick} close the series {tw}-{ow} over {on}. Savor this one."
     if s.get("winner") and s.get("winner") != team_name:
-        return f"{s['winner']} closes out the series — what it means for {team_name}'s offseason story."
+        return f"{fan_nick(s['winner'])} ended the dream this round — here's what it means for your offseason storylines."
     if tw == 3 and ow <= 1:
-        return f"{team_name} one win away from advancing — {tw}-{ow} vs {opp} in the {rnd}."
+        return f"One more win and {nick} punch the next round — you're up {tw}-{ow} on {on} in the {rnd}."
     if tw == ow and tw >= 1:
-        return f"Series knotted {tw}-{ow} — every possession swings momentum vs {opp}."
+        return f"Deadlocked {tw}-{ow} with {on} — every possession feels huge from the {nick} side."
     if lw == team_name and last:
-        return f"{team_name} took the last one ({last.get('Score','')}) — now the chess match continues vs {opp}."
+        return f"You took the last one ({last.get('Score','')}) — carry that juice into the chess match vs {on}."
     if lw and lw != team_name:
-        return f"{opp} answered in the latest game — {team_name} looks to respond next."
+        return f"{on} answered last — what you want next is a cleaner start so {nick} reset the vibe early."
     if "Final" in rnd or "Conference" in rnd:
-        return f"{rnd}: {team_name} vs {opp} — the stakes rise each night."
-    return f"{team_name} vs {opp} — {tw}-{ow}. The {rnd} narrative is still being written."
+        return f"{rnd}: {nick} vs {on} — the stakes climb every night for your fanbase."
+    return f"{nick} vs {on}, {tw}-{ow}. The {rnd} story is still being written from your seat."
 
 
 def _home_series_win_probability(team_name, hctx, live):
@@ -2064,7 +2118,7 @@ def _home_injury_hero_snippet(team_name, opponents):
             f"<span style='opacity:.85'>({html.escape(str(row.get('Status','?')))})</span>"
         )
     if not parts:
-        return "Key injuries load from ESPN when available — see <strong>Key injuries</strong> below."
+        return f"Injuries for {html.escape(fan_nick(team_name))} & opponents load from ESPN when available — scroll to <strong>Key injuries</strong> below."
     return " · ".join(parts)
 
 
@@ -2141,7 +2195,7 @@ def _home_command_center_hero_html(team_name, hctx):
         )
     else:
         next_line = (
-            f"Next: {esc(team_name)} vs "
+            f"Next for you: {esc(fan_nick(team_name))} vs "
             f"{esc(hctx.get('opponent_display', profile.get('current_opponent') or 'opponent TBA'))} "
             f"— tip data when NBA schedule loads."
         )
@@ -2150,7 +2204,7 @@ def _home_command_center_hero_html(team_name, hctx):
 <div class="cmd-shell" style="--cmd-bg0:{pal['bg0']};--cmd-bg1:{pal['bg1']};--cmd-accent:{pal['accent']};--cmd-accent-soft:{pal['accent_soft']};">
 <div class="cmd-hero">
   <div class="cmd-hero-inner">
-    <div class="cmd-kicker">Playoff command center</div>
+    <div class="cmd-kicker">Your playoff command center · {esc(fan_nick(team_name))}</div>
     <div class="cmd-row">
       <img class="cmd-logo" src="{esc(left_logo)}" alt=""/>
       <div class="cmd-center">
@@ -2158,7 +2212,7 @@ def _home_command_center_hero_html(team_name, hctx):
         <div class="cmd-match">{matchup}</div>
         <div class="cmd-scoreline">{score_txt}</div>
         <div class="cmd-rail">
-          <span class="cmd-pill cmd-pill--accent">Win probability · {prob}%</span>
+          <span class="cmd-pill cmd-pill--accent">Your win probability · {prob}%</span>
           <span class="cmd-pill">Live pulse</span>
         </div>
       </div>
@@ -2192,15 +2246,15 @@ def render_playoff_command_center(team_name):
     st.markdown(_home_command_center_hero_html(team_name, hctx), unsafe_allow_html=True)
     render_next_game_actions(team_name)
 
-    st.markdown('<div class="cmd-sec">1 · Current series snapshot</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">1 · Your current series snapshot</div>', unsafe_allow_html=True)
     snap_cols = st.columns(4)
     status_txt = series_status_text(team_name)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
     profile = TEAM_PROFILES[team_name]
-    snap_cols[0].metric("Playoff status", "Advanced" if adv_like else profile.get("status", "—"))
-    snap_cols[1].metric("Seed", profile.get("seed", "—"))
-    snap_cols[2].metric("Round", (hctx.get("series") or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"))
-    snap_cols[3].metric("Outlook", "Live edge" if find_live_game_for_team(team_name) else "Tracking")
+    snap_cols[0].metric("Your playoff status", "Advanced" if adv_like else profile.get("status", "—"))
+    snap_cols[1].metric("Your seed", profile.get("seed", "—"))
+    snap_cols[2].metric("Round you're tracking", (hctx.get("series") or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"))
+    snap_cols[3].metric("Tonight's edge", "Live — you're on the broadcast" if find_live_game_for_team(team_name) else "Tracking next tip")
     st.markdown(
         f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
         unsafe_allow_html=True,
@@ -2209,15 +2263,15 @@ def render_playoff_command_center(team_name):
     if s and s.get("games"):
         st.dataframe(pd.DataFrame(s["games"]), use_container_width=True, height=min(220, 38 + 28 * len(s["games"])))
     elif hctx.get("advanced"):
-        st.info("Conference Finals matchup forms when both semis finish — scores land here next.")
+        st.info("You're through — Conference Finals pairings populate here once both semis finish.")
     elif s and s.get("round") in ("Conference Finals", "NBA Finals"):
-        st.caption("Conference Finals / Finals shell is set — game rows populate as games complete.")
+        st.caption("CF/Finals shell is live — your game rows fill in as results post.")
 
-    st.markdown('<div class="cmd-sec">2 · Key injuries</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">2 · Injuries that could swing your night</div>', unsafe_allow_html=True)
     with st.container(border=True):
-        render_injury_report(team_name, home_injury_opponents(team_name), show_page_header=False)
+        render_injury_report(team_name, home_injury_opponents(team_name), show_page_header=False, fan_perspective_team=team_name)
 
-    st.markdown('<div class="cmd-sec">3 · Top performers (rotation anchors)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">3 · Your guys carrying the load</div>', unsafe_allow_html=True)
     starters = profile.get("starters", [])[:3]
     pc = st.columns(len(starters) or 1)
     for i, name in enumerate(starters or ["Rotation"]):
@@ -2233,7 +2287,7 @@ def render_playoff_command_center(team_name):
                     st.metric("PTS", sa.get("PTS", "—"))
                     st.caption(f"REB {sa.get('REB','—')} · AST {sa.get('AST','—')}")
 
-    st.markdown('<div class="cmd-sec">4 · Momentum & trends</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">4 · Your momentum read</div>', unsafe_allow_html=True)
     hist = historic_series_context(team_name)
     if not hist.empty:
         st.markdown(f"<div style='font-size:13px;color:#cbd5e1;line-height:1.45'>{hist.iloc[0].get('Historical Context','')}</div>", unsafe_allow_html=True)
@@ -2243,15 +2297,15 @@ def render_playoff_command_center(team_name):
         a, b = s2["a"], s2["b"]
         tw = int(s2["a_wins"]) if team_name == a else int(s2["b_wins"])
         ow = int(s2["b_wins"]) if team_name == a else int(s2["a_wins"])
-        m1.metric("Series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
+        m1.metric("Your series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
         m2.metric("Games played", tw + ow)
         m3.metric("Data source", (s2.get("source") or "—")[:18])
     else:
-        m1.metric("Series edge", "—")
+        m1.metric("Your series edge", "—")
         m2.metric("Games played", "—")
         m3.metric("Data", "Awaiting")
 
-    st.markdown('<div class="cmd-sec">5 · Legacy impact</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">5 · Legacy on your marquee name</div>', unsafe_allow_html=True)
     anchor = profile.get("starters", [""])[0]
     if anchor:
         logs = playoff_game_logs_for_player(anchor)
@@ -2260,9 +2314,9 @@ def render_playoff_command_center(team_name):
         c1.metric(f"{anchor.split()[-1]} PTS", sm.get("PTS", 0))
         c2.metric("REB", sm.get("REB", 0))
         c3.metric("AST", sm.get("AST", 0))
-    st.caption("Full what-if paths: **Legacy Tracker** page.")
+    st.caption("Full what-if paths for your guys: **Legacy Tracker** page.")
 
-    st.markdown('<div class="cmd-sec">6 · Upcoming games</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">6 · Your next game</div>', unsafe_allow_html=True)
     with st.container(border=True):
         live = find_live_game_for_team(team_name)
         if live:
@@ -2273,14 +2327,26 @@ def render_playoff_command_center(team_name):
             )
         else:
             opp = profile.get("current_opponent")
-            st.info(f"{team_name} vs {opp or 'opponent TBA'} — live tip and countdown appear when NBA feed lists the game.")
+            st.info(
+                f"Your {fan_nick(team_name)} vs {opp or 'opponent TBA'} — live tip and countdown appear when the NBA feed lists it."
+            )
 
-    st.markdown('<div class="cmd-sec">7 · Biggest playoff storylines</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">7 · Playoff storylines for your crew</div>', unsafe_allow_html=True)
     story_cols = st.columns(3)
+    nk = fan_nick(team_name)
     stories = [
-        ("Pressure", f"Every close game shifts how {team_name.split()[-1]} is judged in crunch time."),
-        ("Health", "Availability swings matchups more than raw talent in a seven-game series."),
-        ("Margin for error", "One shooting slump or turnover stretch can flip home-court logic fast."),
+        (
+            "Pressure cooker",
+            f"When it's tight late, {nk} fans live and die with every whistle — execution matters more than narrative.",
+        ),
+        (
+            "Health swings",
+            "One availability change can flip matchups more than a scouting tweak — watch the injury strip all week.",
+        ),
+        (
+            "Margin for error",
+            "A cold stretch from three or two careless turnovers can hand the other side the night — you feel it in the building.",
+        ),
     ]
     for col, (t, b) in zip(story_cols, stories):
         with col:
@@ -2288,7 +2354,7 @@ def render_playoff_command_center(team_name):
                 st.markdown(f"**{t}**")
                 st.caption(b)
 
-    st.markdown('<div class="cmd-sec">8 · Previous game MVP</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">8 · Who owned the last game for you</div>', unsafe_allow_html=True)
     _, s3 = series_for_team(team_name)
     if s3 and s3.get("games"):
         last = s3["games"][-1]
@@ -2302,7 +2368,7 @@ def render_playoff_command_center(team_name):
         st.success(f"**{mvp}** — _{why}_")
         st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
     else:
-        st.caption("MVP tag unlocks when the most recent game row is available.")
+        st.caption("MVP tag unlocks when the most recent game row hits the log — tuned to your matchup.")
 
     st.markdown('<div class="cmd-sec">9 · Team outlook</div>', unsafe_allow_html=True)
     render_team_outlook(team_name)
@@ -2870,27 +2936,42 @@ def render_bracket():
 def latest_game_note(team):
     _, s = series_for_team(team)
     if not s or not s.get("games"):
-        return "No completed current-series game has been detected yet."
+        return "No completed current-series game is in the log yet — check back after tip."
     last = s["games"][-1]
     result = "won" if last.get("Winner") == team else "lost"
-    return f"Most recent game: {last.get('Game','Previous Game')} on {last.get('Date','recently')} — {last.get('Score','score unavailable')}. {team} {result} that game."
+    nick = fan_nick(team)
+    if result == "won":
+        vibe = "That's a night you can feel good about as a fan — carry the energy into prep for the next one."
+    else:
+        vibe = "Tough watch — the bounce-back story starts with defense and cleaner possessions next game."
+    return (
+        f"Last result for {nick}: {last.get('Game','Previous game')} on {last.get('Date','recently')} — "
+        f"{last.get('Score','score unavailable')}. You {result} that one. {vibe}"
+    )
 
 def render_team_outlook(team):
-    p=TEAM_PROFILES[team]
-    st.subheader("Team Outlook")
+    p = TEAM_PROFILES[team]
+    nick = fan_nick(team)
+    st.subheader(f"Team outlook · {nick} fan lens")
     st.markdown(f"<div class='big-status'>{series_status_text(team)}</div>", unsafe_allow_html=True)
     st.info(latest_game_note(team))
-    st.markdown("### What is going well")
+    st.markdown("### What you should feel good about")
     for s in p["strengths"]:
         if team == "New York Knicks" and "Towns" in s:
-            st.success("Karl-Anthony Towns gives New York spacing at center, but his impact depends on staying out of foul trouble.")
+            st.success(
+                "Karl-Anthony Towns gives you real spacing at the five — the swing factor is keeping him on the floor without foul trouble."
+            )
         else:
             st.success(s)
-    st.markdown("### Specific concerns")
+    st.markdown("### Honest worry list (so you're not surprised)")
     for c in p["concerns"]:
         st.warning(c)
-    st.markdown("### Next game keys")
-    for item in ["Win the possession battle", "Keep the main creators fresh for the fourth quarter", "Avoid cheap fouls", "Get bench minutes that do not lose the lead"]:
+    st.markdown("### What a win looks like next game")
+    for item in [
+        "You win the possession battle — fewer empty trips, no careless live-ball turnovers.",
+        "Your main creators still have legs in the fourth because the bench didn't bleed the lead.",
+        "You defend without fouling; bonus points if the glass tilts your way late.",
+    ]:
         st.write(f"• {item}")
 
 def render_game_countdown(team):
@@ -3013,7 +3094,7 @@ def live_hero_palette(favorite_team):
 def render_live_game_center(favorite_team, profile):
     """Professional dashboard layout: sticky score hero + tabbed sections."""
     st.markdown("### 🏟️ Live Game Center")
-    st.caption("Compact layout · use tabs below for depth · refreshes with sidebar autorefresh when enabled")
+    st.caption(f"Broadcast view for **{fan_nick(favorite_team)}** fans — tabs below stay on your team.")
 
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=30000, key="live_refresh")
@@ -3025,7 +3106,7 @@ def render_live_game_center(favorite_team, profile):
 
     live = find_live_game_for_team(favorite_team)
     if not live:
-        st.warning("No live or scheduled game found for this team right now.")
+        st.warning(f"No live or scheduled game for {fan_nick(favorite_team)} in the feed right now — try again near tip.")
         return
 
     home = live.get("homeTeam", {}) or {}
@@ -3048,6 +3129,16 @@ def render_live_game_center(favorite_team, profile):
     margin = team_score - opp_score
     prob = win_prob(margin, period, is_home)
 
+    opp_other = home_name if favorite_team == away_name else away_name
+    nick_live = fan_nick(favorite_team)
+    opp_nick_live = fan_nick(opp_other) if opp_other else "them"
+    if prob > 58:
+        momentum_note = f"Model likes {nick_live} right now — keep the foot on the gas, don't gift {opp_nick_live} free runs."
+    elif prob >= 42:
+        momentum_note = f"Toss-up — the next run decides how stressed you feel as a {nick_live} fan."
+    else:
+        momentum_note = f"{nick_live} need a defensive stop chain and better shot quality — model has you chasing {opp_nick_live}."
+
     series_line, series_src = _live_series_board(away_name, home_name)
     if not series_line and favorite_team in (away_name, home_name):
         series_line = series_status_text(favorite_team)
@@ -3059,8 +3150,6 @@ def render_live_game_center(favorite_team, profile):
 
     logo_away = TEAM_LOGOS.get(away_name, f"https://cdn.nba.com/logos/nba/500/{away_tri}/primary/L/logo.svg")
     logo_home = TEAM_LOGOS.get(home_name, f"https://cdn.nba.com/logos/nba/500/{home_tri}/primary/L/logo.svg")
-
-    momentum_note = "Favored team trending up in model" if prob > 55 else "Tight game in model" if prob >= 45 else "Underdog needs stops & quality looks"
 
     inj_teams = []
     for t in (away_name, home_name):
@@ -3110,10 +3199,10 @@ def render_live_game_center(favorite_team, profile):
     <span class="live-pill">⏱ Q{period} · {html.escape(clock or '—')}</span>
     <span class="live-pill series">🏆 {html.escape(series_line or 'Series')}</span>
     {('<span class="live-pill clutch">⚡ CLUTCH</span>' if clutch else '')}
-    <span class="live-pill prob" style="{prob_pill_style}">📈 Win prob · {favorite_team.split()[-1]}: {prob}%</span>
+    <span class="live-pill prob" style="{prob_pill_style}">📈 Your win prob · {nick_live}: {prob}%</span>
   </div>
   <div class="live-tile-row">
-    <div class="live-tile"><div class="k">Margin ({favorite_team.split()[-1]})</div><div class="v">{'+' if margin > 0 else ''}{margin}</div></div>
+    <div class="live-tile"><div class="k">Your margin</div><div class="v">{'+' if margin > 0 else ''}{margin}</div></div>
     <div class="live-tile"><div class="k">Venue</div><div class="v">{'HOME' if is_home else 'AWAY'}</div></div>
     <div class="live-tile"><div class="k">Momentum (model)</div><div class="v" style="font-size:12px;line-height:1.25;font-weight:700">{html.escape(momentum_note)}</div></div>
   </div>
@@ -3128,7 +3217,6 @@ def render_live_game_center(favorite_team, profile):
     box = get_live_boxscore(gid)
     box_df = create_boxscore_df(box) if box else pd.DataFrame()
     actions = get_live_playbyplay(gid) if gid else []
-    opp_other = home_name if favorite_team == away_name else away_name
     opp = profile.get("current_opponent") or opp_other
 
     matchup_opp = opp if opp in TEAM_PROFILES else (opp_other if opp_other in TEAM_PROFILES else None)
@@ -3149,8 +3237,8 @@ def render_live_game_center(favorite_team, profile):
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Clock", clock or "—")
             m2.metric("Period", f"Q{period}")
-            m3.metric(f"{favorite_team.split()[-1]} pts", team_score)
-            m4.metric("Opponent pts", opp_score)
+            m3.metric(f"Your {nick_live} pts", team_score)
+            m4.metric(f"Their ({opp_nick_live}) pts", opp_score)
             if not box_df.empty:
                 st.markdown("**Box score**")
                 st.dataframe(box_df, use_container_width=True, height=300)
@@ -3167,20 +3255,28 @@ def render_live_game_center(favorite_team, profile):
                 st.markdown("**Positional matchup**")
                 st.dataframe(matchup_advantages(favorite_team, matchup_opp), use_container_width=True)
             st.divider()
-            st.markdown("**Pressure & narrative**")
-            st.info(
-                f"{favorite_team} is {'ahead' if margin > 0 else 'tied' if margin == 0 else 'behind'} by {abs(margin)}. "
-                "The next stretch matters for turnovers, fouls, and shot quality."
-            )
-            st.markdown("**Next priorities**")
-            for item in ["Get stops without fouling", "Protect the defensive glass", "Create clean looks for the main scorer", "Avoid live-ball turnovers"]:
+            st.markdown("**Pressure & how it feels**")
+            if margin > 0:
+                feel = f"You're up {margin} — enjoy the moment, but the other side is one run from stealing the vibe."
+            elif margin == 0:
+                feel = "Deadlocked — next three minutes usually decide who walks to the car happy."
+            else:
+                feel = f"You're down {abs(margin)} — not dead yet: one stop-and-score swing changes the building."
+            st.info(feel + " Watch turnovers, fouls, and who gets the clean look late.")
+            st.markdown("**Your next priorities**")
+            for item in [
+                "Stops without fouling — make them hit contested twos.",
+                "Defensive glass so they can't extend possessions.",
+                "Clean looks for your best creator — no hero-ball early-clock shots.",
+                "No live-ball turnovers that become free transition points.",
+            ]:
                 st.write(f"• {item}")
-            st.caption("Full legacy modeling: Legacy Tracker page.")
+            st.caption("Legacy modeling from your player's angle: **Legacy Tracker** page.")
 
     with tab_inj:
         with st.container(border=True):
             st.markdown("##### Injuries & availability")
-            render_injury_report(favorite_team, home_injury_opponents(favorite_team), show_page_header=False)
+            render_injury_report(favorite_team, home_injury_opponents(favorite_team), show_page_header=False, fan_perspective_team=favorite_team)
             if away_name in TEAM_PROFILES and home_name in TEAM_PROFILES and {away_name, home_name} != {favorite_team, profile.get("current_opponent")}:
                 st.caption("Favorite team + sidebar opponent list; live pair above may differ from profile when the bracket has advanced.")
 
@@ -3191,7 +3287,12 @@ def render_live_game_center(favorite_team, profile):
             with cL:
                 st.plotly_chart(
                     px.pie(
-                        pd.DataFrame({"Outcome": [f"{favorite_team} wins", "Opponent wins"], "Probability": [prob, 100 - prob]}),
+                        pd.DataFrame(
+                            {
+                                "Outcome": [f"You ({nick_live}) win this game", f"{opp_nick_live} steal it"],
+                                "Probability": [prob, 100 - prob],
+                            }
+                        ),
                         names="Outcome",
                         values="Probability",
                         title="Win probability split",
@@ -3211,7 +3312,7 @@ def render_live_game_center(favorite_team, profile):
                     use_container_width=True,
                 )
             st.plotly_chart(px.line(timeline, x="Game Segment", y="Margin", markers=True, title="Score margin momentum (illustrative)"), use_container_width=True)
-            st.caption("Timeline is a compact visual aid tied to the current margin and period, not a full play-by-play reconstruction.")
+            st.caption(f"Charts are tuned to how **{nick_live}** look vs **{opp_nick_live}** right now — illustrative path, not full reconstruction.")
 
     with tab_top:
         with st.container(border=True):
@@ -3240,12 +3341,12 @@ def render_live_game_center(favorite_team, profile):
                     options = ["All players"] + sorted(shots["Player"].dropna().unique().tolist())
                     shooter = st.selectbox("Shooter filter", options, key="live_shot_shooter")
                     display = shots if shooter == "All players" else shots[shots["Player"] == shooter]
-                    st.plotly_chart(draw_court(display, f"{favorite_team} shot chart — blue ○ made, red × missed"), use_container_width=True)
-                st.markdown("**Clutch meter**")
+                    st.plotly_chart(draw_court(display, f"{nick_live} shot chart — blue ○ made, red × missed"), use_container_width=True)
+                st.markdown("**Clutch meter (your stress index)**")
                 if clutch:
-                    st.warning("Clutch-time situation: fourth quarter and within five points.")
+                    st.warning(f"Buckle up — it's clutch time for {nick_live}: Q4 inside five. Every possession hits different.")
                 else:
-                    st.info("Clutch meter becomes more important in the fourth quarter within five points.")
+                    st.info(f"Not clutch-time yet for {nick_live} — if the margin tightens late, this meter becomes your pulse check.")
                 st.markdown("**Top plays (this game)**")
                 rows_tp = []
                 for a in actions:
@@ -3471,10 +3572,10 @@ elif page == "Playoff Bracket":
 
 elif page == "Matchup Intelligence":
     render_matchup_header(favorite_team)
-    st.subheader("Analyst intelligence layer")
+    st.subheader("Analyst layer — told from your sideline")
     st.caption(
-        "Series-aware read from the playoff log (wins, parsed margins when available), "
-        "team strength tags, injuries, and recent outcomes. Heuristic engine — not a live betting model."
+        f"Built for **{fan_nick(favorite_team)}** fans: series log, margins when we can parse them, your roster tags, injuries, and recent swings. "
+        "Heuristic read — not a betting model."
     )
     render_matchup_intelligence(favorite_team)
 
@@ -3508,7 +3609,7 @@ elif page == "Player Playoff Tracker":
 
 elif page == "Legacy Tracker":
     render_matchup_header(favorite_team)
-    st.subheader("Legacy Tracker: Current Playoff Stats + What-If Legacy Simulator")
+    st.subheader(f"Legacy Tracker · how {fan_nick(favorite_team)} history could rewrite if this run keeps going")
 
     player_pool = current_roster_names(favorite_team, limit=15)
     player = st.selectbox("Choose player", player_pool)
@@ -3564,7 +3665,10 @@ elif page == "Legacy Tracker":
     for line in legacy_takeaways(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus):
         st.write(f"• {line}")
 
-    st.info("This is an analytical legacy model, not an official ranking. It now combines existing career résumé, current playoff production, efficiency, plus/minus, and round advancement. Actual legacy also depends on signature games, opponent quality, injuries, media narrative, and championships.")
+    st.info(
+        "Fan-forward legacy toy — not an official ranking. It blends résumé, your current playoff line, efficiency, plus/minus, and how deep "
+        f"{fan_nick(favorite_team)} advance. Real legacy also lives in signature games, who you beat, injuries, narrative, and rings."
+    )
 
 elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
