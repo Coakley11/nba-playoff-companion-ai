@@ -3261,29 +3261,26 @@ def render_legacy_tracker_page(team_name):
             exit_line = _elimination_exit_line(team_name)
         except Exception:
             exit_line = TEAM_PROFILES.get(team_name, {}).get("first_round_result") or "Playoff exit"
-        st.markdown(
-            f"""
-<div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(248,113,113,0.55);background:rgba(127,29,29,0.22);margin-bottom:14px;">
-<div style="font-weight:800;color:#fecaca;letter-spacing:0.04em;">COMPLETED RUN · NO FUTURE-ROUND SIMULATIONS</div>
-<div style="color:#fee2e2;font-size:0.95rem;margin-top:6px;line-height:1.55;">
-<b>{html.escape(team_name)}</b> is out of the title chase as the bracket currently reads (<b>{html.escape(exit_line)}</b>).
-Legacy here is a <b>postmortem</b> only: actual box scores through the exit, round-by-round splits, best/worst nights, and a final interpretation — <b>no</b> Conference Finals or NBA Finals projections and <b>no</b> championship sliders.
-</div></div>
-""",
-            unsafe_allow_html=True,
+        render_mode_banner(
+            team_name,
+            "COMPLETED RUN · NO FUTURE-ROUND SIMULATIONS",
+            f"<b>{html.escape(team_name)}</b> is out of the title chase as the bracket currently reads "
+            f"(<b>{html.escape(exit_line)}</b>). Legacy here is a <b>postmortem</b> only: actual box scores through the exit, "
+            "round-by-round splits, best/worst nights, and a final interpretation — "
+            "<b>no</b> Conference Finals or NBA Finals projections and <b>no</b> championship sliders.",
+            variant="postmortem",
         )
     else:
         st.subheader(f"Legacy Tracker · {nick} — live forecast (future outcomes can still change the story)")
-        st.markdown(
-            f"""
-<div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(52,211,153,0.45);background:rgba(6,78,59,0.22);margin-bottom:14px;">
-<div style="font-weight:800;color:#a7f3d0;letter-spacing:0.04em;">LIVE FORECAST MODE</div>
-<div style="color:#ecfdf5;font-size:0.95rem;margin-top:6px;line-height:1.55;">
-<b>Section A</b> locks <b>current legacy impact</b> to real playoff logs plus <b>{series_wins_bracket}</b> series win(s) already on the bracket.
-<b>Section B</b> is a <b>fan simulator</b>: move sliders to stress-test scoring, efficiency, defense feel, clutch, turnovers, and bench lift — then read the ladder for what happens if {html.escape(nick)} keep climbing.
-</div></div>
-""",
-            unsafe_allow_html=True,
+        render_mode_banner(
+            team_name,
+            "LIVE FORECAST MODE",
+            f"<b>Section A</b> locks <b>current legacy impact</b> to real playoff logs plus "
+            f"<b>{series_wins_bracket}</b> series win(s) already on the bracket. "
+            f"<b>Section B</b> is a <b>fan simulator</b>: move sliders to stress-test scoring, efficiency, "
+            f"defense feel, clutch, turnovers, and bench lift — then read the ladder for what happens if "
+            f"{html.escape(nick)} keep climbing.",
+            variant="live",
         )
 
     player_pool = current_roster_names(team_name, limit=15)
@@ -4261,7 +4258,7 @@ def render_player_playoff_story_hub(team_name, profile):
     )
 
     # --- 1 · Current run ---
-    st.markdown("<div class='pp-sec'>1 · Current playoff run</div>", unsafe_allow_html=True)
+    team_section_header("1 · Current playoff run", "🏀")
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("PPG", f"{cur_summary.get('PTS', 0):.1f}")
     m2.metric("RPG", f"{cur_summary.get('REB', 0):.1f}")
@@ -4316,7 +4313,7 @@ def render_player_playoff_story_hub(team_name, profile):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 2 · Series ---
-    st.markdown("<div class='pp-sec'>2 · Series-by-series breakdown</div>", unsafe_allow_html=True)
+    team_section_header("2 · Series-by-series breakdown", "📊")
     st.caption("Series 1 is the **first** playoff matchup in this log (earliest games), then Series 2 for the next opponent, and so on.")
     chunks = _series_chunks_playoff_order(df, team_tri)
     if not chunks:
@@ -4357,7 +4354,7 @@ def render_player_playoff_story_hub(team_name, profile):
             st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 3 · Pressure & legacy ---
-    st.markdown("<div class='pp-sec'>3 · Pressure & legacy</div>", unsafe_allow_html=True)
+    team_section_header("3 · Pressure & legacy", "🎯")
     pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
     rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
     stakes = min(100, 35 + _round_narrative_weight(rnd) + (12 if status == "Active" else 0))
@@ -4423,7 +4420,7 @@ def render_player_playoff_story_hub(team_name, profile):
         )
 
     # --- 4 · Historical comparisons ---
-    st.markdown("<div class='pp-sec'>4 · Historical comparison engine</div>", unsafe_allow_html=True)
+    team_section_header("4 · Historical comparison engine", "📚")
     for line in _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower):
         with st.container(border=True):
             st.markdown(line)
@@ -4431,7 +4428,7 @@ def render_player_playoff_story_hub(team_name, profile):
         st.caption(f"Prior playoff sample: **{prev_season}** ({prev_summary.get('GP', 0)} games) used only when the API returned a log.")
 
     # --- 5 · Clutch impact ---
-    st.markdown("<div class='pp-sec'>5 · Clutch impact</div>", unsafe_allow_html=True)
+    team_section_header("5 · Clutch impact", "⏱️")
     df_c = df.copy()
     df_c["_impact"] = df_c.apply(_game_impact_score, axis=1)
     df_c = df_c.sort_values("_impact", ascending=False)
@@ -4458,13 +4455,13 @@ def render_player_playoff_story_hub(team_name, profile):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 6 · Narratives ---
-    st.markdown("<div class='pp-sec'>6 · Narrative storylines</div>", unsafe_allow_html=True)
+    team_section_header("6 · Narrative storylines", "📰")
     for s in _narrative_storylines(player, team_name, cur_summary, reg_avg, prev_summary, prof):
         with st.container(border=True):
             st.markdown(s)
 
     # --- 7 · Visuals ---
-    st.markdown("<div class='pp-sec'>7 · Progression & raw log</div>", unsafe_allow_html=True)
+    team_section_header("7 · Progression & raw log", "📈")
     tcol1, tcol2 = st.columns((1, 1))
     with tcol1:
         st.markdown("<div class='pp-card'><h4>Game-by-game progression</h4>", unsafe_allow_html=True)
@@ -5089,13 +5086,17 @@ def render_matchup_intelligence(team_name):
         b = str(body)
         b = html.escape(b)
         b = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", b)
+        mom_pill = ""
+        if kind == "momentum" and tone in ("up", "down", "flat"):
+            lbl = {"up": "Swing up", "down": "Swing down", "flat": "Flat"}.get(tone, "")
+            mom_pill = f'<span class="mi-mom-pill {tone}">{lbl}</span>'
         extra = ""
         if num == "8":
             pv = max(5, min(100, int(meta.get("pressure", 50))))
             extra = f'<div class="mi-bar" title="Fan stress meter for {html.escape(fan_nick(team_name))} (higher = heavier)"><span style="width:{pv}%"></span></div>'
         st.markdown(
             f"<div class='mi-card {cls}'><div class='mi-num'>SECTION {num}</div>"
-            f"<div class='mi-title'>{safe_title}</div><div class='mi-body'>{b}</div>{extra}</div>",
+            f"<div class='mi-title'>{safe_title}{mom_pill}</div><div class='mi-body'>{b}</div>{extra}</div>",
             unsafe_allow_html=True,
         )
 
@@ -6418,7 +6419,7 @@ def render_playoff_command_center(team_name):
         live_on = False
     effective_live = live_on and not is_eliminated
 
-    st.markdown("#### Home Dashboard")
+    render_fan_page_hero(team_name, f"{fan_nick(team_name)} Home Dashboard", "Series snapshot, injuries, stars, and offseason outlook when the run is over.", "YOUR TEAM")
     if not is_eliminated:
         with st.expander("Looking for offseason / future outlook sections?", expanded=False):
             st.markdown(
@@ -7125,7 +7126,7 @@ def _bracket_game_log_items(s):
     return "".join(rows) if rows else "<li style='opacity:.7'>No game rows yet</li>"
 
 
-def bracket_series_card(s, round_display_name, show_round_chip=False):
+def bracket_series_card(s, round_display_name, show_round_chip=False, favorite_team=None):
     s_disp = _bracket_series_for_display(s, round_display_name)
     a, b = s_disp["a"], s_disp["b"]
     aw = int(s_disp.get("a_wins", 0) or 0)
@@ -7140,6 +7141,8 @@ def bracket_series_card(s, round_display_name, show_round_chip=False):
     def team_row(team, wins, seed, logo_url, is_winner, is_leading):
         stripe = bracket_team_accent(team)
         classes = ["bmk-team"]
+        if favorite_team and team == favorite_team:
+            classes.append("bmk-team--yours")
         if is_winner:
             classes.append("bmk-team--winner")
         elif active and is_leading:
@@ -7161,6 +7164,8 @@ def bracket_series_card(s, round_display_name, show_round_chip=False):
         else '<span class="bmk-pill bmk-pill--done">Series complete</span>'
     )
     card_mod = "bmk-card--active" if active else "bmk-card--complete"
+    if favorite_team and favorite_team in (a, b):
+        card_mod += " bmk-card--yours"
     chip = (
         f'<span class="bmk-chip-round">{html.escape(round_display_name)}</span>'
         if show_round_chip
@@ -7257,7 +7262,15 @@ def _bracket_fallback_dataframe(east_fr, east_sr, west_sr, west_fr, east_conf, w
     return pd.DataFrame(rows)
 
 
-def render_bracket():
+def render_bracket(favorite_team=None):
+    if favorite_team:
+        render_fan_page_hero(
+            favorite_team,
+            "Playoff Bracket",
+            f"Full 2026 bracket — {fan_nick(favorite_team)} series highlighted in your colors.",
+            "YOUR TEAM",
+        )
+
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=30000, key="bracket_refresh")
 
@@ -7271,17 +7284,17 @@ def render_bracket():
     finals = stt["finals"]
 
     if east_conf and len(east_conf) == 1:
-        east_cf_block = bracket_series_card(list(east_conf.values())[0], "Conference Finals")
+        east_cf_block = bracket_series_card(list(east_conf.values())[0], "Conference Finals", favorite_team=favorite_team)
     else:
         east_cf_block = _cf_waiting_placeholder("Eastern Conference Finals", east_sr)
 
     if west_conf and len(west_conf) == 1:
-        west_cf_block = bracket_series_card(list(west_conf.values())[0], "Conference Finals")
+        west_cf_block = bracket_series_card(list(west_conf.values())[0], "Conference Finals", favorite_team=favorite_team)
     else:
         west_cf_block = _cf_waiting_placeholder("Western Conference Finals", west_sr)
 
     if finals and len(finals) == 1:
-        finals_block = bracket_series_card(list(finals.values())[0], "NBA Finals")
+        finals_block = bracket_series_card(list(finals.values())[0], "NBA Finals", favorite_team=favorite_team)
     else:
         finals_block = (
             '<div class="bmk-wait-card bmk-wait-card--finals">'
@@ -7302,10 +7315,10 @@ def render_bracket():
         f"{finals_block}</div></div>"
     )
 
-    east_fr_cards = "".join(bracket_series_card(s, "First Round") for s in east_fr)
-    east_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in east_sr)
-    west_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals") for s in west_sr)
-    west_fr_cards = "".join(bracket_series_card(s, "First Round") for s in west_fr)
+    east_fr_cards = "".join(bracket_series_card(s, "First Round", favorite_team=favorite_team) for s in east_fr)
+    east_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals", favorite_team=favorite_team) for s in east_sr)
+    west_sr_cards = "".join(bracket_series_card(s, "Conference Semifinals", favorite_team=favorite_team) for s in west_sr)
+    west_fr_cards = "".join(bracket_series_card(s, "First Round", favorite_team=favorite_team) for s in west_fr)
 
     bracket_body = f"""<div class="bmk-page-head">
 <h2 class="bmk-title">2026 NBA Playoff Bracket</h2>
@@ -7833,7 +7846,7 @@ def _live_center_debug_probe():
 
 def render_live_game_center(favorite_team, profile):
     """Minimal fail-safe Live Game Center: always renders; heavy tabs/APIs temporarily disabled for reliability."""
-    st.markdown("### 🏟️ Live Game Center")
+    render_fan_page_hero(favorite_team, "Live Game Center", f"Real-time board for {fan_nick(favorite_team)}.", "LIVE HUB")
     st.caption(
         "**Minimal mode** — box score, play-by-play, shot chart, momentum charts, injuries, lineups, and roster calls are "
         "**disabled** until this page loads reliably. Only scoreboard merge + local series text runs."
@@ -7963,10 +7976,9 @@ def render_live_game_center(favorite_team, profile):
     away_name = _live_team_full_name(away_tri, away)
     opp_display = home_name if favorite_team == away_name else away_name
 
-    st.markdown("#### Game row (minimal)")
+    render_live_score_banner(favorite_team, away_tri, home_tri, away_score, home_score, status, phase)
+    team_section_header("Game details", "🏟️")
     st.write(f"**Your team:** {favorite_team} · **Opponent on board:** {opp_display}")
-    st.write(f"**{away_name}** @ **{home_name}**")
-    st.metric("Score", f"{away_tri} {away_score}  —  {home_tri} {home_score}")
     st.write(f"**Status:** {status}")
     if period or clock:
         st.caption(f"Clock raw: Q{period} · {clock}" if period else f"Clock: {clock}")
@@ -8067,12 +8079,6 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
         return
     a_wins = sum(1 for g in games if g.get("Winner") == team_a)
     b_wins = sum(1 for g in games if g.get("Winner") == team_b)
-    st.markdown("""
-    <style>
-    .history-card{border:1px solid rgba(0,0,0,.12);border-radius:20px;padding:16px;margin:12px 0;background:linear-gradient(135deg,#ffffff,#f8fafc);box-shadow:0 4px 18px rgba(15,23,42,.06)}
-    .history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.history-team{text-align:center;font-weight:900;font-size:18px}.history-score{font-size:28px;font-weight:950;color:#ea580c;text-align:center}.game-row{border-top:1px solid rgba(0,0,0,.08);padding:10px 2px}.mvp-pill{display:inline-block;background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:3px 10px;font-weight:800;color:#9a3412}
-    </style>
-    """, unsafe_allow_html=True)
     st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
     c1,c2,c3=st.columns([1.2,.8,1.2])
     with c1:
@@ -8102,8 +8108,8 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
 def render_previous_rounds_history(team_name):
     profile = TEAM_PROFILES[team_name]
     first_opp = profile["first_round_opponent"]
-    st.subheader("Playoff Path So Far")
-    st.caption("Includes logos, scores, winners, and estimated game MVP/standout player for each completed game.")
+    render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
+    team_section_header("Round-by-round results", "📜")
     first_games = []
     for idx, row in enumerate(FIRST_ROUND_GAME_SCORES.get(team_name, []), start=1):
         r = dict(row)
@@ -8193,15 +8199,9 @@ if page == "Home Dashboard":
     render_playoff_command_center(favorite_team)
 
 elif page == "Playoff Bracket":
-    render_bracket()
+    render_bracket(favorite_team)
 
 elif page == "Matchup Intelligence":
-    render_matchup_header(favorite_team)
-    st.subheader("Analyst layer — told from your sideline")
-    st.caption(
-        f"Built for **{fan_nick(favorite_team)}** fans: series log, margins when we can parse them, your roster tags, injuries, and recent swings. "
-        "Heuristic read — not a betting model."
-    )
     render_matchup_intelligence(favorite_team)
 
 elif page == "Previous Rounds":
