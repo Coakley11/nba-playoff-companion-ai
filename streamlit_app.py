@@ -270,6 +270,18 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 .live-score-banner.live { animation: homeLivePulse 2.4s ease-in-out infinite; border-color: var(--team-accent); }
 .live-score-big { font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 950; color: #fff; letter-spacing: .04em; }
 .live-momentum { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+.live-gc-board {
+  display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+  padding: 16px; border-radius: 16px; margin: 10px 0 14px;
+  background: linear-gradient(135deg, var(--team-bg0), var(--team-bg1));
+  border: 1px solid var(--team-border); color: #f8fafc;
+}
+.live-gc-board img { width: 64px; height: 64px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
+.live-gc-score { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 950; letter-spacing: .04em; }
+.live-gc-clock { font-size: 13px; color: #cbd5e1; margin-top: 4px; text-align: center; }
+.live-gc-series { font-size: 12px; color: #94a3b8; margin-top: 6px; text-align: center; }
+.live-gc-perf { border: 1px solid var(--team-border); border-radius: 12px; padding: 10px 12px;
+  background: linear-gradient(180deg, #fff, var(--team-card-tint)); margin-bottom: 8px; }
 /* Bracket — your team highlight */
 .bracket-wrap { border-color: var(--team-border) !important; }
 .bmk-card--yours { border-color: var(--team-accent) !important;
@@ -2401,15 +2413,12 @@ def get_live_game_detection_context_impl(team_name):
     if has_today_et and v2_live_today:
         tier = "likely_live_feed_gap"
         message = (
-            "Game may be in progress, but the live API feed is not returning a stable row in the app yet. "
-            "The **stats scoreboard for today (ET)** shows in-progress signals — wait for CDN to sync or tap refresh."
+            "Game may be in progress, but the live feed is delayed. "
+            "Today's stats scoreboard shows in-progress signals — wait for CDN to sync or tap refresh."
         )
     elif has_today_et:
         tier = "scheduled_today"
-        message = (
-            "Game **scheduled today** on the Eastern calendar — the merged live row is not ready yet (or clocks are still publishing). "
-            "This is not the same as 'no game'."
-        )
+        message = "Game scheduled today — live feed not detected yet."
     elif has_window:
         tier = "window_off_today"
         message = (
@@ -7819,6 +7828,205 @@ def _short_matchup_tris(g):
     return f"{at} @ {ht}"
 
 
+def _live_gc_parse_game_row(game_row, favorite_team):
+    """Normalize a scoreboard row for Live Game Center UI."""
+    home = game_row.get("homeTeam") or {}
+    away = game_row.get("awayTeam") or {}
+    home_tri = (home.get("teamTricode") or "") or _tricode_from_team_dict(home)
+    away_tri = (away.get("teamTricode") or "") or _tricode_from_team_dict(away)
+    home_score = safe_int(home.get("score", 0))
+    away_score = safe_int(away.get("score", 0))
+    home_name = _live_team_full_name(home_tri, home)
+    away_name = _live_team_full_name(away_tri, away)
+    fav_alias = TEAM_ALIASES.get(favorite_team, "")
+    if fav_alias and fav_alias == home_tri:
+        is_fav_home = True
+        fav_score, opp_score = home_score, away_score
+        opp_name = away_name
+    elif fav_alias and fav_alias == away_tri:
+        is_fav_home = False
+        fav_score, opp_score = away_score, home_score
+        opp_name = home_name
+    else:
+        is_fav_home = favorite_team == home_name
+        fav_score = home_score if is_fav_home else away_score
+        opp_score = away_score if is_fav_home else home_score
+        opp_name = away_name if is_fav_home else home_name
+    period = safe_int(game_row.get("period", 0), 0)
+    clock = str(game_row.get("gameClock") or "").strip()
+    status = str(game_row.get("gameStatusText") or "Unknown").strip()
+    phase = _live_broadcast_phase(game_row)
+    return {
+        "game": game_row,
+        "gid": str(game_row.get("gameId") or ""),
+        "home": home,
+        "away": away,
+        "home_tri": home_tri,
+        "away_tri": away_tri,
+        "home_name": home_name,
+        "away_name": away_name,
+        "home_score": home_score,
+        "away_score": away_score,
+        "fav_alias": fav_alias,
+        "is_fav_home": is_fav_home,
+        "fav_score": fav_score,
+        "opp_score": opp_score,
+        "opp_name": opp_name,
+        "margin": fav_score - opp_score,
+        "period": period,
+        "clock": clock,
+        "status": status,
+        "phase": phase,
+    }
+
+
+def _live_gc_detection_banner(det_ctx, has_merged_live, phase):
+    """User-facing feed status — never block the rest of the page."""
+    tier = (det_ctx or {}).get("tier", "ok")
+    msg = (det_ctx or {}).get("message", "")
+    if tier == "ok" and has_merged_live:
+        if phase == "live":
+            st.success("Live scoreboard row detected — refreshing advanced sections below.")
+        return
+    if tier == "likely_live_feed_gap":
+        st.error(msg or "Game may be in progress, but the live feed is delayed.")
+    elif tier == "scheduled_today" and not has_merged_live:
+        st.warning(msg or "Game scheduled today — live feed not detected yet.")
+    elif tier == "window_off_today":
+        st.warning(msg)
+    elif msg:
+        st.info(msg)
+
+
+def _render_live_gc_matchup_header(parsed, series_line=None):
+    """Logos + score + quarter/clock — renders immediately (no box score required)."""
+    e = html.escape
+    away_logo = e(TEAM_LOGOS.get(parsed["away_name"], ""))
+    home_logo = e(TEAM_LOGOS.get(parsed["home_name"], ""))
+    if parsed["period"] and parsed["clock"]:
+        clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
+    elif parsed["period"]:
+        clock_txt = f"Q{parsed['period']}"
+    else:
+        clock_txt = parsed["status"]
+    phase = parsed["phase"]
+    badge = "🔴 LIVE" if phase == "live" else ("FINAL" if phase == "postgame" else "📅 PREGAME")
+    series_html = f"<div class='live-gc-series'>Series · {e(series_line)}</div>" if series_line else ""
+    st.markdown(
+        f"<div class='live-gc-board'>"
+        f"<div style='text-align:center'><img src='{away_logo}' alt=''/><div style='font-size:12px;font-weight:800'>{e(parsed['away_name'])}</div></div>"
+        f"<div style='text-align:center'><div style='font-size:11px;color:#94a3b8'>{badge}</div>"
+        f"<div class='live-gc-score'>{parsed['away_score']} — {parsed['home_score']}</div>"
+        f"<div class='live-gc-clock'>{e(clock_txt)}</div>{series_html}</div>"
+        f"<div style='text-align:center'><img src='{home_logo}' alt=''/><div style='font-size:12px;font-weight:800'>{e(parsed['home_name'])}</div></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _live_gc_render_fallback_content(favorite_team, profile, opp_name=None):
+    """Always-on content when live APIs are thin: series, injuries, outlook, last-game plays."""
+    try:
+        st.markdown(f"**Playoff series (bracket):** {series_status_text(favorite_team)}")
+    except Exception:
+        pass
+    opp = opp_name or profile.get("current_opponent")
+    if opp:
+        st.caption(f"Profile matchup: **{favorite_team}** vs **{opp}**")
+    team_section_header("Injury report", "🩹")
+    try:
+        render_injury_report(favorite_team, opponent_name=opp, show_page_header=False, fan_perspective_team=favorite_team)
+    except Exception as exc:
+        st.caption(f"Injury report unavailable ({exc}).")
+    team_section_header("Team outlook", "🎯")
+    try:
+        render_team_outlook(favorite_team, compact_home=True)
+    except Exception as exc:
+        st.caption(f"Outlook unavailable ({exc}).")
+    team_section_header("Recent top plays", "🎬")
+    try:
+        tp = previous_game_top_plays(favorite_team)
+        if tp is not None and not tp.empty:
+            st.dataframe(tp, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Play-by-play highlights appear when a game id is in the feed.")
+    except Exception as exc:
+        st.caption(f"Top plays unavailable ({exc}).")
+
+
+def _live_gc_top_performers(box_df, team_name, opp_name, limit=3):
+    if box_df is None or box_df.empty:
+        st.caption("Top performers load when the box score feed publishes player rows.")
+        return
+    cols = st.columns(2)
+    for col, (label, tm) in zip(
+        cols,
+        [(fan_nick(team_name), TEAM_ALIASES.get(team_name)), (fan_nick(opp_name or "Opponent"), TEAM_ALIASES.get(opp_name, ""))],
+    ):
+        with col:
+            st.markdown(f"**{label}**")
+            sub = box_df[box_df["Team"] == tm] if tm else pd.DataFrame()
+            if sub.empty:
+                st.caption("No rows yet.")
+                continue
+            sub = sub.sort_values("PTS", ascending=False).head(limit)
+            for _, r in sub.iterrows():
+                st.markdown(
+                    f"<div class='live-gc-perf'><b>{html.escape(str(r.get('Player','')))}</b> "
+                    f"{player_temp(r)} · {safe_int(r.get('PTS'))} PTS · "
+                    f"{safe_int(r.get('REB'))} REB · {safe_int(r.get('AST'))} AST · "
+                    f"+/- {safe_int(r.get('+/-'))}</div>",
+                    unsafe_allow_html=True,
+                )
+
+
+def _live_gc_foul_trouble(box_df, team_name, opp_name):
+    if box_df is None or box_df.empty:
+        st.caption("Foul trouble updates when personal fouls appear in the box score.")
+        return
+    any_row = False
+    for tm_label, tm in ((fan_nick(team_name), TEAM_ALIASES.get(team_name)), (opp_name or "Opponent", TEAM_ALIASES.get(opp_name or ""))):
+        if not tm:
+            continue
+        trouble = box_df[(box_df["Team"] == tm) & (box_df["PF"].apply(lambda x: safe_int(x) >= 4))]
+        if trouble.empty:
+            continue
+        any_row = True
+        st.markdown(f"**{tm_label}**")
+        for _, r in trouble.iterrows():
+            pf = safe_int(r.get("PF"))
+            flag = "🚨 FOUL OUT RISK" if pf >= 5 else "⚠️ IN FOUL TROUBLE"
+            st.warning(f"{r.get('Player','?')} — {pf} PF · {flag}")
+    if not any_row:
+        st.success("No players at 4+ fouls in the current box score feed.")
+
+
+def _live_gc_whatif_panel(favorite_team, margin, period, is_home, base_prob):
+    st.caption("Quick what-if — adjusts the live win-probability model (not Vegas odds).")
+    swing = st.slider("Swing margin for your team (+/− points on the board)", -18, 18, 0, key=f"live_gc_swing_{favorite_team}")
+    adj_margin = margin + swing
+    adj_prob = win_prob(adj_margin, period, is_home)
+    c1, c2 = st.columns(2)
+    c1.metric("Model win % (now)", f"{base_prob}%")
+    c2.metric("Model win % (what-if)", f"{adj_prob}%", delta=f"{adj_prob - base_prob}")
+    star = (TEAM_PROFILES.get(favorite_team, {}).get("starters") or ["Your star"])[0]
+    extra = st.slider(f"Extra points for {star} (storytelling slider)", 0, 15, 0, key=f"live_gc_star_{favorite_team}")
+    if extra:
+        st.info(
+            f"If {star} adds **{extra}** points of impact, the night tilts toward {fan_nick(favorite_team)} — "
+            "open **Legacy Tracker** for full ladder sliders and round-by-round legacy math."
+        )
+
+
+def _live_gc_section(title, icon, fn, *args, **kwargs):
+    """Render a Live GC block; failures stay local."""
+    team_section_header(title, icon)
+    try:
+        fn(*args, **kwargs)
+    except Exception as exc:
+        st.caption(f"{title} could not load right now ({exc}).")
+
+
 def _live_center_debug_probe():
     """Probe CDN + merged stats slate (yesterday→tomorrow ET); must not raise."""
     errs = []
@@ -7844,12 +8052,32 @@ def _live_center_debug_probe():
     return n_cdn, n_stats_window, errs
 
 
+def _live_gc_render_debug_panel(favorite_team, fb, det_ctx):
+    n_cdn, n_stats, probe_errs = _live_center_debug_probe()
+    d1, d2, d3, d4 = st.columns(4)
+    d1.metric("NBA_LIVE_AVAILABLE", "yes" if NBA_LIVE_AVAILABLE else "no")
+    d2.metric("NBA_STATS_AVAILABLE", "yes" if NBA_STATS_AVAILABLE else "no")
+    d3.metric("Live CDN games", str(n_cdn) if n_cdn >= 0 else "err")
+    d4.metric("Stats slate (3 ET days)", str(n_stats) if n_stats >= 0 else "err")
+    st.write(f"**Team:** {favorite_team} · **detection tier:** `{det_ctx.get('tier')}`")
+    if isinstance(fb, dict) and fb.get("_merge_error"):
+        st.warning(fb["_merge_error"])
+    if probe_errs:
+        st.error("\n".join(probe_errs))
+    with st.expander("Raw scoreboard pipeline", expanded=False):
+        try:
+            st.code(_scoreboard_pipeline_debug_report(), language="text")
+        except Exception as exc:
+            st.write(repr(exc))
+
+
 def render_live_game_center(favorite_team, profile):
-    """Minimal fail-safe Live Game Center: always renders; heavy tabs/APIs temporarily disabled for reliability."""
-    render_fan_page_hero(favorite_team, "Live Game Center", f"Real-time board for {fan_nick(favorite_team)}.", "LIVE HUB")
-    st.caption(
-        "**Minimal mode** — box score, play-by-play, shot chart, momentum charts, injuries, lineups, and roster calls are "
-        "**disabled** until this page loads reliably. Only scoreboard merge + local series text runs."
+    """Full broadcast-style Live Game Center — header first, sections fail independently."""
+    render_fan_page_hero(
+        favorite_team,
+        "Live Game Center",
+        f"Real-time board for {fan_nick(favorite_team)} — score, momentum, injuries, and highlights.",
+        "LIVE HUB",
     )
 
     if st.session_state.get("_live_gc_sel_team") != favorite_team:
@@ -7858,152 +8086,177 @@ def render_live_game_center(favorite_team, profile):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = favorite_team
 
-    alias = TEAM_ALIASES.get(favorite_team, "—")
-
-    n_cdn, n_stats, probe_errs = _live_center_debug_probe()
+    det_ctx = get_live_game_detection_context(favorite_team)
+    fb = None
     try:
-        slate_games = _merged_stats_games_et_window()
+        fb = featured_broadcast_state(favorite_team)
     except Exception:
-        slate_games = []
-    fav_slate = [g for g in slate_games if _game_involves_team(g, favorite_team)]
+        fb = None
+    merged_live = (fb or {}).get("game") if isinstance(fb, dict) else None
+    phase = (fb or {}).get("phase", "unknown") if isinstance(fb, dict) else "unknown"
+    game_row = merged_live or det_ctx.get("best_stub_game")
+    has_merged = merged_live is not None
 
-    featured_err = None
-    raw_fb = None
-    try:
-        raw_fb = featured_broadcast_state(favorite_team)
-    except Exception as e:
-        featured_err = repr(e)
-    state = raw_fb if isinstance(raw_fb, dict) and raw_fb.get("game") else None
-    if isinstance(raw_fb, dict) and raw_fb.get("_merge_error"):
-        featured_err = featured_err or raw_fb["_merge_error"]
+    _live_gc_detection_banner(det_ctx, has_merged, phase)
 
-    cdn_got = (n_cdn >= 0) and (n_cdn > 0)
-    stats_got = (n_stats >= 0) and (n_stats > 0)
-
-    with st.container(border=True):
-        st.markdown("##### Scoreboard status (Eastern window: yesterday → tomorrow)")
-        hint = _profile_playoff_sched_hint(favorite_team, profile)
-        if fav_slate:
-            g0 = fav_slate[0]
-            gst = (g0.get("gameStatusText") or "status TBD").strip()
-            st.success(f"**{fan_nick(favorite_team)}** on the stats slate: **{_short_matchup_tris(g0)}** — **{gst}**")
-            if len(fav_slate) > 1:
-                st.caption(f"Multiple rows include your team today ({len(fav_slate)}); merge picks the best broadcast state.")
-        elif stats_got:
-            st.info(
-                f"**{n_stats} NBA game(s)** on the merged stats board for the Eastern 3-day window — "
-                f"your sidebar team (**{favorite_team}**) is not listed on those rows yet."
-            )
-        elif not cdn_got and not stats_got:
-            st.warning(
-                "**No live feed detected** — both the live CDN board and the stats scoreboard returned **zero** merged games. "
-                "Open **Raw scoreboard API debug** below if you need exact dates and dataframe shapes."
-            )
-        elif cdn_got and not stats_got:
-            st.warning("CDN returned games but the **stats merge is empty** — check raw debug (stats may be blocked or mis-parsed).")
-        else:
-            st.caption("Feeds responded; see metrics below for counts.")
-        if hint:
-            st.caption(hint)
-        m1, m2 = st.columns(2)
-        m1.metric("Live CDN (today in ET)", str(n_cdn) if n_cdn >= 0 else "err")
-        m2.metric("Stats slate (deduped, 3 ET days)", str(n_stats) if n_stats >= 0 else "err")
-
-    with st.expander("🔧 Live Game Center debug (read first if the page misbehaves)", expanded=True):
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("NBA_LIVE_AVAILABLE", "yes" if NBA_LIVE_AVAILABLE else "no")
-        d2.metric("NBA_STATS_AVAILABLE", "yes" if NBA_STATS_AVAILABLE else "no")
-        d3.metric("Live CDN games (count)", str(n_cdn) if n_cdn >= 0 else "err")
-        d4.metric("Stats slate (3-day ET)", str(n_stats) if n_stats >= 0 else "err")
-        d5, d6 = st.columns(2)
-        d5.metric("Live scoreboard returned games", "yes" if cdn_got else ("no" if n_cdn == 0 else "err"))
-        d6.metric("Merged row for favorite", "yes" if state and state.get("game") else "no")
-        st.write(f"**Selected team:** {favorite_team} · **alias:** `{alias}` · **ET now:** `{_nba_et_now().isoformat()}`")
-        if featured_err:
-            st.warning(f"**Merge / featured error:** `{featured_err}`")
-        if probe_errs:
-            st.error("Probe errors:\n" + "\n".join(probe_errs))
-        else:
-            st.success("Probe completed without exceptions.")
-        with st.expander("Raw scoreboard API debug (dates, V3 frame shapes, per-date game counts)", expanded=False):
-            try:
-                st.code(_scoreboard_pipeline_debug_report(), language="text")
-            except Exception as e:
-                st.write(f"(debug report failed: {e!r})")
-
-    opp_prof = profile.get("current_opponent") or "—"
-    try:
-        series_txt = series_status_text(favorite_team)
-    except Exception as e:
-        series_txt = f"(series text error: {e!r})"
-
-    st.divider()
-    st.markdown("#### Snapshot (no images, no secondary APIs)")
-    st.write(f"**Profile opponent:** {opp_prof}")
-    st.write(f"**Series (local bracket data):** {series_txt}")
-
-    live = None
-    phase = "unknown"
-    if state and isinstance(state, dict):
-        live = state.get("game")
-        phase = state.get("phase", "unknown")
-
-    if not live:
-        st.info(
-            "No merged game row for this team right now — live CDN and/or stats scoreboard did not return a match, "
-            "or the merge step failed. The hub is still usable from this snapshot."
-        )
-        st.info(
-            f"**Feeds:** live CDN returned **{'games' if cdn_got else 'zero games'}**; "
-            f"stats scoreboard (merged **yesterday→tomorrow ET**) returned **{n_stats if n_stats >= 0 else 'err'}** game row(s)."
-        )
-        if AUTOREFRESH_AVAILABLE:
-            st.caption("Auto-refresh paused in minimal mode when no game row.")
+    if not game_row:
+        _render_live_game_center_empty(favorite_team, profile)
+        _live_gc_render_fallback_content(favorite_team, profile)
+        with st.expander("Developer debug", expanded=False):
+            _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
         return
 
-    home = live.get("homeTeam") or {}
-    away = live.get("awayTeam") or {}
-    home_tri = (home.get("teamTricode") or "") or _tricode_from_team_dict(home)
-    away_tri = (away.get("teamTricode") or "") or _tricode_from_team_dict(away)
-    home_score = safe_int(home.get("score", 0))
-    away_score = safe_int(away.get("score", 0))
-    period = safe_int(live.get("period", 0), 0)
-    clock = live.get("gameClock", "") or ""
-    status = live.get("gameStatusText", "Unknown") or "Unknown"
-    gid = str(live.get("gameId") or "")
+    parsed = _live_gc_parse_game_row(game_row, favorite_team)
+    series_line, _src = _live_series_board(parsed["away_name"], parsed["home_name"])
 
-    home_name = _live_team_full_name(home_tri, home)
-    away_name = _live_team_full_name(away_tri, away)
-    opp_display = home_name if favorite_team == away_name else away_name
-
-    render_live_score_banner(favorite_team, away_tri, home_tri, away_score, home_score, status, phase)
-    team_section_header("Game details", "🏟️")
-    st.write(f"**Your team:** {favorite_team} · **Opponent on board:** {opp_display}")
-    st.write(f"**Status:** {status}")
-    if period or clock:
-        st.caption(f"Clock raw: Q{period} · {clock}" if period else f"Clock: {clock}")
-    st.write(f"**Phase:** `{phase}`")
-    st.caption(f"gameId: `{gid}`")
-
-    games_in_probe = (n_cdn > 0) or (n_stats > 0)
-    st.info(
-        f"**Live API availability:** live CDN JSON = **{'yes' if NBA_LIVE_AVAILABLE else 'no'}**; "
-        f"stats (nba_api) = **{'yes' if NBA_STATS_AVAILABLE else 'no'}**. "
-        f"Counts: **{n_cdn}** CDN games · **{n_stats}** stats slate games (3 ET days, deduped). "
-        f"Merged featured row for favorite: **{'yes' if live else 'no'}**."
+    _render_live_gc_matchup_header(parsed, series_line)
+    render_live_score_banner(
+        favorite_team,
+        parsed["away_tri"],
+        parsed["home_tri"],
+        parsed["away_score"],
+        parsed["home_score"],
+        parsed["status"],
+        parsed["phase"],
     )
-    if not games_in_probe and not live:
-        st.warning("Neither CDN nor stats slate returned games — feeds may be down for this Eastern window.")
 
-    if AUTOREFRESH_AVAILABLE and phase == "live":
-        st_autorefresh(interval=12000, key="live_refresh_minimal")
-        st.caption("Auto-refresh every **12s** while phase is **live** (minimal mode).")
+    if AUTOREFRESH_AVAILABLE and parsed["phase"] == "live":
+        st_autorefresh(interval=12000, key="live_gc_refresh")
+        st.caption("Auto-refresh every **12s** while the game is live.")
 
-    st.caption(
-        "Next re-enable order (toggle in code): box score → injuries → play-by-play → shot chart. "
-        "Heavy sections stay off until each step is verified."
-    )
-    return
+    team_section_header("Series & game status", "🏆")
+    try:
+        st.markdown(f"**Bracket:** {series_status_text(favorite_team)}")
+        if series_line:
+            st.success(f"Series on board: **{series_line}**")
+        st.caption(f"Status: **{parsed['status']}** · Phase: **{parsed['phase']}**")
+        if parsed["phase"] == "pregame":
+            for line in _pregame_pressure_lines(favorite_team, parsed["opp_name"], series_line, profile):
+                st.write(f"• {line}")
+    except Exception as exc:
+        st.caption(f"Series strip unavailable ({exc}).")
+
+    gid = parsed["gid"]
+    box_game = {}
+    box_df = pd.DataFrame()
+    actions = []
+    if gid:
+        try:
+            box_game = get_live_boxscore(gid) or {}
+        except Exception:
+            box_game = {}
+        try:
+            box_df = create_boxscore_df(box_game)
+        except Exception:
+            box_df = pd.DataFrame()
+        try:
+            actions = get_live_playbyplay(gid) or []
+        except Exception:
+            actions = []
+
+    def _sec_injuries():
+        c1, c2 = st.columns(2)
+        with c1:
+            render_injury_report(
+                favorite_team,
+                opponent_name=parsed["opp_name"],
+                show_page_header=False,
+                fan_perspective_team=favorite_team,
+            )
+        with c2:
+            if parsed["opp_name"]:
+                render_injury_report(
+                    parsed["opp_name"],
+                    show_page_header=False,
+                    neutral_framing=True,
+                )
+
+    _live_gc_section("Injury report", "🩹", _sec_injuries)
+
+    def _sec_momentum():
+        prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Win probability (model)", f"{prob}%")
+        c2.metric("Your margin", f"{parsed['margin']:+d}")
+        c3.metric("Period", f"Q{parsed['period']}" if parsed["period"] else parsed["status"])
+        headline = _live_headline_natural(
+            favorite_team,
+            parsed["phase"],
+            parsed["margin"],
+            prob,
+            parsed["period"],
+            parsed["status"],
+            fan_nick(parsed["opp_name"]),
+        )
+        st.markdown(f"**Broadcast read:** {headline}")
+        run = _scoring_run_summary(actions, parsed["fav_alias"])
+        if run:
+            st.markdown(run)
+        _live_gc_whatif_panel(
+            favorite_team, parsed["margin"], parsed["period"], parsed["is_fav_home"], prob
+        )
+
+    _live_gc_section("Momentum & win probability", "📈", _sec_momentum)
+
+    def _sec_key_players():
+        render_lineup_cards(favorite_team, box_df)
+
+    _live_gc_section("Key players", "⭐", _sec_key_players)
+
+    def _sec_top():
+        _live_gc_top_performers(box_df, favorite_team, parsed["opp_name"])
+
+    _live_gc_section("Top performers", "🔥", _sec_top)
+
+    def _sec_fouls():
+        _live_gc_foul_trouble(box_df, favorite_team, parsed["opp_name"])
+
+    _live_gc_section("Foul trouble", "⚠️", _sec_fouls)
+
+    def _sec_stories():
+        prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
+        for line in game_story(favorite_team, parsed["margin"], prob, box_df):
+            st.write(f"• {line}")
+
+    _live_gc_section("Game storylines", "📰", _sec_stories)
+
+    def _sec_pbp():
+        if gid:
+            tp = top_plays_from_game_id(gid, favorite_team, limit=8)
+            if tp is not None and not tp.empty:
+                st.dataframe(tp, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No highlight plays parsed yet — feed may still be catching up.")
+        else:
+            st.caption("Play-by-play needs a game id from the scoreboard merge.")
+
+    _live_gc_section("Play-by-play highlights", "🎬", _sec_pbp)
+
+    def _sec_shots():
+        if not actions:
+            st.caption("Shot chart appears when play-by-play actions are available.")
+            return
+        shots = shot_df_from_pbp(actions, parsed["fav_alias"])
+        if shots.empty:
+            st.caption("No shot events parsed yet for your team in this feed.")
+            return
+        st.plotly_chart(
+            draw_court(shots, f"{fan_nick(favorite_team)} shot chart (play-by-play proxy)"),
+            use_container_width=True,
+        )
+
+    _live_gc_section("Shot chart", "🎯", _sec_shots)
+
+    with st.expander("Full box score", expanded=False):
+        if box_df is not None and not box_df.empty:
+            render_fan_stat_table(box_df, favorite_team)
+        else:
+            st.caption("Box score table loads when the NBA live box score endpoint returns data.")
+
+    with st.expander("Developer debug", expanded=False):
+        _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
+
+
 
 # ==========================================================
 # Previous rounds / playoff path helpers
