@@ -5346,6 +5346,17 @@ def render_playoff_command_center(team_name):
     effective_live = live_on and not is_eliminated
 
     st.markdown("#### Home Dashboard")
+    if not is_eliminated:
+        with st.expander("Looking for offseason / future outlook sections?", expanded=False):
+            st.markdown(
+                "Those **six analysis blocks** (season reflection, priorities, future outlook, draft assets, "
+                "players who may not return, ideal player types) **only show for eliminated teams**.\n\n"
+                "**What to do:** in the **sidebar**, open the team dropdown and pick any roster labeled "
+                "**(offseason view)** — e.g. **Boston Celtics**, **Phoenix Suns**, **Atlanta Hawks**, "
+                "**Orlando Magic**, **Toronto Raptors**, **Portland Trail Blazers**, **Denver Nuggets**, or **Houston Rockets**.\n\n"
+                "Then stay on **🏀 Home Dashboard**: the gold **Postmortem** banner and sections appear **directly under** "
+                "the Load live / Fast mode buttons, **above** the big hero card."
+            )
     if is_eliminated:
         st.success(
             f"**{fan_nick(team_name)}** — offseason / future outlook mode is on. Scroll for the gold **Postmortem** header and six analysis sections directly below the controls."
@@ -6932,7 +6943,28 @@ PAGES={
     "🏀 Legacy Tracker":"Legacy Tracker",
     "🏀 Previous Rounds":"Previous Rounds",
 }
-favorite_team=st.sidebar.selectbox("Choose your 2026 NBA playoff team", list(TEAM_PROFILES.keys()), index=list(TEAM_PROFILES.keys()).index("New York Knicks"))
+
+
+def _sidebar_team_label(team_name):
+    """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
+    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+        return f"📋 {team_name} (offseason view)"
+    return team_name
+
+
+_team_keys_sorted = sorted(TEAM_PROFILES.keys())
+_default_idx = _team_keys_sorted.index("New York Knicks") if "New York Knicks" in _team_keys_sorted else 0
+favorite_team = st.sidebar.selectbox(
+    "Choose your 2026 NBA playoff team",
+    _team_keys_sorted,
+    index=_default_idx,
+    format_func=_sidebar_team_label,
+    help="Pick any name with “(offseason view)” to unlock the six offseason sections on Home Dashboard.",
+)
+st.sidebar.caption(
+    "**Where are those sections?** On **🏀 Home Dashboard**, after you choose an **eliminated** team above "
+    "(Boston, Phoenix, Atlanta, Orlando, Toronto, Portland, Denver, or Houston — they show as *offseason view*)."
+)
 USE_DEMO_BACKUP = st.sidebar.toggle(
     "Use demo backup scores only if NBA API has no game data",
     value=False,
