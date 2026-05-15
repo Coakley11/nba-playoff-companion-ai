@@ -153,6 +153,79 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .pp-timeline { border-left: 3px solid #cbd5e1; margin-left: 8px; padding-left: 14px; }
 .pp-tl-item { margin-bottom: 10px; font-size: 13px; color: #334155; }
 .pp-tl-item b { color: #0f172a; }
+/* Fan branding (team CSS vars injected per selected team) */
+.team-match-header {
+  text-align: center; padding: 14px 16px; border-radius: 18px; margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 100%);
+  border: 1px solid var(--team-border, rgba(148,163,184,.35));
+  color: #f8fafc; box-shadow: 0 10px 32px rgba(0,0,0,.25);
+}
+.team-match-header h1 { margin: 0 0 6px; font-size: clamp(1.1rem, 2.8vw, 1.65rem); }
+.team-match-header h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--team-accent,#38bdf8); }
+.team-sec {
+  font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--team-accent,#64748b); margin: 20px 0 10px; padding: 8px 12px;
+  border-left: 4px solid var(--team-primary,#38bdf8);
+  background: var(--team-accent-soft, rgba(56,189,248,.08)); border-radius: 0 10px 10px 0;
+}
+.team-card {
+  border: 1px solid var(--team-border, rgba(15,23,42,.12)); border-radius: 16px; padding: 14px 16px;
+  background: linear-gradient(180deg, #fff 0%, var(--team-card-tint, #f8fafc) 100%);
+  box-shadow: 0 2px 8px rgba(15,23,42,.06); margin-bottom: 12px;
+}
+.team-card h4 { margin: 0 0 8px; color: #0f172a; }
+.fan-player-card {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+  padding: 14px 16px; border-radius: 16px; margin-bottom: 12px;
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 72%, #0f172a 100%);
+  border: 1px solid var(--team-border, rgba(148,163,184,.3)); color: #f8fafc;
+}
+.fan-player-card img.hs { width: 88px; height: 88px; border-radius: 14px; object-fit: cover;
+  border: 2px solid var(--team-primary,#38bdf8); background: #0b1224; }
+.fan-player-card img.logo { width: 48px; opacity: .95; }
+.fan-player-name { font-size: 1.15rem; font-weight: 900; margin: 0 0 4px; }
+.fan-player-role { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+.fan-stat-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.fan-stat-tile {
+  min-width: 58px; text-align: center; padding: 6px 10px; border-radius: 10px;
+  background: rgba(15,23,42,.45); border: 1px solid var(--team-border, rgba(148,163,184,.25));
+}
+.fan-stat-tile .v { font-size: 1.05rem; font-weight: 900; color: #fff; }
+.fan-stat-tile .k { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+.fan-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.fan-badge {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  padding: 4px 9px; border-radius: 999px; border: 1px solid transparent;
+}
+.fan-badge.hot { background: rgba(249,115,22,.22); border-color: rgba(253,186,116,.5); color: #ffedd5; }
+.fan-badge.clutch { background: rgba(234,179,8,.2); border-color: rgba(253,224,71,.45); color: #fef9c3; }
+.fan-badge.xfactor { background: rgba(167,139,250,.22); border-color: rgba(196,181,253,.45); color: #ede9fe; }
+.fan-badge.bounce { background: rgba(239,68,68,.18); border-color: rgba(252,165,165,.4); color: #fee2e2; }
+.fan-badge.injury { background: rgba(248,113,113,.2); border-color: rgba(254,202,202,.45); color: #fecaca; }
+.fan-stat-table-wrap { overflow-x: auto; margin: 8px 0 14px; border-radius: 14px;
+  border: 1px solid var(--team-border, rgba(148,163,184,.35)); }
+table.fan-stat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.fan-stat-table th {
+  background: linear-gradient(90deg, var(--team-bg0,#0f172a), var(--team-bg1,#1e293b));
+  color: #f8fafc; padding: 10px 12px; text-align: left; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+table.fan-stat-table td { padding: 9px 12px; border-bottom: 1px solid rgba(148,163,184,.15); color: #1e293b; }
+table.fan-stat-table tr.row-even td { background: var(--team-row-even, rgba(248,250,252,.9)); }
+table.fan-stat-table tr.row-odd td { background: var(--team-row-odd, #fff); }
+table.fan-stat-table td.stat-good { color: #15803d; font-weight: 800; }
+table.fan-stat-table td.stat-warn { color: #b45309; font-weight: 800; }
+table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
+.injury-card { border:1px solid var(--team-border, rgba(0,0,0,.12)); border-radius:16px; padding:10px;
+  background: linear-gradient(180deg, #fff, var(--team-card-tint, #f8fafc)); margin-bottom:10px; min-height:135px; }
+.injury-status { font-weight:900; padding:4px 8px; border-radius:999px; display:inline-block;
+  background: rgba(254,226,226,.9); color:#991b1b; border: 1px solid rgba(248,113,113,.35); }
+.pp-hero.team-branded {
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 55%, #0c1224 100%) !important;
+  border-color: var(--team-border, rgba(148,163,184,.35)) !important;
+}
+.pp-badge.team { background: var(--team-accent-soft); border-color: var(--team-primary); color: #f8fafc; }
+.cmd-sec { color: var(--team-accent, #64748b) !important; border-bottom-color: var(--team-primary, rgba(148,163,184,.35)) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -777,24 +850,28 @@ def render_offseason_future_outlook_sections(team_name):
     except Exception:
         exit_line = prof.get("first_round_result") or "Playoff exit"
 
+    th = get_team_theme(team_name)
     st.markdown(
-        """
-<div style="padding:16px 18px;border-radius:16px;border:2px solid rgba(251,191,36,0.65);
-background:linear-gradient(135deg,rgba(120,53,15,0.55) 0%,rgba(30,41,59,0.95) 55%,#0f172a 100%);
-margin:0 0 18px 0;box-shadow:0 12px 40px rgba(0,0,0,0.35)">
-  <div style="font-size:11px;font-weight:900;letter-spacing:0.18em;color:#fde68a;text-transform:uppercase;margin-bottom:8px">
-    Offseason mode · Home Dashboard</div>
+        f"""
+<div style="padding:16px 18px;border-radius:16px;border:2px solid {th['primary']};
+background:linear-gradient(135deg,{th['bg0']} 0%,{th['bg1']} 55%,#0f172a 100%);
+margin:0 0 18px 0;box-shadow:0 12px 40px rgba(0,0,0,0.35);display:flex;gap:14px;align-items:flex-start">
+  <img src="{html.escape(TEAM_LOGOS.get(team_name, ''))}" width="58" alt=""/>
+  <div>
+  <div style="font-size:11px;font-weight:900;letter-spacing:0.18em;color:{th['accent']};text-transform:uppercase;margin-bottom:8px">
+    Offseason mode · {html.escape(fan_nick(team_name))}</div>
   <div style="font-size:1.35rem;font-weight:900;color:#fffbeb;line-height:1.2;margin-bottom:8px">Postmortem & future outlook</div>
   <div style="font-size:0.98rem;color:#fef3c7;line-height:1.5;opacity:0.95">
     Live chase mode is off for this club. Below is a front-office style read: what broke in the playoffs,
     what the roster needs next, draft and trade assets, and who might not be back.</div>
+  </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
     st.caption(f"**{exit_line}** · Analysis is team-specific and tied to this postseason run.")
 
-    st.markdown("### 1 · Season reflection")
+    team_section_header("1 · Season reflection", "📋")
     with st.container(border=True):
         st.markdown(f"**What went right**\n\n{ref['went_right']}")
         st.markdown(f"**What caused elimination**\n\n{ref['elimination_cause']}")
@@ -3170,7 +3247,7 @@ Legacy here is a <b>postmortem</b> only: actual box scores through the exit, rou
             ]
             if c in logs.columns
         ]
-        st.dataframe(logs[show_cols], use_container_width=True)
+        render_fan_stat_table(logs[show_cols], team_name)
 
     pts0 = float(current.get("PTS", 20.0) or 20.0)
     reb0 = float(current.get("REB", 6.0) or 6.0)
@@ -3210,7 +3287,7 @@ Legacy here is a <b>postmortem</b> only: actual box scores through the exit, rou
         st.markdown("### 2 · Round-by-round actual performance")
         rr = _legacy_round_by_round_summary(logs, team_tri)
         if rr:
-            st.dataframe(pd.DataFrame(rr), use_container_width=True)
+            render_fan_stat_table(pd.DataFrame(rr), team_name)
         else:
             st.caption("Series splits need matchup rows in the game log — showing full-run averages only above.")
 
@@ -4096,13 +4173,15 @@ def render_player_playoff_story_hub(team_name, profile):
         badge_html += "<span class='pp-badge gold'>High scoring load</span>"
     if (cur_summary.get("STL", 0) + cur_summary.get("BLK", 0)) >= 2.5:
         badge_html += "<span class='pp-badge fire'>Two-way activity</span>"
+    for lbl, cls in player_fan_badges(cur_summary)[:3]:
+        badge_html += f"<span class='fan-badge {cls}' style='font-size:10px;padding:3px 8px'>{html.escape(lbl)}</span>"
 
     st.markdown(
-        f"""<div class='pp-hero'>
-  <div><img src='{hs}' width='104' style='border-radius:16px;border:2px solid rgba(248,250,252,.35);object-fit:cover;background:#0b1224;'/></div>
+        f"""<div class='pp-hero team-branded'>
+  <div><img src='{hs}' width='104' style='border-radius:16px;border:2px solid var(--team-primary,rgba(248,250,252,.35));object-fit:cover;background:#0b1224;'/></div>
   <div>
     <h2>{html.escape(player)} · {html.escape(season)} playoffs</h2>
-    <div class='sub'>{html.escape(fan_nick(team_name))} · {html.escape(wl_record)} · {int(cur_summary.get('GP',0))} games in sample</div>
+    <div class='sub'>{html.escape(prof.get('role', 'Rotation'))} · {html.escape(fan_nick(team_name))} · {html.escape(wl_record)} · {int(cur_summary.get('GP',0))} games</div>
     <div class='pp-badges'>{badge_html}</div>
   </div>
   <div style='justify-self:end;'><img src='{logo}' width='56' alt=''/></div>
@@ -4982,14 +5061,175 @@ def render_matchup_header(team_name, first_round=False):
     opp=p["first_round_opponent"] if first_round else (p.get("current_opponent") or p["first_round_opponent"])
     round_label="Previous Rounds / First Round Review" if first_round else p["round"]
     header=f"{p['conference']} {round_label}"
-    c1,c2,c3=st.columns([1,2.5,1])
-    with c1: st.image(TEAM_LOGOS[team_name], width=105)
-    with c2:
-        st.markdown(f"<div style='text-align:center'><h1>({p['seed']}) {team_name} vs ({TEAM_PROFILES[opp]['seed']}) {opp}</h1><h3>{header}</h3></div>", unsafe_allow_html=True)
-    with c3: st.image(TEAM_LOGOS[opp], width=105)
+    oseed = TEAM_PROFILES.get(opp, {}).get("seed", "—")
+    e = html.escape
+    st.markdown(
+        (
+            '<div class="team-match-header"><div style="display:flex;align-items:center;'
+            'justify-content:center;gap:20px;flex-wrap:wrap">'
+            f'<img src="{e(TEAM_LOGOS[team_name])}" width="88" alt=""/>'
+            "<div><h1>"
+            f"({p['seed']}) {e(team_name)} <span style='opacity:.5'>vs</span> "
+            f"({oseed}) {e(opp)}</h1>"
+            f"<h3>{e(p['conference'])} · {e(round_label)}</h3></div>"
+            f'<img src="{e(TEAM_LOGOS.get(opp, ""))}" width="88" alt=""/>'
+            "</div></div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
-def team_logo_html(team,size=28):
+def team_logo_html(team, size=28):
     return f"<img src='{TEAM_LOGOS[team]}' width='{size}' style='vertical-align:middle;margin-right:8px;'>"
+
+
+def team_section_header(title, icon="🏀"):
+    """Colorful section divider using the active team palette."""
+    safe = html.escape(str(title))
+    st.markdown(f"<div class='team-sec'>{icon} {safe}</div>", unsafe_allow_html=True)
+
+
+def player_fan_badges(summary, injury_status=None):
+    """Return list of (label, css_class) for fan-facing player badges."""
+    badges = []
+    pts = safe_float(summary.get("PTS", 0))
+    pm = safe_float(summary.get("PLUS_MINUS", 0))
+    tov = safe_float(summary.get("TOV", 0))
+    stl = safe_float(summary.get("STL", 0))
+    blk = safe_float(summary.get("BLK", 0))
+    gp = safe_float(summary.get("GP", 0))
+    if injury_status:
+        st_low = str(injury_status).lower()
+        if any(x in st_low for x in ("out", "doubt", "question", "injur", "monitor")):
+            badges.append(("Injury Watch", "injury"))
+    if pts >= 28 or (pts >= 22 and pm >= 3):
+        badges.append(("Hot", "hot"))
+    if pm >= 5 and pts >= 14:
+        badges.append(("Clutch", "clutch"))
+    if (stl + blk) >= 2.5 or (pm >= 4 and pts >= 12):
+        badges.append(("X-Factor", "xfactor"))
+    if pm <= -4 or (pts >= 16 and pm <= -2):
+        badges.append(("Needs Bounce Back", "bounce"))
+    elif gp >= 3 and pts < 11:
+        badges.append(("Needs Bounce Back", "bounce"))
+    return badges
+
+
+def render_player_fan_card(player_name, team_name, role="", stats=None, badges=None, injury_status=None):
+    """Visual player card: headshot, logo, role, stat tiles, badges."""
+    stats = stats or {}
+    if badges is None:
+        badges = player_fan_badges(stats, injury_status=injury_status)
+    hs = headshot(player_name)
+    logo = TEAM_LOGOS.get(team_name, "")
+    role_txt = html.escape(role or "Rotation")
+    badge_html = "".join(
+        f"<span class='fan-badge {html.escape(cls)}'>{html.escape(lbl)}</span>" for lbl, cls in badges
+    )
+    tiles = []
+    for key, label in (
+        ("PTS", "PTS"),
+        ("REB", "REB"),
+        ("AST", "AST"),
+        ("STL", "STL"),
+        ("BLK", "BLK"),
+        ("PLUS_MINUS", "+/-"),
+    ):
+        val = stats.get(key)
+        if val is None or val == "":
+            continue
+        if key == "PLUS_MINUS":
+            disp = f"{safe_float(val):+.1f}"
+        elif isinstance(val, (int, float)):
+            disp = f"{safe_float(val):.1f}" if key != "PTS" else f"{safe_float(val):.1f}"
+        else:
+            disp = html.escape(str(val))
+        tiles.append(
+            f"<div class='fan-stat-tile'><div class='v'>{disp}</div><div class='k'>{label}</div></div>"
+        )
+    tile_html = "".join(tiles) if tiles else "<span class='fan-player-role'>Stats load on demand</span>"
+    st.markdown(
+        f"""<div class='fan-player-card'>
+  <img class='hs' src='{hs}' alt=''/>
+  <div>
+    <div class='fan-player-name'>{html.escape(player_name)}</div>
+    <div class='fan-player-role'>{role_txt} · {html.escape(fan_nick(team_name))}</div>
+    <div class='fan-stat-tiles'>{tile_html}</div>
+    <div class='fan-badges'>{badge_html}</div>
+  </div>
+  <img class='logo' src='{logo}' alt=''/>
+</div>""",
+        unsafe_allow_html=True,
+    )
+
+
+def _stat_cell_class(col, val, wl=None):
+    """CSS class for highlighted stat cells in fan tables."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    v = safe_float(val)
+    c = str(col).upper()
+    if c == "WL":
+        s = str(val).upper()
+        if s.startswith("W"):
+            return "stat-good"
+        if s.startswith("L"):
+            return "stat-bad"
+        return ""
+    if c in ("PTS", "AST"):
+        if v >= 28:
+            return "stat-good"
+        if v >= 18:
+            return ""
+        if v < 10:
+            return "stat-bad"
+    if c == "PLUS_MINUS":
+        if v >= 8:
+            return "stat-good"
+        if v <= -6:
+            return "stat-bad"
+        if v <= -2:
+            return "stat-warn"
+    if c == "TOV" and v >= 5:
+        return "stat-warn"
+    if c in ("FG_PCT", "FG3_PCT", "FT_PCT"):
+        pct = v * 100 if v <= 1.5 else v
+        if pct >= 50:
+            return "stat-good"
+        if pct < 38:
+            return "stat-bad"
+    return ""
+
+
+def render_fan_stat_table(df, team_name=None):
+    """HTML stat table with alternating team-color rows and stat highlights."""
+    if df is None or df.empty:
+        st.caption("No rows to display.")
+        return
+    cols = list(df.columns)
+    thead = "".join(f"<th>{html.escape(str(c))}</th>" for c in cols)
+    body_rows = []
+    for i, (_, row) in enumerate(df.iterrows()):
+        parity = "row-even" if i % 2 == 0 else "row-odd"
+        cells = []
+        for c in cols:
+            raw = row.get(c, "")
+            cls = _stat_cell_class(c, raw)
+            if isinstance(raw, float):
+                if str(c).upper() in ("FG_PCT", "FG3_PCT", "FT_PCT"):
+                    disp = f"{raw * 100:.1f}%" if raw == raw else "—"
+                elif str(c).upper() == "PLUS_MINUS":
+                    disp = f"{raw:+.0f}" if raw == raw else "—"
+                else:
+                    disp = f"{raw:.1f}" if raw == raw else "—"
+            else:
+                disp = html.escape(str(raw))
+            cells.append(f"<td class='{cls}'>{disp}</td>")
+        body_rows.append(f"<tr class='{parity}'>" + "".join(cells) + "</tr>")
+    st.markdown(
+        f"<div class='fan-stat-table-wrap'><table class='fan-stat-table'><thead><tr>{thead}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ==========================================================
@@ -6293,19 +6533,23 @@ def render_playoff_command_center(team_name):
             starters = [anchor] + [x for x in starters if x != anchor][:2]
         elif anchor:
             starters = [anchor]
-        pc = st.columns(len(starters) or 1)
-        for i, name in enumerate(starters or ["Rotation"]):
-            with pc[i]:
-                with st.container(border=True):
-                    st.markdown(f"**{name}**")
-                    try:
-                        st.image(headshot(name), width=76)
-                    except Exception:
-                        pass
-                    if name != "Rotation":
-                        sa = season_averages(name)
-                        st.metric("PTS", sa.get("PTS", "—"))
-                        st.caption(f"REB {sa.get('REB','—')} · AST {sa.get('AST','—')}")
+        for name in starters or ["Rotation"]:
+            if name == "Rotation":
+                continue
+            sa = season_averages(name)
+            prof = player_resume_profile(name, team_name)
+            render_player_fan_card(
+                name,
+                team_name,
+                role=prof.get("role", "Rotation"),
+                stats={
+                    "PTS": sa.get("PTS", 0),
+                    "REB": sa.get("REB", 0),
+                    "AST": sa.get("AST", 0),
+                    "STL": sa.get("STL", 0),
+                    "BLK": sa.get("BLK", 0),
+                },
+            )
 
     def sec_momentum():
         hist = historic_series_context(team_name, s_active)
@@ -7165,27 +7409,152 @@ def _injury_hero_lines(team_names, max_each=2):
     return "".join(lines) if lines else "<div style='margin-top:8px;color:#94a3b8;font-size:12px'>No injury rows from live source · see <b>Injuries</b> tab.</div>"
 
 
+def get_team_theme(team_name):
+    """Brand palette for the selected team — heroes, cards, tables, and accents."""
+    default = {
+        "primary": "#38bdf8",
+        "secondary": "#1e293b",
+        "accent": "#38bdf8",
+        "bg0": "#0f172a",
+        "bg1": "#1e293b",
+        "accent_soft": "rgba(56,189,248,.18)",
+        "border": "rgba(56,189,248,.35)",
+        "card_tint": "#f0f9ff",
+        "row_even": "rgba(56,189,248,.06)",
+        "row_odd": "#ffffff",
+        "good": "#16a34a",
+        "warn": "#d97706",
+        "bad": "#dc2626",
+    }
+    palettes = {
+        "New York Knicks": {
+            "primary": "#006BB6", "secondary": "#F58426", "accent": "#F58426",
+            "bg0": "#0a1628", "bg1": "#152642", "accent_soft": "rgba(245,132,38,.22)",
+            "border": "rgba(0,107,182,.45)", "card_tint": "#eff6ff", "row_even": "rgba(0,107,182,.08)",
+        },
+        "Philadelphia 76ers": {
+            "primary": "#006BB6", "secondary": "#ED174C", "accent": "#ED174C",
+            "bg0": "#0c1220", "bg1": "#1a1f3c", "accent_soft": "rgba(237,23,76,.18)",
+            "border": "rgba(0,107,182,.4)", "card_tint": "#f8fafc",
+        },
+        "Detroit Pistons": {
+            "primary": "#C8102E", "secondary": "#1D42BA", "accent": "#C8102E",
+            "bg0": "#1a0a0c", "bg1": "#241018", "accent_soft": "rgba(200,16,46,.2)",
+            "border": "rgba(200,16,46,.4)", "card_tint": "#fff1f2",
+        },
+        "Cleveland Cavaliers": {
+            "primary": "#860038", "secondary": "#FDBB30", "accent": "#FDBB30",
+            "bg0": "#1a0c12", "bg1": "#2a1220", "accent_soft": "rgba(253,187,48,.18)",
+            "border": "rgba(134,0,56,.4)", "card_tint": "#fdf4ff",
+        },
+        "Oklahoma City Thunder": {
+            "primary": "#007AC1", "secondary": "#EF3B24", "accent": "#007AC1",
+            "bg0": "#0a1524", "bg1": "#122238", "accent_soft": "rgba(0,122,193,.22)",
+            "border": "rgba(0,122,193,.4)", "card_tint": "#f0f9ff",
+        },
+        "Los Angeles Lakers": {
+            "primary": "#552583", "secondary": "#FDB927", "accent": "#FDB927",
+            "bg0": "#14081f", "bg1": "#251538", "accent_soft": "rgba(253,185,39,.22)",
+            "border": "rgba(85,37,131,.5)", "card_tint": "#faf5ff", "row_even": "rgba(85,37,131,.07)",
+        },
+        "San Antonio Spurs": {
+            "primary": "#000000", "secondary": "#C4CED4", "accent": "#C4CED4",
+            "bg0": "#0c0c0c", "bg1": "#1c232e", "accent_soft": "rgba(196,206,212,.2)",
+            "border": "rgba(196,206,212,.35)", "card_tint": "#f8fafc", "row_even": "rgba(0,0,0,.04)",
+        },
+        "Minnesota Timberwolves": {
+            "primary": "#0C2340", "secondary": "#236192", "accent": "#78BE20",
+            "bg0": "#061a18", "bg1": "#0f2d28", "accent_soft": "rgba(120,190,32,.2)",
+            "border": "rgba(120,190,32,.35)", "card_tint": "#f0fdf4",
+        },
+        "Boston Celtics": {
+            "primary": "#007A33", "secondary": "#FFFFFF", "accent": "#22c55e",
+            "bg0": "#061510", "bg1": "#0f2418", "accent_soft": "rgba(34,197,94,.2)",
+            "border": "rgba(0,122,51,.45)", "card_tint": "#f0fdf4", "row_even": "rgba(0,122,51,.07)",
+        },
+        "Atlanta Hawks": {
+            "primary": "#E03A3E", "secondary": "#C1D32F", "accent": "#E03A3E",
+            "bg0": "#1a0c0c", "bg1": "#2a1212", "accent_soft": "rgba(224,58,62,.2)",
+            "border": "rgba(224,58,62,.4)", "card_tint": "#fff7ed",
+        },
+        "Orlando Magic": {
+            "primary": "#0077C0", "secondary": "#000000", "accent": "#0077C0",
+            "bg0": "#0a1420", "bg1": "#122a45", "accent_soft": "rgba(0,119,192,.22)",
+            "border": "rgba(0,119,192,.4)", "card_tint": "#eff6ff",
+        },
+        "Toronto Raptors": {
+            "primary": "#CE1141", "secondary": "#000000", "accent": "#CE1141",
+            "bg0": "#0f0f12", "bg1": "#1a1520", "accent_soft": "rgba(206,17,65,.18)",
+            "border": "rgba(206,17,65,.4)", "card_tint": "#fff1f2",
+        },
+        "Phoenix Suns": {
+            "primary": "#1D1160", "secondary": "#E56020", "accent": "#E56020",
+            "bg0": "#1a0f08", "bg1": "#2d1810", "accent_soft": "rgba(229,96,32,.22)",
+            "border": "rgba(229,96,32,.4)", "card_tint": "#fff7ed",
+        },
+        "Portland Trail Blazers": {
+            "primary": "#E03A3E", "secondary": "#000000", "accent": "#E03A3E",
+            "bg0": "#120808", "bg1": "#221010", "accent_soft": "rgba(224,58,62,.2)",
+            "border": "rgba(224,58,62,.4)", "card_tint": "#fff1f2",
+        },
+        "Denver Nuggets": {
+            "primary": "#0E2240", "secondary": "#FEC524", "accent": "#FEC524",
+            "bg0": "#0f1724", "bg1": "#1e2a42", "accent_soft": "rgba(254,197,36,.2)",
+            "border": "rgba(254,197,36,.35)", "card_tint": "#fffbeb",
+        },
+        "Houston Rockets": {
+            "primary": "#CE1141", "secondary": "#000000", "accent": "#CE1141",
+            "bg0": "#140808", "bg1": "#241010", "accent_soft": "rgba(206,17,65,.2)",
+            "border": "rgba(206,17,65,.4)", "card_tint": "#fff1f2",
+        },
+    }
+    merged = {**default, **palettes.get(team_name, {})}
+    return merged
+
+
+def inject_team_brand_css(team_name):
+    """Inject CSS variables + page tint for the sidebar-selected team."""
+    t = get_team_theme(team_name)
+    nick = html.escape(fan_nick(team_name))
+    st.markdown(
+        f"""
+<style>
+:root {{
+  --team-primary: {t['primary']};
+  --team-secondary: {t['secondary']};
+  --team-accent: {t['accent']};
+  --team-bg0: {t['bg0']};
+  --team-bg1: {t['bg1']};
+  --team-accent-soft: {t['accent_soft']};
+  --team-border: {t['border']};
+  --team-card-tint: {t['card_tint']};
+  --team-row-even: {t['row_even']};
+  --team-row-odd: {t['row_odd']};
+  --team-good: {t['good']};
+  --team-warn: {t['warn']};
+  --team-bad: {t['bad']};
+}}
+div[data-testid="stAppViewContainer"] {{
+  background: linear-gradient(180deg, {t['card_tint']} 0%, #f8fafc 120px, #f1f5f9 100%) !important;
+}}
+section[data-testid="stSidebar"] {{
+  border-right: 3px solid {t['primary']} !important;
+}}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def live_hero_palette(favorite_team):
     """Subtle gradient + accent for sticky hero; tuned for contrast on dark backgrounds."""
-    palettes = {
-        "New York Knicks": {"bg0": "#0a1628", "bg1": "#152642", "accent": "#f97316", "accent_soft": "rgba(249,115,22,.22)"},
-        "Philadelphia 76ers": {"bg0": "#0c1220", "bg1": "#1a1f3c", "accent": "#3b82f6", "accent_soft": "rgba(59,130,246,.22)"},
-        "Detroit Pistons": {"bg0": "#1a0a0c", "bg1": "#241018", "accent": "#ef4444", "accent_soft": "rgba(239,68,68,.2)"},
-        "Cleveland Cavaliers": {"bg0": "#1a0c12", "bg1": "#2a1220", "accent": "#f472b6", "accent_soft": "rgba(244,114,182,.18)"},
-        "Oklahoma City Thunder": {"bg0": "#0a1524", "bg1": "#122238", "accent": "#38bdf8", "accent_soft": "rgba(56,189,248,.22)"},
-        "Los Angeles Lakers": {"bg0": "#14081f", "bg1": "#251538", "accent": "#fbbf24", "accent_soft": "rgba(251,191,36,.2)"},
-        "San Antonio Spurs": {"bg0": "#0c0c0c", "bg1": "#1c232e", "accent": "#cbd5e1", "accent_soft": "rgba(203,213,225,.18)"},
-        "Minnesota Timberwolves": {"bg0": "#061a18", "bg1": "#0f2d28", "accent": "#34d399", "accent_soft": "rgba(52,211,153,.2)"},
-        "Boston Celtics": {"bg0": "#061510", "bg1": "#0f2418", "accent": "#22c55e", "accent_soft": "rgba(34,197,94,.2)"},
-        "Atlanta Hawks": {"bg0": "#1a0c0c", "bg1": "#2a1212", "accent": "#dc2626", "accent_soft": "rgba(220,38,38,.2)"},
-        "Orlando Magic": {"bg0": "#0a1420", "bg1": "#122a45", "accent": "#60a5fa", "accent_soft": "rgba(96,165,250,.22)"},
-        "Toronto Raptors": {"bg0": "#0f0f12", "bg1": "#1a1520", "accent": "#ef4444", "accent_soft": "rgba(239,68,68,.18)"},
-        "Phoenix Suns": {"bg0": "#1a0f08", "bg1": "#2d1810", "accent": "#fb923c", "accent_soft": "rgba(251,146,60,.22)"},
-        "Portland Trail Blazers": {"bg0": "#120808", "bg1": "#221010", "accent": "#e11d48", "accent_soft": "rgba(225,29,72,.2)"},
-        "Denver Nuggets": {"bg0": "#0f1724", "bg1": "#1e2a42", "accent": "#facc15", "accent_soft": "rgba(250,204,21,.2)"},
-        "Houston Rockets": {"bg0": "#140808", "bg1": "#241010", "accent": "#f87171", "accent_soft": "rgba(248,113,113,.2)"},
+    t = get_team_theme(favorite_team)
+    return {
+        "bg0": t["bg0"],
+        "bg1": t["bg1"],
+        "accent": t["accent"],
+        "accent_soft": t["accent_soft"],
     }
-    return palettes.get(favorite_team, {"bg0": "#0f172a", "bg1": "#1e293b", "accent": "#38bdf8", "accent_soft": "rgba(56,189,248,.18)"})
 
 
 def _render_live_game_center_empty(favorite_team, profile):
@@ -7685,6 +8054,7 @@ USE_DEMO_BACKUP = st.sidebar.toggle(
     help="Leave this OFF for true automatic tracking. Turn it ON only when testing or when nba_api is unavailable."
 )
 profile=TEAM_PROFILES[favorite_team]
+inject_team_brand_css(favorite_team)
 labels=list(PAGES.keys())
 def_label=st.session_state.pop("page_override", "🏀 Home Dashboard")
 page_label=st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
