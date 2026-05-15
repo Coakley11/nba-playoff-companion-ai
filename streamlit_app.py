@@ -226,6 +226,77 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 }
 .pp-badge.team { background: var(--team-accent-soft); border-color: var(--team-primary); color: #f8fafc; }
 .cmd-sec { color: var(--team-accent, #64748b) !important; border-bottom-color: var(--team-primary, rgba(148,163,184,.35)) !important; }
+/* Matchup Intelligence */
+.mi-wrap { max-width: 1100px; margin: 0 auto; }
+.mi-hero {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 16px; border-radius: 16px; margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a), var(--team-bg1,#1e293b));
+  border: 1px solid var(--team-border); color: #f8fafc;
+}
+.mi-hero img.logo { width: 52px; height: 52px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
+.mi-card {
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+  background: linear-gradient(135deg, #fff 0%, var(--team-card-tint, #f8fafc) 100%);
+  border: 1px solid rgba(15,23,42,.08); box-shadow: 0 4px 14px rgba(15,23,42,.06);
+  border-left: 4px solid var(--team-primary, #38bdf8);
+}
+.mi-card.mi-good { border-left-color: var(--team-good, #22c55e); }
+.mi-card.mi-warn { border-left-color: var(--team-warn, #f97316); }
+.mi-card.mi-mom-up { border-left-color: var(--team-good); background: linear-gradient(135deg, #f0fdf4, var(--team-card-tint)); }
+.mi-card.mi-mom-down { border-left-color: var(--team-bad); background: linear-gradient(135deg, #fef2f2, #fff); }
+.mi-num { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: .06em; }
+.mi-title { font-size: 16px; font-weight: 900; color: #0f172a; margin: 2px 0 8px; }
+.mi-body { font-size: 14px; line-height: 1.55; color: #334155; }
+.mi-bar { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
+.mi-bar > span { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--team-primary), var(--team-accent)); }
+.mi-mom-pill { display: inline-block; font-size: 10px; font-weight: 800; padding: 3px 9px;
+  border-radius: 999px; margin-left: 6px; text-transform: uppercase; letter-spacing: .05em; }
+.mi-mom-pill.up { background: rgba(34,197,94,.15); color: #15803d; }
+.mi-mom-pill.down { background: rgba(220,38,38,.12); color: #b91c1c; }
+.mi-mom-pill.flat { background: var(--team-accent-soft); color: #475569; }
+/* Live Game Center */
+.live-fan-hero {
+  border-radius: 18px; padding: 16px 18px; margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--team-bg0), var(--team-bg1));
+  border: 1px solid var(--team-border); color: #f8fafc;
+}
+.live-score-banner {
+  text-align: center; padding: 18px 16px; border-radius: 16px; margin: 12px 0;
+  background: linear-gradient(145deg, rgba(15,23,42,.85), rgba(15,23,42,.55));
+  border: 2px solid var(--team-accent); box-shadow: 0 12px 36px rgba(0,0,0,.35);
+}
+.live-score-banner.live { animation: homeLivePulse 2.4s ease-in-out infinite; border-color: var(--team-accent); }
+.live-score-big { font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 950; color: #fff; letter-spacing: .04em; }
+.live-momentum { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+/* Bracket — your team highlight */
+.bracket-wrap { border-color: var(--team-border) !important; }
+.bmk-card--yours { border-color: var(--team-accent) !important;
+  box-shadow: 0 0 0 1px var(--team-accent-soft), 0 6px 22px rgba(0,0,0,.35) !important; }
+.bmk-team--yours { border-left-color: var(--team-primary) !important;
+  background: linear-gradient(90deg, var(--team-accent-soft), rgba(30,41,59,.72)) !important; }
+/* Previous rounds */
+.history-card {
+  border: 1px solid var(--team-border); border-radius: 20px; padding: 16px; margin: 12px 0;
+  background: linear-gradient(135deg, #fff, var(--team-card-tint));
+  box-shadow: 0 4px 18px rgba(15,23,42,.08);
+}
+.history-score { font-size: 28px; font-weight: 950; color: var(--team-accent); text-align: center; }
+.mvp-pill { display: inline-block; background: var(--team-accent-soft);
+  border: 1px solid var(--team-border); border-radius: 999px; padding: 3px 10px;
+  font-weight: 800; color: #0f172a; }
+.fan-player-card.large img.hs { width: 104px; height: 104px; }
+.mode-banner {
+  padding: 12px 14px; border-radius: 12px; margin-bottom: 14px;
+  border: 1px solid var(--team-border); background: var(--team-accent-soft);
+}
+.mode-banner .k { font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--team-accent); }
+.mode-banner .b { font-size: 0.95rem; line-height: 1.5; color: #1e293b; margin-top: 6px; }
+.mode-banner--postmortem { border-color: rgba(248,113,113,.55); background: rgba(254,226,226,.35); }
+.mode-banner--postmortem .k { color: #b91c1c; }
+.mode-banner--live { border-color: rgba(52,211,153,.45); background: rgba(209,250,229,.4); }
+.mode-banner--live .k { color: #047857; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -4980,34 +5051,8 @@ def build_matchup_intelligence_sections(team_name):
 
 
 def _inject_matchup_intel_css():
-    st.markdown(
-        """
-<style>
-.mi-wrap { max-width: 1100px; margin: 0 auto; }
-.mi-card {
-  border-radius: 14px;
-  padding: 14px 16px 16px;
-  margin-bottom: 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-  border-left: 4px solid #38bdf8;
-}
-.mi-card.mi-good { border-left-color: #22c55e; }
-.mi-card.mi-warn { border-left-color: #f97316; }
-.mi-card.mi-neutral { border-left-color: #64748b; }
-.mi-card.mi-mom-up { border-left-color: #16a34a; background: linear-gradient(135deg, #f0fdf4, #ffffff); }
-.mi-card.mi-mom-down { border-left-color: #dc2626; background: linear-gradient(135deg, #fef2f2, #ffffff); }
-.mi-card.mi-mom-flat { border-left-color: #94a3b8; }
-.mi-num { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.06em; }
-.mi-title { font-size: 16px; font-weight: 900; color: #0f172a; margin: 2px 0 8px; display: flex; align-items: center; gap: 8px; }
-.mi-body { font-size: 14px; line-height: 1.55; color: #334155; }
-.mi-bar { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
-.mi-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #6366f1); }
-</style>
-""",
-        unsafe_allow_html=True,
-    )
+    """MI styles use global fan CSS + team CSS variables."""
+    return
 
 
 def render_matchup_intelligence(team_name):
@@ -5016,15 +5061,17 @@ def render_matchup_intelligence(team_name):
     if meta is None:
         st.warning(payload)
         return
-    opp = meta["opp"]
-    st.markdown(
-        f"<div class='mi-wrap'><p style='color:#64748b;font-size:14px;margin:0 0 12px'>"
-        f"<strong style='color:#0f172a'>Your {html.escape(fan_nick(team_name))}</strong> vs "
-        f"<strong style='color:#0f172a'>{html.escape(fan_nick(opp))}</strong> · "
-        f"{html.escape(meta['round'])} · You at <strong>{meta['tw']}-{meta['ow']}</strong>"
-        f" · {meta['games_n']} games in log</p></div>",
-        unsafe_allow_html=True,
-    )
+    render_mi_intelligence_hero(team_name, meta)
+    prof = TEAM_PROFILES.get(team_name) or {}
+    anchor = (prof.get("starters") or [None])[0]
+    if anchor:
+        sa = season_averages(anchor)
+        render_player_fan_card(
+            anchor,
+            team_name,
+            role=player_resume_profile(anchor, team_name).get("role", "Rotation"),
+            stats={"PTS": sa.get("PTS", 0), "REB": sa.get("REB", 0), "AST": sa.get("AST", 0)},
+        )
     for num, title, icon, body, tone, kind in payload:
         if kind == "momentum":
             cls = f"mi-mom-{tone}"
@@ -5228,6 +5275,85 @@ def render_fan_stat_table(df, team_name=None):
     st.markdown(
         f"<div class='fan-stat-table-wrap'><table class='fan-stat-table'><thead><tr>{thead}</tr></thead>"
         f"<tbody>{''.join(body_rows)}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_fan_page_hero(team_name, title, subtitle="", badge_text=""):
+    """Top-of-page hero with team logo and gradient (used across pages)."""
+    e = html.escape
+    logo = e(TEAM_LOGOS.get(team_name, ""))
+    d = "div"
+    badge_block = ""
+    if badge_text:
+        badge_block = (
+            f"<{d} style='margin-top:8px'><span style='font-size:10px;font-weight:800;"
+            f"padding:4px 10px;border-radius:999px;background:var(--team-accent-soft);"
+            f"border:1px solid var(--team-border);color:#f8fafc'>{e(badge_text)}</span></{d}>"
+        )
+    st.markdown(
+        f"<{d} class='live-fan-hero'>"
+        f"<img src='{logo}' width='56' alt='' style='filter:drop-shadow(0 4px 14px rgba(0,0,0,.4))'/>"
+        f"<{d} style='flex:1;min-width:200px'>"
+        f"<{d} style='font-size:1.25rem;font-weight:900;margin:0 0 4px'>{e(title)}</{d}>"
+        f"<{d} style='font-size:13px;color:#cbd5e1;line-height:1.45;margin:0'>{e(subtitle)}</{d}>"
+        f"{badge_block}</{d}></{d}>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_mode_banner(team_name, kicker, body_html, variant="neutral"):
+    """Compact team-tinted callout."""
+    e = html.escape
+    d = "div"
+    st.markdown(
+        f"<{d} class='mode-banner mode-banner--{e(variant)}'>"
+        f"<{d} class='k'>{e(kicker)}</{d}>"
+        f"<{d} class='b'>{body_html}</{d}></{d}>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_mi_intelligence_hero(team_name, meta):
+    """Matchup Intelligence header with both team logos."""
+    opp = meta.get("opp", "Opponent")
+    e = html.escape
+    d = "div"
+    st.markdown(
+        f"<{d} class='mi-wrap'><{d} class='mi-hero'>"
+        f"<img class='logo' src='{e(TEAM_LOGOS.get(team_name, ''))}' alt=''/>"
+        f"<{d} style='flex:1;min-width:180px'>"
+        f"<{d} style='font-size:1.1rem;font-weight:900;margin:0'>"
+        f"Your {e(fan_nick(team_name))} vs {e(fan_nick(opp))}</{d}>"
+        f"<{d} style='font-size:13px;color:#94a3b8;margin-top:4px'>"
+        f"{e(meta.get('round', 'Playoffs'))} · You at "
+        f"<strong style='color:#fff'>{meta['tw']}-{meta['ow']}</strong>"
+        f" · {meta['games_n']} games in log</{d}></{d}>"
+        f"<img class='logo' src='{e(TEAM_LOGOS.get(opp, ''))}' alt=''/>"
+        f"</{d}></{d}>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_live_score_banner(favorite_team, away_tri, home_tri, away_score, home_score, status, phase):
+    """Team-colored live score strip for Live Game Center."""
+    e = html.escape
+    is_live = phase == "live"
+    live_cls = " live" if is_live else ""
+    fav_alias = TEAM_ALIASES.get(favorite_team, "")
+    fav_side = "away" if away_tri == fav_alias else ("home" if home_tri == fav_alias else "watching")
+    pill_live = " live" if is_live else ""
+    d = "div"
+    st.markdown(
+        f"<{d} class='live-score-banner{live_cls}'>"
+        f"<{d} style='font-size:11px;font-weight:800;letter-spacing:.14em;"
+        f"text-transform:uppercase;color:var(--team-accent,#fde68a)'>"
+        f"{'🔴 LIVE' if is_live else '📺 GAME BOARD'} · {e(fan_nick(favorite_team))}</{d}>"
+        f"<{d} class='live-score-big'>{e(away_tri)} {away_score}  —  {e(home_tri)} {home_score}</{d}>"
+        f"<{d} style='font-size:13px;color:#cbd5e1;margin-top:6px'>{e(status)}</{d}>"
+        f"<{d} class='live-momentum'>"
+        f"<span class='live-pill{pill_live}'>Your team ({fav_side})</span>"
+        f"<span class='live-pill series'>Playoff companion</span></{d}></{d}>",
         unsafe_allow_html=True,
     )
 
