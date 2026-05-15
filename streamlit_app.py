@@ -1393,6 +1393,22 @@ def _dynamic_playoff_eliminated(team_name):
         return False
 
 
+def _count_series_wins_for_team(team_name):
+    """How many completed playoff series ``team_name`` has won this postseason (merged bracket)."""
+    if not team_name:
+        return 0
+    n = 0
+    try:
+        for s in _iter_playoff_series_shells_merged():
+            if team_name not in (s.get("a"), s.get("b")):
+                continue
+            if s.get("winner") == team_name:
+                n += 1
+    except Exception:
+        return 0
+    return n
+
+
 def infer_next_round_series(round_name, conf=None):
     """Return series dict(s) for Conference Finals or NBA Finals (from cached playoff state)."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
@@ -2739,7 +2755,23 @@ def player_specific_tier(score, player_name, team_name=""):
         return f"{player_name} would nudge perception—solid, but not a full narrative rewrite yet"
     return f"{player_name} would mostly look like the player people already expected"
 
-def legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds_won, title_won=False, player_name="", team_name=""):
+def legacy_score_from_inputs(
+    pts,
+    reb,
+    ast,
+    stl,
+    blk,
+    fg,
+    three,
+    plus_minus,
+    rounds_won,
+    title_won=False,
+    player_name="",
+    team_name="",
+    clutch_momentum=0.0,
+    turnover_trend=0.0,
+    bench_support=0.0,
+):
     prof = player_resume_profile(player_name, team_name)
     baseline = prof["baseline"]
     ceiling = prof["ceiling"]
@@ -2749,7 +2781,8 @@ def legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rou
     efficiency = max(0, (fg - 0.43) * 24) + max(0, (three - 0.34) * 10)
     impact = plus_minus * 0.22
     winning = rounds_won * 4.2 + (7.0 if title_won else 0)
-    raw = baseline + scoring + all_around + efficiency + impact + winning
+    fan_intangibles = clutch_momentum * 0.7 + bench_support * 0.55 + turnover_trend * 0.45
+    raw = baseline + scoring + all_around + efficiency + impact + winning + fan_intangibles
     return round(max(0, min(ceiling, raw)), 1)
 
 def legacy_tier(score):
@@ -2792,19 +2825,134 @@ def _scenario_meaning(player, team, score, _scenario_label, rounds, title):
         nba_hist = prof["resume"]
     return team_hist, nba_hist
 
-def build_legacy_path(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
-    steps = [
-        ("Right now (this stat line)", 0, False),
-        ("If they win this round", 1, False),
-        ("If they reach the Conference Finals", 2, False),
-        ("If they reach the NBA Finals", 3, False),
-        ("If they win the title", 4, True),
-    ]
-    rows = []
-    for label, rounds, title in steps:
-        sc = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, rounds, title, player, team)
+def _legacy_path_label(target_series_wins, base_series_wins, title_won):
+    """Human label for a row in the active-team legacy ladder (series wins = playoff rounds won)."""
+    if title_won:
+        return "If they win the NBA championship (four series wins)"
+    if target_series_wins == base_series_wins:
+        if base_series_wins == 0:
+            return "Projected from sliders — no series wins on the board yet"
+        if base_series_wins == 1:
+            return "Projected from sliders — one series win already banked"
+        if base_series_wins == 2:
+            return "Projected from sliders — two series wins (Conference Finals territory)"
+        if base_series_wins == 3:
+            return "Projected from sliders — three series wins (NBA Finals)"
+        return f"Projected from sliders — {base_series_wins} series wins on the board"
+    if target_series_wins == 1:
+        return "If they reach one series win this postseason"
+    if target_series_wins == 2:
+        return "If they reach two series wins (Conference Finals path)"
+    if target_series_wins == 3:
+        return "If they reach three series wins (NBA Finals path)"
+    return f"If they reach {target_series_wins} series wins"
+
+
+def build_legacy_path(
+    player,
+    team,
+    pts,
+    reb,
+    ast,
+    stl,
+    blk,
+    fg,
+    three,
+    plus_minus,
+    base_series_wins=0,
+    clutch_momentum=0.0,
+    turnover_trend=0.0,
+    bench_support=0.0,
+):
+    """Ladder of legacy scores from the team's current series-win count through a title.
+
+    ``base_series_wins`` should match the merged bracket (what is already clinched).
+    """
+    base_series_wins = max(0, min(4, int(base_series_wins)))
+    if base_series_wins >= 4:
+        sc = legacy_score_from_inputs(
+            pts,
+            reb,
+            ast,
+            stl,
+            blk,
+            fg,
+            three,
+            plus_minus,
+            4,
+            True,
+            player,
+            team,
+            clutch_momentum,
+            turnover_trend,
+            bench_support,
+        )
         tier = player_specific_tier(sc, player, team)
-        team_hist, nba_hist = _scenario_meaning(player, team, sc, label, rounds, title)
+        team_hist, nba_hist = _scenario_meaning(player, team, sc, "champions", 4, True)
+        return pd.DataFrame(
+            [
+                {
+                    "Playoff picture": "Championship already clinched — legacy at the banner moment",
+                    "Legacy score": sc,
+                    "Fan read": tier,
+                    "Franchise angle": team_hist,
+                    "League-wide read": nba_hist,
+                }
+            ]
+        )
+    rows = []
+    for tw in range(base_series_wins, 4):
+        label = _legacy_path_label(tw, base_series_wins, False)
+        sc = legacy_score_from_inputs(
+            pts,
+            reb,
+            ast,
+            stl,
+            blk,
+            fg,
+            three,
+            plus_minus,
+            tw,
+            False,
+            player,
+            team,
+            clutch_momentum,
+            turnover_trend,
+            bench_support,
+        )
+        tier = player_specific_tier(sc, player, team)
+        team_hist, nba_hist = _scenario_meaning(player, team, sc, label, tw, False)
+        rows.append(
+            {
+                "Playoff picture": label,
+                "Legacy score": sc,
+                "Fan read": tier,
+                "Franchise angle": team_hist,
+                "League-wide read": nba_hist,
+            }
+        )
+    if base_series_wins < 4:
+        tw = 4
+        label = _legacy_path_label(tw, base_series_wins, True)
+        sc = legacy_score_from_inputs(
+            pts,
+            reb,
+            ast,
+            stl,
+            blk,
+            fg,
+            three,
+            plus_minus,
+            tw,
+            True,
+            player,
+            team,
+            clutch_momentum,
+            turnover_trend,
+            bench_support,
+        )
+        tier = player_specific_tier(sc, player, team)
+        team_hist, nba_hist = _scenario_meaning(player, team, sc, label, tw, True)
         rows.append(
             {
                 "Playoff picture": label,
@@ -2816,18 +2964,463 @@ def build_legacy_path(player, team, pts, reb, ast, stl, blk, fg, three, plus_min
         )
     return pd.DataFrame(rows)
 
-def legacy_takeaways(player, team, pts, reb, ast, stl, blk, fg, three, plus_minus):
+
+def legacy_takeaways(
+    player,
+    team,
+    pts,
+    reb,
+    ast,
+    stl,
+    blk,
+    fg,
+    three,
+    plus_minus,
+    base_series_wins=0,
+    clutch_momentum=0.0,
+    turnover_trend=0.0,
+    bench_support=0.0,
+):
     prof = player_resume_profile(player, team)
     _, comps = player_legacy_archetype(player)
-    base = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 0, False, player, team)
-    title = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, 4, True, player, team)
+    base_series_wins = max(0, min(4, int(base_series_wins)))
+    base = legacy_score_from_inputs(
+        pts,
+        reb,
+        ast,
+        stl,
+        blk,
+        fg,
+        three,
+        plus_minus,
+        base_series_wins,
+        False,
+        player,
+        team,
+        clutch_momentum,
+        turnover_trend,
+        bench_support,
+    )
+    title = legacy_score_from_inputs(
+        pts,
+        reb,
+        ast,
+        stl,
+        blk,
+        fg,
+        three,
+        plus_minus,
+        4,
+        True,
+        player,
+        team,
+        clutch_momentum,
+        turnover_trend,
+        bench_support,
+    )
     nick = fan_nick(team)
     return [
         f"Through {nick}: {prof['resume']}",
+        f"Current legacy impact is **locked through whatever the bracket already says** ({base_series_wins} series win(s) on record); the ladder below is only about what still can change.",
         f"What this run could mean for the franchise story: {prof['team_context']}",
         f"If you need a mental picture, think of players like {', '.join(comps[:4])} — different careers, but the kind of names that come up in the same conversations.",
-        f"With these numbers, {player} goes from **{player_specific_tier(base, player, team)}** to **{player_specific_tier(title, player, team)}** if {nick} raise a banner. That is the fan fantasy arc.",
+        f"With these sliders, {player} moves from **{player_specific_tier(base, player, team)}** at today's win total to **{player_specific_tier(title, player, team)}** if {nick} raise a banner. That is the fan forecast arc — not a prediction.",
     ]
+
+
+def _best_worst_playoff_game_rows(logs):
+    """Return (best_row, worst_row) Series by PTS from chronological playoff logs."""
+    prep = _prepare_chrono_playoff_logs(logs)
+    if prep is None or prep.empty or "PTS" not in prep.columns:
+        return None, None
+    pts = pd.to_numeric(prep["PTS"], errors="coerce")
+    if pts.dropna().empty:
+        return None, None
+    try:
+        i_hi = int(pts.idxmax())
+        i_lo = int(pts.idxmin())
+        return prep.loc[i_hi], prep.loc[i_lo]
+    except Exception:
+        return None, None
+
+
+def _legacy_round_by_round_summary(logs, team_tri):
+    """Per-series playoff splits in postseason order (First Round chunk, then Second, …)."""
+    df = _prepare_chrono_playoff_logs(logs)
+    if df is None or df.empty:
+        return []
+    team_tri = (team_tri or "").upper()
+    chunks = _series_chunks_playoff_order(df, team_tri)
+    rnd_names = ["First Round", "Second Round", "Conference Finals", "NBA Finals"]
+    out = []
+    for i, (opp_tri, seg) in enumerate(chunks):
+        lab = rnd_names[i] if i < len(rnd_names) else f"Round {i + 1}"
+        sm = summarize_playoff_logs(seg)
+        opp_full = ALIAS_TO_TEAM.get(opp_tri, opp_tri or "—")
+        out.append(
+            {
+                "Round": lab,
+                "Opponent": opp_full,
+                "GP": sm.get("GP", 0),
+                "PTS": sm.get("PTS", 0),
+                "REB": sm.get("REB", 0),
+                "AST": sm.get("AST", 0),
+                "STL": sm.get("STL", 0),
+                "BLK": sm.get("BLK", 0),
+                "TOV": sm.get("TOV", 0),
+                "FG_PCT": sm.get("FG_PCT", 0),
+                "FG3_PCT": sm.get("FG3_PCT", 0),
+                "FT_PCT": sm.get("FT_PCT", 0),
+                "PLUS_MINUS": sm.get("PLUS_MINUS", 0),
+            }
+        )
+    return out
+
+
+def legacy_takeaways_eliminated(player, team_name, pts, reb, ast, stl, blk, fg, three, plus_minus, exit_line):
+    """Narrative bullets for completed runs — no hypothetical Finals arc."""
+    prof = player_resume_profile(player, team_name)
+    _, comps = player_legacy_archetype(player)
+    nick = fan_nick(team_name)
+    sw = _count_series_wins_for_team(team_name)
+    final = legacy_score_from_inputs(pts, reb, ast, stl, blk, fg, three, plus_minus, sw, False, player, team_name)
+    tier = player_specific_tier(final, player, team_name)
+    team_hist, nba_hist = _scenario_meaning(player, team_name, final, "complete", sw, False)
+    comps_txt = ", ".join(comps[:4])
+    return [
+        f"This playoff run is **complete** for {nick}. **{player}** is judged here only through the actual exit: **{exit_line}** — not through fantasy Conference Finals or Finals sliders.",
+        f"**Final legacy score (fan model, actual games only):** {final} · {tier}",
+        f"**What the tape-backed line suggests:** {prof['resume']}",
+        f"**Franchise read (based on how far they really got):** {team_hist}",
+        f"**League-wide read (no future rounds invented):** {nba_hist}",
+        f"**What the run did or did not prove:** if the best nights lined up with swing games, fans will remember it; if not, the summer narrative becomes about health, fit, and whether the role expanded when the defense loaded up.",
+        f"**Offseason / future implications:** contract years, injury management, and whether {nick} need a cleaner secondary creator often decide how this chapter ages — not one more hypothetical Finals game log.",
+        f"**Historical neighborhood (from what actually happened):** mental comps drift toward names like {comps_txt} — imperfect mirrors, but the shape of the role and pressure.",
+    ]
+
+
+def render_legacy_tracker_page(team_name):
+    """Legacy Tracker: frozen postmortem for eliminated teams; live forecast + sliders for active teams."""
+    render_matchup_header(team_name)
+    nick = fan_nick(team_name)
+    is_elim = _is_home_eliminated(team_name)
+    team_tri = (TEAM_ALIASES.get(team_name) or "").upper()
+    series_wins_bracket = _count_series_wins_for_team(team_name)
+
+    if is_elim:
+        st.subheader(f"Legacy Tracker · {nick} — completed playoff postmortem")
+        try:
+            exit_line = _elimination_exit_line(team_name)
+        except Exception:
+            exit_line = TEAM_PROFILES.get(team_name, {}).get("first_round_result") or "Playoff exit"
+        st.markdown(
+            f"""
+<div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(248,113,113,0.55);background:rgba(127,29,29,0.22);margin-bottom:14px;">
+<div style="font-weight:800;color:#fecaca;letter-spacing:0.04em;">COMPLETED RUN · NO FUTURE-ROUND SIMULATIONS</div>
+<div style="color:#fee2e2;font-size:0.95rem;margin-top:6px;line-height:1.55;">
+<b>{html.escape(team_name)}</b> is out of the title chase as the bracket currently reads (<b>{html.escape(exit_line)}</b>).
+Legacy here is a <b>postmortem</b> only: actual box scores through the exit, round-by-round splits, best/worst nights, and a final interpretation — <b>no</b> Conference Finals or NBA Finals projections and <b>no</b> championship sliders.
+</div></div>
+""",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.subheader(f"Legacy Tracker · {nick} — live forecast (future outcomes can still change the story)")
+        st.markdown(
+            f"""
+<div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(52,211,153,0.45);background:rgba(6,78,59,0.22);margin-bottom:14px;">
+<div style="font-weight:800;color:#a7f3d0;letter-spacing:0.04em;">LIVE FORECAST MODE</div>
+<div style="color:#ecfdf5;font-size:0.95rem;margin-top:6px;line-height:1.55;">
+<b>Section A</b> locks <b>current legacy impact</b> to real playoff logs plus <b>{series_wins_bracket}</b> series win(s) already on the bracket.
+<b>Section B</b> is a <b>fan simulator</b>: move sliders to stress-test scoring, efficiency, defense feel, clutch, turnovers, and bench lift — then read the ladder for what happens if {html.escape(nick)} keep climbing.
+</div></div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    player_pool = current_roster_names(team_name, limit=15)
+    player = st.selectbox("Choose player", player_pool)
+    logs = playoff_game_logs_for_player(player)
+    current = summarize_playoff_logs(logs)
+
+    if logs is None or logs.empty:
+        st.warning(
+            "NBA API did not return current playoff game logs for this player. "
+            "Eliminated postmortems still work from safe averages; active-team sliders default to reasonable baselines."
+        )
+    else:
+        st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
+        show_cols = [
+            c
+            for c in [
+                "GAME_DATE",
+                "MATCHUP",
+                "WL",
+                "MIN",
+                "PTS",
+                "REB",
+                "AST",
+                "STL",
+                "BLK",
+                "TOV",
+                "FG_PCT",
+                "FG3_PCT",
+                "FT_PCT",
+                "PLUS_MINUS",
+            ]
+            if c in logs.columns
+        ]
+        st.dataframe(logs[show_cols], use_container_width=True)
+
+    pts0 = float(current.get("PTS", 20.0) or 20.0)
+    reb0 = float(current.get("REB", 6.0) or 6.0)
+    ast0 = float(current.get("AST", 4.0) or 4.0)
+    stl0 = float(current.get("STL", 1.0) or 1.0)
+    blk0 = float(current.get("BLK", 0.5) or 0.5)
+    pm0 = float(current.get("PLUS_MINUS", 0.0) or 0.0)
+    fg0 = float(current.get("FG_PCT", 0.460) or 0.460)
+    th0 = float(current.get("FG3_PCT", 0.360) or 0.360)
+
+    if is_elim:
+        pts, reb, ast, stl, blk = pts0, reb0, ast0, stl0, blk0
+        fg, three, plus_minus = fg0, th0, pm0
+        final_score = legacy_score_from_inputs(
+            pts, reb, ast, stl, blk, fg, three, plus_minus, series_wins_bracket, False, player, team_name
+        )
+
+        st.markdown("### 1 · Final playoff stat summary (actual games)")
+        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
+        m1.metric("Games", current.get("GP", 0))
+        m2.metric("PTS", current.get("PTS", 0))
+        m3.metric("REB", current.get("REB", 0))
+        m4.metric("AST", current.get("AST", 0))
+        m5.metric("STL", current.get("STL", 0))
+        m6.metric("BLK", current.get("BLK", 0))
+        m7.metric("TOV", current.get("TOV", 0))
+        c8, c9, c10 = st.columns(3)
+        c8.metric("FG%", current.get("FG_PCT", 0))
+        c9.metric("3PT%", current.get("FG3_PCT", 0))
+        c10.metric("FT%", current.get("FT_PCT", 0))
+        st.metric(
+            "Final legacy score (fan model · actual exit)",
+            f"{final_score}",
+            help=f"Uses {series_wins_bracket} series win(s) on the bracket and this postseason stat line — no invented future rounds.",
+        )
+
+        st.markdown("### 2 · Round-by-round actual performance")
+        rr = _legacy_round_by_round_summary(logs, team_tri)
+        if rr:
+            st.dataframe(pd.DataFrame(rr), use_container_width=True)
+        else:
+            st.caption("Series splits need matchup rows in the game log — showing full-run averages only above.")
+
+        st.markdown("### 3 · Best game / worst game (by points)")
+        best_r, worst_r = _best_worst_playoff_game_rows(logs)
+        b1, b2 = st.columns(2)
+        with b1:
+            if best_r is not None:
+                st.markdown(
+                    f"**Best night:** {safe_float(best_r.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(best_r.get('MATCHUP'), team_tri)} "
+                    f"({html.escape(str(best_r.get('GAME_DATE', '')))})"
+                )
+            else:
+                st.caption("No best game row available.")
+        with b2:
+            if worst_r is not None:
+                st.markdown(
+                    f"**Tough night:** {safe_float(worst_r.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(worst_r.get('MATCHUP'), team_tri)} "
+                    f"({html.escape(str(worst_r.get('GAME_DATE', '')))})"
+                )
+            else:
+                st.caption("No worst game row available.")
+
+        st.markdown("### 4 · Final legacy interpretation")
+        st.caption(exit_line)
+        st.plotly_chart(
+            px.bar(
+                pd.DataFrame(
+                    [
+                        {
+                            "What is locked": f"Actual exit after {series_wins_bracket} series win(s)",
+                            "Legacy score": final_score,
+                            "Mode": "Postmortem (no future ladder)",
+                        }
+                    ]
+                ),
+                x="What is locked",
+                y="Legacy score",
+                color="Mode",
+                title=f"{player}: legacy frozen at real elimination point",
+            ),
+            use_container_width=True,
+        )
+        elim_lines = legacy_takeaways_eliminated(
+            player, team_name, pts, reb, ast, stl, blk, fg, three, plus_minus, exit_line
+        )
+        st.markdown("**Narrative read (no future rounds)**")
+        for line in elim_lines[:5]:
+            st.write(f"• {line}")
+        st.markdown("### 5 · What the playoff run did or did not prove")
+        st.write(f"• {elim_lines[5]}")
+        st.markdown("### 6 · Offseason / future implications for this player")
+        st.write(f"• {elim_lines[6]}")
+        st.markdown("### 7 · Historical / franchise comparison (actual outcomes only)")
+        st.write(f"• {elim_lines[7]}")
+
+        st.info(
+            "Fan toy, not an official ranking. Eliminated mode **never** blends hypothetical Finals numbers — "
+            "only games played and bracket wins before the exit."
+        )
+        return
+
+    # ----- Active team: locked actuals + forward simulator -----
+    locked_score = legacy_score_from_inputs(
+        pts0, reb0, ast0, stl0, blk0, fg0, th0, pm0, series_wins_bracket, False, player, team_name
+    )
+
+    if series_wins_bracket >= 4:
+        crown_score = legacy_score_from_inputs(
+            pts0, reb0, ast0, stl0, blk0, fg0, th0, pm0, 4, True, player, team_name
+        )
+        st.markdown("### Champion snapshot — no forward ladder needed")
+        st.success(
+            f"The bracket already shows **four** series wins for **{team_name}**. Legacy here is about how the crowning run *looked*, not what might happen next."
+        )
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Games (playoffs)", current.get("GP", 0))
+        m2.metric("PTS", current.get("PTS", 0))
+        m3.metric("Legacy score (title run)", crown_score)
+        m4.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
+        st.info(
+            "There is nothing left to simulate on the bracket path — use **Player Playoff Tracker** for game-by-game story, "
+            "or pick an eliminated team to see the postmortem layout."
+        )
+        return
+
+    st.markdown("### A · Locked — current legacy impact (real logs + bracket)")
+    st.caption(
+        f"Bracket shows **{series_wins_bracket}** series win(s) so far for {team_name}. "
+        "These averages and the score below do not use the simulator sliders."
+    )
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Games", current.get("GP", 0))
+    m2.metric("PTS", current.get("PTS", 0))
+    m3.metric("REB", current.get("REB", 0))
+    m4.metric("AST", current.get("AST", 0))
+    m5.metric("STL", current.get("STL", 0))
+    m6.metric("BLK", current.get("BLK", 0))
+    a1, a2, a3 = st.columns(3)
+    a1.metric("Legacy score (locked)", f"{locked_score}")
+    a2.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
+    a3.metric("Room to title ceiling", round(float(player_legacy_ceiling(player, team_name)) - locked_score, 1))
+
+    st.markdown("### B · Fan simulator (stat line + intangibles · ladder from today forward)")
+    with st.container(border=True):
+        st.caption(
+            f"Sliders default to this player’s **actual playoff averages**. Move them to stress-test scoring, efficiency, defense feel, "
+            f"clutch nights, turnover trend, and bench rescue — the ladder uses **{series_wins_bracket}** series win(s) as the floor, then adds hypothetical rounds."
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pts = st.slider("Scoring (PPG)", 0.0, 45.0, pts0, 0.5)
+            reb = st.slider("Rebounding (RPG)", 0.0, 20.0, reb0, 0.5)
+            ast = st.slider("Playmaking (APG)", 0.0, 15.0, ast0, 0.5)
+        with c2:
+            stl = st.slider("Defense activity — steals per game", 0.0, 4.0, stl0, 0.1)
+            blk = st.slider("Defense activity — blocks per game", 0.0, 5.0, blk0, 0.1)
+            plus_minus = st.slider("Efficiency / impact proxy — avg plus-minus", -20.0, 20.0, pm0, 0.5)
+        with c3:
+            fg = st.slider("Shooting efficiency — FG%", 0.300, 0.700, fg0, 0.005)
+            three = st.slider("Shooting efficiency — 3PT%", 0.200, 0.550, th0, 0.005)
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            clutch_momentum = st.slider(
+                "Clutch / late-game lift (narrative tilt)",
+                -5.0,
+                5.0,
+                0.0,
+                0.5,
+                help="Positive if you think the player is winning closing minutes beyond the box; negative if crunch-time fades show up.",
+            )
+        with d2:
+            turnover_trend = st.slider(
+                "Ball security vs turnovers",
+                -5.0,
+                5.0,
+                0.0,
+                0.5,
+                help="Positive if you expect cleaner possessions; negative if live-ball turnovers spike.",
+            )
+        with d3:
+            bench_support = st.slider(
+                "Bench / role-player rescue around this player",
+                -5.0,
+                5.0,
+                0.0,
+                0.5,
+                help="Positive if supporting cast lifts pressure off the star; negative if the rotation thins when it matters.",
+            )
+
+    path = build_legacy_path(
+        player,
+        team_name,
+        pts,
+        reb,
+        ast,
+        stl,
+        blk,
+        fg,
+        three,
+        plus_minus,
+        base_series_wins=series_wins_bracket,
+        clutch_momentum=clutch_momentum,
+        turnover_trend=turnover_trend,
+        bench_support=bench_support,
+    )
+    sim_now = float(path.iloc[0]["Legacy score"]) if not path.empty else locked_score
+    title_score = float(path.iloc[-1]["Legacy score"]) if not path.empty else locked_score
+
+    x1, x2, x3, x4 = st.columns(4)
+    x1.metric("Simulator · first rung", sim_now)
+    x2.metric("If they win the title (model)", title_score)
+    x3.metric("Delta to banner outcome", round(title_score - sim_now, 1))
+    x4.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
+
+    st.plotly_chart(
+        px.bar(
+            path,
+            x="Playoff picture",
+            y="Legacy score",
+            color="Fan read",
+            title=f"{player}: ladder from today’s bracket position (not a prediction)",
+        ),
+        use_container_width=True,
+    )
+    st.dataframe(path, use_container_width=True)
+
+    st.markdown("### Interpretation")
+    for line in legacy_takeaways(
+        player,
+        team_name,
+        pts,
+        reb,
+        ast,
+        stl,
+        blk,
+        fg,
+        three,
+        plus_minus,
+        base_series_wins=series_wins_bracket,
+        clutch_momentum=clutch_momentum,
+        turnover_trend=turnover_trend,
+        bench_support=bench_support,
+    ):
+        st.write(f"• {line}")
+
+    st.info(
+        "Fan toy, not an official ranking. **Section A** is actual playoff logs plus bracket wins; **Section B** layers hypotheticals. "
+        "Real legacy still lives in signature games, matchups, health, and hardware."
+    )
 
 
 # --- Player Playoff Story Hub (narrative + impact layer on raw logs) ---
@@ -7128,79 +7721,7 @@ elif page == "Player Playoff Tracker":
     render_player_playoff_story_hub(favorite_team, profile)
 
 elif page == "Legacy Tracker":
-    render_matchup_header(favorite_team)
-    st.subheader(f"Legacy Tracker · how {fan_nick(favorite_team)} history could rewrite if this run keeps going")
-
-    player_pool = current_roster_names(favorite_team, limit=15)
-    player = st.selectbox("Choose player", player_pool)
-    logs = playoff_game_logs_for_player(player)
-    current = summarize_playoff_logs(logs)
-
-    if logs.empty:
-        st.warning("NBA API did not return current playoff game logs for this player. The sliders still work, but the starting values come from safe defaults.")
-    else:
-        st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
-        show_cols = [c for c in ["GAME_DATE","MATCHUP","WL","MIN","PTS","REB","AST","STL","BLK","TOV","FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"] if c in logs.columns]
-        st.dataframe(logs[show_cols], use_container_width=True)
-
-    st.markdown("### Current playoff averages")
-    m1,m2,m3,m4,m5,m6 = st.columns(6)
-    m1.metric("Games", current.get("GP",0))
-    m2.metric("PTS", current.get("PTS",0))
-    m3.metric("REB", current.get("REB",0))
-    m4.metric("AST", current.get("AST",0))
-    m5.metric("STL", current.get("STL",0))
-    m6.metric("BLK", current.get("BLK",0))
-
-    st.markdown("### Change the stat line to test legacy scenarios")
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        pts = st.slider("Playoff PPG", 0.0, 45.0, float(current.get("PTS", 20.0) or 20.0), 0.5)
-        reb = st.slider("Playoff RPG", 0.0, 20.0, float(current.get("REB", 6.0) or 6.0), 0.5)
-        ast = st.slider("Playoff APG", 0.0, 15.0, float(current.get("AST", 4.0) or 4.0), 0.5)
-    with c2:
-        stl = st.slider("Playoff steals per game", 0.0, 4.0, float(current.get("STL", 1.0) or 1.0), 0.1)
-        blk = st.slider("Playoff blocks per game", 0.0, 5.0, float(current.get("BLK", 0.5) or 0.5), 0.1)
-        plus_minus = st.slider("Average plus/minus", -20.0, 20.0, float(current.get("PLUS_MINUS", 0.0) or 0.0), 0.5)
-    with c3:
-        fg = st.slider("FG%", 0.300, 0.700, float(current.get("FG_PCT", 0.460) or 0.460), 0.005)
-        three = st.slider("3PT%", 0.200, 0.550, float(current.get("FG3_PCT", 0.360) or 0.360), 0.005)
-        ft = st.slider("FT%", 0.500, 1.000, float(current.get("FT_PCT", 0.800) or 0.800), 0.005)
-
-    path = build_legacy_path(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus)
-    current_score = float(path.iloc[0]["Legacy score"])
-    title_score = float(path.iloc[-1]["Legacy score"])
-
-    a,b,c,d = st.columns(4)
-    a.metric("Legacy score (now)", current_score)
-    b.metric("If they win the title", title_score)
-    c.metric("Room to climb", round(title_score - current_score, 1))
-    d.metric("Ceiling (fan model)", player_legacy_ceiling(player, favorite_team))
-    st.caption(
-        "The score starts from how established the player already is—superstars begin higher; role players have more room to climb. "
-        "Move the sliders to stress-test how far the story could swing if the games look like this."
-    )
-
-    st.plotly_chart(
-        px.bar(
-            path,
-            x="Playoff picture",
-            y="Legacy score",
-            color="Fan read",
-            title=f"{player}: how the story shifts if {fan_nick(favorite_team)} keep advancing",
-        ),
-        use_container_width=True,
-    )
-    st.dataframe(path, use_container_width=True)
-
-    st.markdown("### Interpretation")
-    for line in legacy_takeaways(player, favorite_team, pts, reb, ast, stl, blk, fg, three, plus_minus):
-        st.write(f"• {line}")
-
-    st.info(
-        "Fan toy, not an official ranking. It mixes where the player started in the public imagination with this playoff stat line, "
-        f"shooting, plus/minus, and how far {fan_nick(favorite_team)} go. Real legacy still lives in signature games, matchups, health, and hardware."
-    )
+    render_legacy_tracker_page(favorite_team)
 
 elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
