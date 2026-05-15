@@ -259,6 +259,8 @@ def _is_home_eliminated(team_name):
     res = str(p.get("first_round_result") or "")
     if p.get("current_opponent") is None and res.startswith("Lost"):
         return True
+    if _dynamic_playoff_eliminated(team_name):
+        return True
     return False
 
 
@@ -266,12 +268,37 @@ def _generic_offseason_outlook(team_name):
     """Fallback offseason copy when a team is eliminated but not in the detailed table."""
     nick = fan_nick(team_name)
     prof = TEAM_PROFILES.get(team_name) or {}
-    opp = prof.get("first_round_opponent") or "their opponent"
-    res = prof.get("first_round_result") or "playoff series"
+    lost = None
+    try:
+        lost = _last_elimination_series_for_team(team_name)
+    except Exception:
+        lost = None
+    if lost and team_name in (lost.get("a"), lost.get("b")):
+        a, b = lost.get("a"), lost.get("b")
+        if team_name == a:
+            tw, ow = int(lost.get("a_wins", 0)), int(lost.get("b_wins", 0))
+            opp = b
+        else:
+            tw, ow = int(lost.get("b_wins", 0)), int(lost.get("a_wins", 0))
+            opp = a
+        rd = str(lost.get("round") or "playoffs").strip() or "the playoffs"
+        went_right = (
+            f"{nick} stayed alive deep enough to matter in the {rd} — the regular-season identity showed up "
+            "in at least a few playoff possessions that looked like winning basketball on tape."
+        )
+        elimination_cause = (
+            f"The postseason run ended in the {rd} against {fan_nick(opp)} ({tw}–{ow}). "
+            "Each round asks harder questions: late-clock execution, bench swings, and rebounding battles decide who advances."
+        )
+    else:
+        opp = prof.get("first_round_opponent") or "their opponent"
+        res = prof.get("first_round_result") or "playoff series"
+        went_right = f"{nick} still reached the postseason — the regular season showed enough to earn a seven-game stage against {fan_nick(opp)}."
+        elimination_cause = f"The first round ended with {res}; the tighter margins in May usually go to the group that wins late-clock execution and depth minutes."
     return {
         "reflection": {
-            "went_right": f"{nick} still reached the postseason — the regular season showed enough to earn a seven-game stage against {fan_nick(opp)}.",
-            "elimination_cause": f"The first round ended with {res}; the tighter margins in May usually go to the group that wins late-clock execution and depth minutes.",
+            "went_right": went_right,
+            "elimination_cause": elimination_cause,
             "playoff_strengths": [
                 "Moments where the main creators bent the defense and generated clean looks.",
                 "Home energy and the ability to stay in games when the shot diet tightened.",
@@ -745,7 +772,10 @@ def render_offseason_future_outlook_sections(team_name):
     ref = od["reflection"]
     nick = fan_nick(team_name)
     prof = TEAM_PROFILES.get(team_name) or {}
-    exit_line = prof.get("first_round_result") or "Playoff exit"
+    try:
+        exit_line = _elimination_exit_line(team_name)
+    except Exception:
+        exit_line = prof.get("first_round_result") or "Playoff exit"
 
     st.markdown(
         """
@@ -1301,6 +1331,68 @@ def get_playoff_state_cached(use_demo_backup: bool = True):
     }
 
 
+ROUND_DEPTH_FOR_EXIT = {
+    "NBA Finals": 4,
+    "Conference Finals": 3,
+    "Second Round": 2,
+    "First Round": 1,
+}
+
+
+def _iter_playoff_series_shells_merged():
+    """All playoff series shells: semis, CF, Finals (cached merge) plus static first round."""
+    stt = get_playoff_state_cached(True)
+    for s in (stt.get("second") or {}).values():
+        if s:
+            yield s
+    for s in (stt.get("cf") or {}).values():
+        if s:
+            yield s
+    for s in (stt.get("finals") or {}).values():
+        if s:
+            yield s
+    for s in FIRST_ROUND_SERIES.values():
+        yield {
+            "a": s["a"],
+            "b": s["b"],
+            "a_wins": int(s.get("a_wins", 0)),
+            "b_wins": int(s.get("b_wins", 0)),
+            "winner": s.get("winner"),
+            "round": "First Round",
+            "games": [],
+        }
+
+
+def _last_elimination_series_for_team(team_name):
+    """Deepest completed series on the bracket where ``team_name`` lost (any round)."""
+    best = None
+    best_depth = -1
+    for s in _iter_playoff_series_shells_merged():
+        if team_name not in (s.get("a"), s.get("b")):
+            continue
+        w = s.get("winner")
+        if not w or w == team_name:
+            continue
+        rd = str(s.get("round") or "")
+        depth = ROUND_DEPTH_FOR_EXIT.get(rd, 0)
+        if depth == 0 and "first" in rd.lower():
+            depth = 1
+        if depth > best_depth:
+            best_depth = depth
+            best = s
+    return best
+
+
+def _dynamic_playoff_eliminated(team_name):
+    """Eliminated from the current postseason if the merged bracket shows a series loss."""
+    if team_name not in TEAM_PROFILES:
+        return False
+    try:
+        return _last_elimination_series_for_team(team_name) is not None
+    except Exception:
+        return False
+
+
 def infer_next_round_series(round_name, conf=None):
     """Return series dict(s) for Conference Finals or NBA Finals (from cached playoff state)."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
@@ -1358,6 +1450,28 @@ def fan_nick(team_name):
     if not team_name:
         return "your team"
     return str(team_name).split()[-1]
+
+
+def _elimination_exit_line(team_name):
+    """Human-readable playoff exit line from merged bracket data when available."""
+    prof = TEAM_PROFILES.get(team_name) or {}
+    try:
+        lost = _last_elimination_series_for_team(team_name)
+    except Exception:
+        lost = None
+    if not lost:
+        return prof.get("first_round_result") or "Playoff exit"
+    a, b = lost.get("a"), lost.get("b")
+    if team_name not in (a, b):
+        return prof.get("first_round_result") or "Playoff exit"
+    if team_name == a:
+        tw, ow = int(lost.get("a_wins", 0)), int(lost.get("b_wins", 0))
+        opp = b
+    else:
+        tw, ow = int(lost.get("b_wins", 0)), int(lost.get("a_wins", 0))
+        opp = a
+    rd = str(lost.get("round") or "Playoffs").strip() or "Playoffs"
+    return f"{rd}: {fan_nick(team_name)} exit vs {fan_nick(opp)} ({tw}–{ow} final)"
 
 
 def series_status_text(team_name, series_obj=None):
@@ -5352,8 +5466,10 @@ def render_playoff_command_center(team_name):
                 "Those **six analysis blocks** (season reflection, priorities, future outlook, draft assets, "
                 "players who may not return, ideal player types) **only show for eliminated teams**.\n\n"
                 "**What to do:** in the **sidebar**, open the team dropdown and pick any roster labeled "
-                "**(offseason view)** — e.g. **Boston Celtics**, **Phoenix Suns**, **Atlanta Hawks**, "
-                "**Orlando Magic**, **Toronto Raptors**, **Portland Trail Blazers**, **Denver Nuggets**, or **Houston Rockets**.\n\n"
+                "**(offseason view)**. That label is driven by the **playoff bracket**: any team that lost a "
+                "**completed** series (4–0 through 4–3) in **any round** — e.g. an early exit like **Boston** or **Phoenix**, "
+                "or a later one like **Philadelphia**, the **Lakers**, or **Cleveland** if their series is over — "
+                "shows that tag automatically.\n\n"
                 "Then stay on **🏀 Home Dashboard**: the gold **Postmortem** banner and sections appear **directly under** "
                 "the Load live / Fast mode buttons, **above** the big hero card."
             )
@@ -6947,8 +7063,12 @@ PAGES={
 
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
-    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
-        return f"📋 {team_name} (offseason view)"
+    try:
+        if _is_home_eliminated(team_name):
+            return f"📋 {team_name} (offseason view)"
+    except Exception:
+        if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+            return f"📋 {team_name} (offseason view)"
     return team_name
 
 
@@ -6959,11 +7079,12 @@ favorite_team = st.sidebar.selectbox(
     _team_keys_sorted,
     index=_default_idx,
     format_func=_sidebar_team_label,
-    help="Pick any name with “(offseason view)” to unlock the six offseason sections on Home Dashboard.",
+    help="Pick any team labeled “(offseason view)” — that means the bracket shows their playoff run is over (any round), not only first-round exits.",
 )
 st.sidebar.caption(
-    "**Where are those sections?** On **🏀 Home Dashboard**, after you choose an **eliminated** team above "
-    "(Boston, Phoenix, Atlanta, Orlando, Toronto, Portland, Denver, or Houston — they show as *offseason view*)."
+    "**Where are those sections?** On **🏀 Home Dashboard**, pick a team marked **(offseason view)** above — "
+    "that label appears whenever the **merged bracket** shows that club lost a completed series (first round through Finals), "
+    "for example Philadelphia, the Lakers, or Cleveland if their series is over."
 )
 USE_DEMO_BACKUP = st.sidebar.toggle(
     "Use demo backup scores only if NBA API has no game data",
