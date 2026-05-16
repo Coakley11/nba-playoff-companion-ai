@@ -8979,12 +8979,6 @@ favorite_team = st.sidebar.selectbox(
     _team_keys_sorted,
     index=_default_idx,
     format_func=_sidebar_team_label,
-    help="Pick any team labeled “(offseason view)” — that means the bracket shows their playoff run is over (any round), not only first-round exits.",
-)
-st.sidebar.caption(
-    "**Where are those sections?** On **🏀 Home Dashboard**, pick a team marked **(offseason view)** above — "
-    "that label appears whenever the **merged bracket** shows that club lost a completed series (first round through Finals), "
-    "for example Philadelphia, the Lakers, or Cleveland if their series is over."
 )
 USE_DEMO_BACKUP = st.sidebar.toggle(
     "Use demo backup scores only if NBA API has no game data",
