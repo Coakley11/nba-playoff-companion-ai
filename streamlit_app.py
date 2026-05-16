@@ -8305,7 +8305,7 @@ def _live_gc_render_debug_panel(favorite_team, fb, det_ctx):
             st.write(repr(exc))
 
 
-def render_live_game_center(favorite_team, profile):
+def _render_live_game_center_previous(favorite_team, profile):
     """Live Game Center — multi-source game detection (`get_current_or_today_game`); heavy widgets load after header."""
     render_fan_page_hero(
         favorite_team,
@@ -8705,6 +8705,246 @@ def render_previous_rounds_history(team_name):
                 continue
             note = f"{s.get('winner')} wins the {round_label}." if s.get("winner") else None
             render_series_history_card(team_name, opp, games, round_label, note)
+
+
+# ==========================================================
+# Fail-safe Live Game Center override
+# ==========================================================
+def _local_live_gc_series_context(team_name, profile):
+    """Layer 1 context only: no NBA/ESPN/network calls."""
+    opp = profile.get("current_opponent") or ""
+    round_name = profile.get("round") or "Playoffs"
+    series = None
+    for key, s in SECOND_ROUND_SERIES_TEMPLATE.items():
+        if team_name in (s.get("a"), s.get("b")):
+            series = dict(s)
+            backup = SECOND_ROUND_DEMO_BACKUP.get(key, {}) if isinstance(SECOND_ROUND_DEMO_BACKUP, dict) else {}
+            games = backup.get("games", []) if isinstance(backup, dict) else []
+            if USE_DEMO_BACKUP and games:
+                series["a_wins"] = sum(1 for g in games if g.get("Winner") == series.get("a"))
+                series["b_wins"] = sum(1 for g in games if g.get("Winner") == series.get("b"))
+                series["source"] = "local demo backup"
+            else:
+                series["a_wins"] = int(series.get("a_wins", 0) or 0)
+                series["b_wins"] = int(series.get("b_wins", 0) or 0)
+                series["source"] = "local bracket shell"
+            break
+    if series:
+        a, b = series.get("a"), series.get("b")
+        opp = b if team_name == a else a
+        tw = series.get("a_wins", 0) if team_name == a else series.get("b_wins", 0)
+        ow = series.get("b_wins", 0) if team_name == a else series.get("a_wins", 0)
+        series_text = f"{fan_nick(team_name)} {tw} - {ow} {fan_nick(opp)}"
+        return opp, round_name, series_text, series.get("source", "local bracket shell")
+    series_text = f"{fan_nick(team_name)} vs {fan_nick(opp) if opp else 'Opponent'}"
+    return opp, round_name, series_text, "local profile"
+
+
+def _render_live_gc_layer1(team_name, profile):
+    """Guaranteed basic shell. Must stay local-only."""
+    opp, round_name, series_text, source = _local_live_gc_series_context(team_name, profile)
+    logo = TEAM_LOGOS.get(team_name, "")
+    opp_logo = TEAM_LOGOS.get(opp, "") if opp else ""
+    st.markdown(
+        f"""
+<div class="live-gc-board">
+  <div style="text-align:center">
+    <img src="{html.escape(logo)}" alt=""/>
+    <div style="font-size:12px;font-weight:900">{html.escape(team_name)}</div>
+  </div>
+  <div style="text-align:center;min-width:220px">
+    <div style="font-size:11px;color:#94a3b8;font-weight:900;letter-spacing:.12em">BASIC GAME CENTER</div>
+    <div class="live-gc-score">{html.escape(series_text)}</div>
+    <div class="live-gc-clock">{html.escape(round_name)} · source: {html.escape(source)}</div>
+  </div>
+  <div style="text-align:center">
+    <img src="{html.escape(opp_logo)}" alt=""/>
+    <div style="font-size:12px;font-weight:900">{html.escape(opp or 'Opponent')}</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Selected team", fan_nick(team_name))
+    c2.metric("Opponent", fan_nick(opp) if opp else "TBD")
+    c3.metric("Round", round_name)
+    c4.metric("Layer 1", "loaded")
+    st.info(
+        "Basic Live Game Center is loaded from local app data only. "
+        "Live score, clock, box score, injuries, and play-by-play load only when you click the button below."
+    )
+    return opp, round_name, series_text, source
+
+
+def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None):
+    """Small debug block that never triggers API calls by itself."""
+    errors = errors or []
+    with st.expander("Live Game Center debug", expanded=True):
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Selected team", team_name)
+        d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
+        d3.metric("Opponent", opp or "TBD")
+        d4.metric("Layer 1 loaded", "yes" if layer1_loaded else "no")
+        e1, e2, e3 = st.columns(3)
+        e1.metric("Live fetch attempted", "yes" if live_attempted else "no")
+        e2.metric(
+            "Live scoreboard returned games",
+            "not requested" if live_count is None else ("yes" if live_count > 0 else "no"),
+        )
+        e3.metric("Live games found", "not requested" if live_count is None else str(live_count))
+        if errors:
+            st.warning("API notes: " + " | ".join(str(x) for x in errors[:4]))
+        else:
+            st.caption("No API errors recorded for this page render.")
+
+
+def _fetch_live_gc_snapshot(team_name):
+    """Layer 2 fetch wrapper. All API calls stay behind the manual button."""
+    errors = []
+    live_count = None
+    snap = None
+    try:
+        games = get_live_games()
+        live_count = len(games) if isinstance(games, list) else 0
+    except Exception as exc:
+        live_count = 0
+        errors.append(f"live scoreboard: {exc!r}")
+    try:
+        snap = get_current_or_today_game(team_name)
+    except Exception as exc:
+        snap = {
+            "game_found": False,
+            "game_status": "unavailable",
+            "game_row": None,
+            "error_messages": [repr(exc)],
+            "detection_message": "Live data failed to load.",
+        }
+        errors.append(f"game detection: {exc!r}")
+    errors.extend(snap.get("error_messages", []) if isinstance(snap, dict) else [])
+    return snap, live_count, errors
+
+
+def render_live_game_center(team_name, profile):
+    """Two-layer, fail-safe Live Game Center. Layer 1 never calls external APIs."""
+    render_fan_page_hero(
+        team_name,
+        "Live Game Center",
+        f"Guaranteed local shell first for {fan_nick(team_name)}.",
+        "FAIL-SAFE MODE",
+    )
+    if st.session_state.get("_live_gc_sel_team") != team_name:
+        for k in list(st.session_state.keys()):
+            if isinstance(k, str) and k.startswith("live_gc__"):
+                del st.session_state[k]
+        st.session_state["_live_gc_sel_team"] = team_name
+
+    opp, _round_name, _series_text, _source = _render_live_gc_layer1(team_name, profile)
+    layer_key = f"live_gc__load_{team_name}"
+    col_a, col_b = st.columns([1, 3])
+    with col_a:
+        if st.button("Load / Refresh Live Game Data", key=f"{layer_key}_btn", type="primary"):
+            st.session_state[layer_key] = True
+            for fn in (
+                get_live_games,
+                get_current_or_today_game,
+                get_live_game_detection_context_cached,
+                _pick_featured_game_for_team_cached,
+                featured_broadcast_state_cached,
+                _merged_stats_games_et_window,
+            ):
+                try:
+                    fn.clear()
+                except Exception:
+                    pass
+            st.rerun()
+    with col_b:
+        st.caption("Live APIs, ESPN injuries, box score, play-by-play, and shot chart are not touched until you click the button.")
+
+    if not st.session_state.get(layer_key):
+        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=False)
+        return
+
+    st.divider()
+    team_section_header("Layer 2 · Optional live data", "🔴")
+    snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
+    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
+
+    if not snap or not snap.get("game_found"):
+        msg = (snap or {}).get("detection_message") or "Live feed is unavailable right now."
+        if (snap or {}).get("detection_tier") == "scheduled_today":
+            st.warning("Game scheduled today — live feed not detected yet.")
+        elif (snap or {}).get("detection_tier") == "likely_live_feed_gap":
+            st.error("Game may be in progress, but the live feed is delayed.")
+        else:
+            st.warning(msg)
+        st.caption("Layer 1 remains usable above; no general outlook is shown unless there is truly no live/today game data.")
+        return
+
+    game_row = snap.get("game_row")
+    parsed = _live_gc_parse_game_row(game_row, team_name)
+    series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
+    _render_live_gc_matchup_header(parsed, series_line)
+    render_live_score_banner(
+        team_name,
+        parsed["away_tri"],
+        parsed["home_tri"],
+        parsed["away_score"],
+        parsed["home_score"],
+        parsed["status"],
+        parsed["phase"],
+    )
+    if parsed["phase"] == "live":
+        st.success("LIVE NOW")
+    elif parsed["phase"] == "pregame":
+        st.info("Game Today / Starting Soon")
+    elif parsed["phase"] == "postgame":
+        st.info("Final")
+
+    gid = parsed["gid"]
+    prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Win probability", f"{prob}%")
+    m2.metric("Status", parsed["status"] or parsed["phase"])
+    m3.metric("Game ID", gid or "unavailable")
+
+    with st.expander("Box score and top performers", expanded=False):
+        box_df = pd.DataFrame()
+        try:
+            box_game = get_live_boxscore(gid) if gid else {}
+            box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+        except Exception as exc:
+            st.caption(f"Box score unavailable: {exc!r}")
+        if box_df is not None and not box_df.empty:
+            _live_gc_top_performers(box_df, team_name, parsed["opp_name"])
+            render_fan_stat_table(box_df, team_name)
+        else:
+            st.caption("Box score has not published or could not be fetched.")
+
+    with st.expander("Play-by-play and shot chart", expanded=False):
+        actions = []
+        try:
+            actions = get_live_playbyplay(gid) if gid else []
+        except Exception as exc:
+            st.caption(f"Play-by-play unavailable: {exc!r}")
+        if actions:
+            try:
+                tp = top_plays_from_game_id(gid, team_name, limit=8)
+                if tp is not None and not tp.empty:
+                    st.dataframe(tp, use_container_width=True, hide_index=True)
+                shots = shot_df_from_pbp(actions, parsed["fav_alias"])
+                if not shots.empty:
+                    st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
+            except Exception as exc:
+                st.caption(f"Advanced play analysis unavailable: {exc!r}")
+        else:
+            st.caption("Play-by-play has not published or could not be fetched.")
+
+    with st.expander("Injuries", expanded=False):
+        try:
+            render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name)
+        except Exception as exc:
+            st.caption(f"Injury report unavailable: {exc!r}")
 
 # ==========================================================
 # Sidebar
