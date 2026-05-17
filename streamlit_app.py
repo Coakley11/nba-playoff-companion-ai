@@ -4351,9 +4351,9 @@ def _narrative_storylines(player, team_name, cur, reg, prev_summary, prof):
 def render_player_playoff_story_hub(team_name, profile):
     """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
     st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
-    st.subheader("Player Playoff Hub · journey, series texture, and legacy pressure")
+    st.subheader("Player Playoff Story · the run, the pressure, the memory")
     st.caption(
-        f"Built for **{fan_nick(team_name)}** fans. Game logs come from NBA.com via **nba_api**; clutch and quarter reads use **honest proxies** where play-by-play splits are not in this feed."
+        f"Built for **{fan_nick(team_name)}** fans: what the numbers say, what the series feels like, and how this chapter might be remembered."
     )
 
     plist = current_roster_names(team_name)
@@ -4364,7 +4364,7 @@ def render_player_playoff_story_hub(team_name, profile):
         season = st.selectbox("Season", [CURRENT_NBA_SEASON, "2024-25", "2023-24"], index=0, key="pp_hub_season")
 
     if not NBA_STATS_AVAILABLE:
-        st.error("nba_api stats endpoints unavailable.")
+        st.error("Player game logs are not available right now.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -5108,18 +5108,18 @@ def build_matchup_intelligence_sections(team_name):
 
     # --- 4. Most important adjustment ---
     if blowouts_against >= 2:
-        adj = f"You've been blown out multiple times — the fix you want to see is **early help rules + transition get-backs** so **{o_star.split()[-1] if o_star else O}** stops getting runway."
+        adj = f"You've been hit hard more than once — the next response has to start with **getting back, loading up early, and taking away runway** from **{o_star.split()[-1] if o_star else O}**."
     elif blowouts_for >= 2:
-        adj = f"You've shown you can **run away** from {O} — expect them to **slow the game**, shrink transition, and try to strand you in **late-clock isolations**."
+        adj = f"You've shown you can **break this open** — expect {O} to slow the night down, kill transition, and make every bucket feel like a grind."
     elif close_games >= max(2, len(margins) - 1) and margins:
-        adj = f"**{close_games}** nail-biters (avg ~{avg_abs} pts) — your path is **ATO execution, SLOB/BLOB clarity, and winning the first six minutes after halftime**."
+        adj = f"**{close_games}** nail-biters (avg ~{avg_abs} pts) — the swing is simple: cleaner timeout plays, sharper sideline sets, and winning the first six minutes after halftime."
     else:
         adj = _intel_variant(
             seed + "adj",
             [
-                f"Rotation chess — **rebounding vs switching** — whoever forces the other into **backup coverages** first usually owns the middle quarters.",
-                f"Watch for a **PnR coverage tweak** on **{o_star.split()[-1] if o_star else O}** when your three goes cold.",
-                f"**Side PnR placement** and **weak-side tag timing** — {O} wants **{t_star.split()[-1] if t_star else 'your star'}** off the nail without free corners.",
+                f"The rotation battle is really **rebounding vs switching** — whoever forces the first uncomfortable lineup usually owns the middle quarters.",
+                f"Watch how you guard **{o_star.split()[-1] if o_star else O}** when the shot goes cold; that is where panic or poise shows up.",
+                f"{O} wants to pull **{t_star.split()[-1] if t_star else 'your star'}** into help decisions without giving up free corners.",
             ],
         )
 
@@ -5127,9 +5127,9 @@ def build_matchup_intelligence_sections(team_name):
     def_body = _intel_variant(
         seed + "def",
         [
-            f"You have to solve how {O} runs **{o_strengths[0] if o_strengths else 'star touches'}** in **spread PnR** — weak-side help is getting stretched and skips are turning into **clean threes**.",
+            f"You have to solve how {O} gets to **{o_strengths[0] if o_strengths else 'its best action'}** — the help is getting stretched, and the next pass is becoming a clean three.",
             f"The stress point is **{o_star}** attacking **{t_concerns[0] if t_concerns else 'your point of attack'}** — help opens **ORBs and dump-offs** that hurt on the second side.",
-            f"{O}'s **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'size')}** forces you to pick: **switch mismatches** or **over-help rebound holes**.",
+            f"{O}'s **{o_strengths[1] if len(o_strengths) > 1 else (o_strengths[0] if o_strengths else 'size')}** forces an ugly choice: live with a mismatch or send help and risk the glass.",
         ],
     )
 
@@ -5199,9 +5199,9 @@ def build_matchup_intelligence_sections(team_name):
     chess = _intel_variant(
         seed + "ch",
         [
-            f"Timeout chess: {O} toggles **coverage on {t_star.split()[-1] if t_star else 'your star'}**; you counter with **off-ball screens** to hunt **switches**.",
-            f"Rotation length — whoever shortens the bench without bleeding minutes usually stabilizes **your glass**.",
-            f"Series-long bet: **help at the nail** vs **corner skips** — coaches sell out one to steal the other.",
+            f"Out of timeouts, watch how {O} guards **{t_star.split()[-1] if t_star else 'your star'}** — the counter is movement before the ball even gets there.",
+            f"The bench question is brutal: shorten the rotation for trust, or keep fresh legs and risk the scoreboard wobble.",
+            f"The series-long bet is help versus corners — coaches will give up one thing to steal the thing that hurts most.",
         ],
     )
 
@@ -5209,22 +5209,22 @@ def build_matchup_intelligence_sections(team_name):
     star_pressure = _intel_variant(
         seed + "sp",
         [
-            f"**{t_star}** carries your heaviest **trap/double** decisions when offense stalls; {O} lives with rotations if it means **contested twos**.",
-            f"**{t_star}**'s **usage vs efficiency** trade is the emotional ride — {O} wants late clocks and **bodies at the level**.",
+            f"**{t_star}** is where the offense goes when the building gets tight; {O} is trying to turn those touches into tough twos.",
+            f"**{t_star}** carrying more of the offense is the emotional ride — heroic when it hits, exhausting when the clock gets late.",
             f"The narrative pressure you feel on **{t_star}** is real because **{o_star}** is the clearest counter-star.",
         ],
     )
 
     sections = [
-        ("1", "Key matchup advantage", "🏆", adv_body, "good", None),
-        ("2", "Biggest tactical concern", "⚠️", concern_body, "warn", None),
+        ("1", "Where you can win this series", "🏆", adv_body, "good", None),
+        ("2", "What should worry you", "⚠️", concern_body, "warn", None),
         ("3", "X-factor player", "✨", x_body, "neutral", None),
-        ("4", "Most important adjustment", "🧭", adj, "neutral", None),
-        ("5", "Defensive matchup problems", "🛡️", def_body, "warn", None),
-        ("6", "Momentum shift", "📈", mom_txt, mom_class, "momentum"),
-        ("7", "Clutch-time edge", "⏱️", clutch, "neutral", None),
-        ("8", "Pressure meter + star load", "🎯", f"**{p_label}** ({pressure}/100). {p_note} {star_pressure}", "neutral", None),
-        ("9", "Coaching chess match", "♟️", chess, "neutral", None),
+        ("4", "The move that changes the series", "🧭", adj, "neutral", None),
+        ("5", "Where the defense feels stress", "🛡️", def_body, "warn", None),
+        ("6", "Where the momentum sits", "📈", mom_txt, mom_class, "momentum"),
+        ("7", "Who owns the tense minutes", "⏱️", clutch, "neutral", None),
+        ("8", "Pressure check", "🎯", f"**{p_label}** ({pressure}/100). {p_note} {star_pressure}", "neutral", None),
+        ("9", "Coaches' next move", "♟️", chess, "neutral", None),
     ]
     meta = {
         "opp": opp,
@@ -5490,6 +5490,61 @@ def render_fan_page_hero(team_name, title, subtitle="", badge_text=""):
         f"<{d} style='font-size:1.25rem;font-weight:900;margin:0 0 4px'>{e(title)}</{d}>"
         f"<{d} style='font-size:13px;color:#cbd5e1;line-height:1.45;margin:0'>{e(subtitle)}</{d}>"
         f"{badge_block}</{d}></{d}>",
+        unsafe_allow_html=True,
+    )
+
+
+def team_fan_identity(team_name):
+    """Short, fan-facing identity lines for heroes and story cards."""
+    nick = fan_nick(team_name)
+    defaults = {
+        "tagline": f"{nick} playoff pulse",
+        "stakes": "Every possession changes the mood of the series.",
+        "texture": "Pressure, momentum, matchups, and the moments fans remember.",
+    }
+    identities = {
+        "New York Knicks": {
+            "tagline": "MSG pressure cooker",
+            "stakes": "Every Brunson touch feels louder because New York expects this run to matter.",
+            "texture": "Physical defense, late-clock nerve, and the Garden waiting to explode.",
+        },
+        "San Antonio Spurs": {
+            "tagline": "Built on poise",
+            "stakes": "The future is arriving fast, but playoff habits still have to hold under noise.",
+            "texture": "Discipline, length, half-court patience, and Wembanyama gravity.",
+        },
+        "Los Angeles Lakers": {
+            "tagline": "Legacy lights",
+            "stakes": "In Laker colors, every spring becomes a referendum on banners and stars.",
+            "texture": "Championship pressure, veteran counters, and late-game shotmaking.",
+        },
+        "Cleveland Cavaliers": {
+            "tagline": "Guard heat, playoff proof",
+            "stakes": "Cleveland's guards have the keys; the series turns on whether the half court stays sharp.",
+            "texture": "Mitchell pressure, Garland rhythm, Mobley/Allen protection, and tense fourth quarters.",
+        },
+        "Detroit Pistons": {
+            "tagline": "Young team, loud moment",
+            "stakes": "Detroit is trying to turn belief into a real playoff identity right now.",
+            "texture": "Cade control, transition force, and whether the young group can close clean.",
+        },
+    }
+    return {**defaults, **identities.get(team_name, {})}
+
+
+def fan_story_callout(team_name, title, body, badge="STORYLINE"):
+    """Compact TV-style story card for the biggest emotional angle."""
+    e = html.escape
+    ident = team_fan_identity(team_name)
+    st.markdown(
+        f"""
+<div class="team-card" style="margin:10px 0 14px;border-left:5px solid var(--team-accent);">
+  <div style="font-size:10px;font-weight:900;letter-spacing:.14em;color:var(--team-accent);text-transform:uppercase">{e(badge)}</div>
+  <div style="font-size:1.08rem;font-weight:950;color:#0f172a;margin-top:3px">{e(title)}</div>
+  <div style="font-size:14px;line-height:1.5;color:#334155;margin-top:6px">{body}</div>
+  <div style="font-size:12px;color:#64748b;margin-top:8px">{e(ident["tagline"])} · {e(ident["texture"])}</div>
+</div>
+""",
         unsafe_allow_html=True,
     )
 
@@ -6311,8 +6366,7 @@ def _home_injury_hero_snippet(team_name, use_live_feed=True):
         df, _ = get_injury_report(team_name)
         if df is None or df.empty:
             return (
-                f"Injury feed for {html.escape(fan_nick(team_name))} loads when available — "
-                f"use <strong>Load live API updates</strong> or open <strong>Injury Report</strong> below."
+                f"Availability for {html.escape(fan_nick(team_name))} loads when you ask for the live board."
             )
         row = df.iloc[0]
         return (
@@ -6322,8 +6376,7 @@ def _home_injury_hero_snippet(team_name, use_live_feed=True):
     fb_list = FALLBACK_INJURY_REPORT.get(team_name, []) or []
     if not fb_list:
         return (
-            "Bundled injury rows not loaded for this team — "
-            "<strong>Load live API updates</strong> or open <strong>Injury Report</strong> for ESPN data."
+            "Availability is tucked away until you ask for the live board."
         )
     row = fb_list[0]
     return (
@@ -6584,19 +6637,13 @@ def _home_dashboard_live_data_bundle(team_name):
 def _home_dashboard_perf_footer(t0, sections, fast_mode, api_calls, skipped_note=""):
     elapsed_ms = (pytime.perf_counter() - t0) * 1000
     sec_txt = " → ".join(sections) if sections else "(none)"
-    st.markdown(
-        "<div style='margin-top:16px;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,0.35);"
-        "background:rgba(15,23,42,0.45);font-size:13px;color:#e2e8f0;line-height:1.5'>"
-        f"<div style='font-weight:800;margin-bottom:6px;color:#94a3b8;text-transform:uppercase;font-size:11px;letter-spacing:0.12em'>"
-        f"Performance debug</div>"
-        f"<div><strong>Page render time</strong>: {elapsed_ms:.0f} ms</div>"
-        f"<div><strong>Fast mode</strong>: {'yes (no automatic NBA/ESPN fan-out)' if fast_mode else 'no (live API bundle)'}</div>"
-        f"<div><strong>API-style calls (this run)</strong>: {html.escape(str(api_calls))}</div>"
-        f"<div><strong>Sections touched</strong>: {html.escape(sec_txt)}</div>"
-        f"{skipped_note}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    if skipped_note:
+        st.markdown(skipped_note, unsafe_allow_html=True)
+    with st.expander("Page status", expanded=False):
+        st.caption(f"Loaded in {elapsed_ms:.0f} ms.")
+        st.caption("Quick view is on." if fast_mode else "Live view is on.")
+        st.caption(f"Feed checks this run: {html.escape(str(api_calls))}")
+        st.caption(f"Sections ready: {html.escape(sec_txt)}")
 
 
 def render_playoff_command_center(team_name):
@@ -6610,42 +6657,41 @@ def render_playoff_command_center(team_name):
         live_on = False
     effective_live = live_on and not is_eliminated
 
-    render_fan_page_hero(team_name, f"{fan_nick(team_name)} Home Dashboard", "Series snapshot, injuries, stars, and offseason outlook when the run is over.", "YOUR TEAM")
-    if not is_eliminated:
-        with st.expander("Looking for offseason / future outlook sections?", expanded=False):
-            st.markdown(
-                "Those **six analysis blocks** (season reflection, priorities, future outlook, draft assets, "
-                "players who may not return, ideal player types) **only show for eliminated teams**.\n\n"
-                "**What to do:** in the **sidebar**, open the team dropdown and pick any roster labeled "
-                "**(offseason view)**. That label is driven by the **playoff bracket**: any team that lost a "
-                "**completed** series (4–0 through 4–3) in **any round** — e.g. an early exit like **Boston** or **Phoenix**, "
-                "or a later one like **Philadelphia**, the **Lakers**, or **Cleveland** if their series is over — "
-                "shows that tag automatically.\n\n"
-                "Then stay on **🏀 Home Dashboard**: the gold **Postmortem** banner and sections appear **directly under** "
-                "the Load live / Fast mode buttons, **above** the big hero card."
-            )
+    ident = team_fan_identity(team_name)
+    render_fan_page_hero(
+        team_name,
+        f"{fan_nick(team_name)} Playoff Pulse",
+        f"{ident['stakes']} {ident['texture']}",
+        "YOUR TEAM",
+    )
+    fan_story_callout(
+        team_name,
+        ident["tagline"],
+        html.escape(ident["stakes"]),
+        badge="TONIGHT'S FEEL",
+    )
     if is_eliminated:
         st.success(
-            f"**{fan_nick(team_name)}** — offseason / future outlook mode is on. Scroll for the gold **Postmortem** header and six analysis sections directly below the controls."
+            f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
         )
     b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
     with b1:
         if is_eliminated:
             st.caption(
-                "Live playoff API bundle is hidden for eliminated teams — open **Live Game Center** from the sidebar for league-wide games."
+                "This team is in wrap-up mode. Open **Live Game Center** for games still being played."
             )
-        elif st.button("Load live API updates", key="home_btn_live_apis", disabled=live_on, help="Scoreboard merge, ESPN injuries, and full bracket APIs"):
+        elif st.button("Go live", key="home_btn_live_apis", disabled=live_on, help="Pull in the latest scoreboard and injury updates."):
             st.session_state[HOME_DASH_LIVE_UPDATES] = True
             st.rerun()
     with b2:
-        if st.button("Instant dashboard (fast mode)", key="home_btn_fast_mode", disabled=not live_on):
+        if st.button("Back to quick view", key="home_btn_fast_mode", disabled=not live_on):
             st.session_state[HOME_DASH_LIVE_UPDATES] = False
             st.session_state.pop(HOME_DASH_LOAD_INJ, None)
             st.session_state.pop(HOME_DASH_LOAD_STARS, None)
             st.session_state.pop(HOME_DASH_LOAD_LEGACY, None)
             st.rerun()
     with b3:
-        st.caption("⚡ Fast" if not live_on else "📡 Live")
+        st.caption("Quick view" if not live_on else "Live feed on")
 
     _inject_home_command_center_css()
     sections.append("inject_css")
@@ -6680,13 +6726,13 @@ def render_playoff_command_center(team_name):
         except concurrent.futures.TimeoutError:
             bundle = None
             skip_note = (
-                "<div style='margin-top:8px;color:#fca5a5'><strong>Live data skipped to keep dashboard fast.</strong> "
-                "The live bundle did not finish within 8 seconds — showing cached/local hero above.</div>"
+                "<div style='margin-top:8px;color:#fca5a5'><strong>Keeping the page fast.</strong> "
+                "The live feed took too long, so the local game story stays on screen.</div>"
             )
         except Exception as exc:
             bundle = None
             skip_note = (
-                "<div style='margin-top:8px;color:#fca5a5'><strong>Live data skipped to keep dashboard fast.</strong> "
+                "<div style='margin-top:8px;color:#fca5a5'><strong>Live feed did not load.</strong> "
                 f"{html.escape(repr(exc))}</div>"
             )
         finally:
@@ -6727,16 +6773,16 @@ def render_playoff_command_center(team_name):
     sections.append("hero")
     sections.append("emphasis_strip")
 
-    sec1_title = "1 · Postmortem — final series log" if is_eliminated else "1 · Series board"
+    sec1_title = "1 · How the run ended" if is_eliminated else "1 · Where the series stands"
     st.markdown(f'<div class="cmd-sec">{html.escape(sec1_title)}</div>', unsafe_allow_html=True)
     snap_cols = st.columns(4)
     status_txt = series_status_text(team_name, s_active)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
-    snap_cols[0].metric("Playoff status", "Advanced" if adv_like else profile.get("status", "—"))
+    snap_cols[0].metric("Playoff mood", "Still dancing" if adv_like else profile.get("status", "—"))
     snap_cols[1].metric("Seed", profile.get("seed", "—"))
     s_disp = hctx.get("series") or s_active
     snap_cols[2].metric(
-        "Round on the board",
+        "Current chapter",
         (s_disp or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"),
     )
     fb = pctx.get("fb")
@@ -6749,8 +6795,8 @@ def render_playoff_command_center(team_name):
     elif fb and fb.get("game") and fb.get("phase") == "postgame":
         edge = "Final logged — wrap in hub"
     else:
-        edge = "Local / static (no live scoreboard merge)" if not effective_live else "Tracking next tip"
-    edge_metric = "Dashboard focus" if is_eliminated else "Tonight's edge"
+        edge = "Quick story view" if not effective_live else "Tracking next tip"
+    edge_metric = "Page focus" if is_eliminated else "Tonight's edge"
     if is_eliminated:
         edge = "Offseason · roster, draft & cap"
     snap_cols[3].metric(edge_metric, edge)
@@ -6771,7 +6817,7 @@ def render_playoff_command_center(team_name):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
     sections.append("series_board")
 
-    st.markdown('<div class="cmd-sec">2 · Runway to tip</div>', unsafe_allow_html=True)
+    st.markdown("<div class='cmd-sec'>2 · Tonight's runway</div>", unsafe_allow_html=True)
     if is_eliminated:
         with st.expander("Playoff schedule archive (no upcoming tip for this team)", expanded=False):
             with st.container(border=True):
@@ -6793,31 +6839,31 @@ def render_playoff_command_center(team_name):
                 st.info(
                     f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
                     + (
-                        "Live scoreboard row appears after **Load live API updates**."
+                        "Tap **Go live** when you want the scoreboard feed."
                         if not live_on
-                        else "Live tip and countdown post when the NBA schedule feed lists the game."
+                        else "The live feed will drop the game card here as soon as the league board has it."
                     )
                 )
     sections.append("runway")
 
-    st.markdown('<div class="cmd-sec">3 · Quick outlook</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">3 · What it feels like</div>', unsafe_allow_html=True)
     render_team_outlook(team_name, compact_home=True, series_obj=s_active)
     sections.append("outlook_compact")
 
-    st.markdown('<div class="cmd-sec">4 · Series snapshot (instant)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmd-sec">4 · Series at a glance</div>', unsafe_allow_html=True)
     fsnap = hctx.get("fast_snapshot") or get_fast_series_snapshot(team_name)
     c1, c2, c3 = st.columns(3)
     c1.metric("Opponent", fsnap.get("opponent") or "—")
-    c2.metric("Series (local)", fsnap.get("series_score") or "—")
-    c3.metric("Source", (fsnap.get("source") or "—")[:28])
+    c2.metric("Series", fsnap.get("series_score") or "—")
+    c3.metric("Latest read", (fsnap.get("source") or "—")[:28])
     lg = fsnap.get("latest_game")
     if isinstance(lg, dict) and lg:
         st.caption(
-            f"Latest logged row (local pack): {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
+            f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
         )
     sections.append("fast_series_snapshot")
 
-    st.markdown('<div class="cmd-sec">5 · Injury snapshot</div>', unsafe_allow_html=True)
+    st.markdown("<div class='cmd-sec'>5 · Who's available</div>", unsafe_allow_html=True)
     if injury_live:
         df_inj, _ = get_injury_report(team_name)
         if df_inj is not None and not df_inj.empty:
@@ -6827,7 +6873,7 @@ def render_playoff_command_center(team_name):
         sections.append("injury_snapshot_live")
     else:
         st.info(
-            "ESPN injury scrape is **off** in fast mode. Open **Injury Report** below and tap **Fetch** to load."
+            "Injuries stay tucked away in quick view. Tap **Go live** when you want the latest availability check."
         )
         sections.append("injury_snapshot_fast_placeholder")
 
@@ -6926,23 +6972,23 @@ def render_playoff_command_center(team_name):
     def sec_outlook_full():
         render_team_outlook(team_name, compact_home=False, series_obj=s_active)
 
-    with st.expander("Injury Report (ESPN / merges)", expanded=False):
+    with st.expander("Who's available", expanded=False):
         if st.button("Fetch injury report", key=f"home_fetch_inj_{team_name}"):
             st.session_state[HOME_DASH_LOAD_INJ] = True
             st.rerun()
         if st.session_state.get(HOME_DASH_LOAD_INJ):
             sec_injuries()
         else:
-            st.caption("Loads ESPN scrape and merged tables — only after you click **Fetch**.")
+            st.caption("Tap **Fetch injury report** when you want the latest availability check.")
 
-    with st.expander("Top Performers (NBA player stats)", expanded=False):
-        if st.button("Load player stats & headshots", key=f"home_fetch_stars_{team_name}"):
+    with st.expander("Faces of the run", expanded=False):
+        if st.button("Load players & photos", key=f"home_fetch_stars_{team_name}"):
             st.session_state[HOME_DASH_LOAD_STARS] = True
             st.rerun()
         if st.session_state.get(HOME_DASH_LOAD_STARS):
             sec_stars()
         else:
-            st.caption("Uses career stats + headshot URLs — skipped until you opt in.")
+            st.caption("Tap once to bring in player cards and photos.")
 
     with st.expander("Momentum", expanded=False):
         sec_momentum()
@@ -6950,36 +6996,36 @@ def render_playoff_command_center(team_name):
     with st.expander("Player Storylines", expanded=False):
         sec_stories()
 
-    with st.expander("Detailed Matchup Intelligence", expanded=False):
+    with st.expander("Last game's headline", expanded=False):
         sec_last_game()
 
-    with st.expander("Full team outlook & worry list", expanded=False):
+    with st.expander("Full team outlook", expanded=False):
         sec_outlook_full()
 
-    with st.expander("Legacy playoff game totals (NBA logs)", expanded=False):
+    with st.expander("Player playoff receipts", expanded=False):
         if st.button("Load playoff game logs", key=f"home_fetch_legacy_{team_name}"):
             st.session_state[HOME_DASH_LOAD_LEGACY] = True
             st.rerun()
         if st.session_state.get(HOME_DASH_LOAD_LEGACY):
             sec_legacy()
         else:
-            st.caption("Pulls player playoff game logs — heavy; click **Load** first.")
+            st.caption("Tap **Load playoff game logs** to see the deeper player ledger.")
 
     st.caption(
-        f"Auto-updated bracket series + API where available · Refreshed {datetime.now().strftime('%b %d %I:%M %p')}"
+        f"Updated {datetime.now().strftime('%b %d %I:%M %p')} · Playoff story refreshes as new results land."
     )
     sections.append("footer_caption")
 
     live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
     perf_fast = (not live_flag) or is_eliminated
     if is_eliminated:
-        api_display = "0 (offseason mode — no automatic live playoff bundle on Home)"
+        api_display = "none in postmortem mode"
     elif live_flag and api_calls:
-        api_display = "1 × live_bundle (resolve_home_matchup + series_for_team + featured_broadcast_state)"
+        api_display = "live feed checked"
     elif live_flag:
-        api_display = "0 (live bundle did not complete)"
+        api_display = "live feed missed"
     else:
-        api_display = "0 automatic on Home (fast mode — optional APIs only via buttons)"
+        api_display = "quick view only"
 
     _home_dashboard_perf_footer(
         t0,
@@ -8753,7 +8799,7 @@ def _render_live_gc_layer1(team_name, profile):
     <div style="font-size:12px;font-weight:900">{html.escape(team_name)}</div>
   </div>
   <div style="text-align:center;min-width:220px">
-    <div style="font-size:11px;color:#94a3b8;font-weight:900;letter-spacing:.12em">BASIC GAME CENTER</div>
+    <div style="font-size:11px;color:#94a3b8;font-weight:900;letter-spacing:.12em">GAME ROOM</div>
     <div class="live-gc-score">{html.escape(series_text)}</div>
     <div class="live-gc-clock">{html.escape(round_name)} · source: {html.escape(source)}</div>
   </div>
@@ -8769,10 +8815,9 @@ def _render_live_gc_layer1(team_name, profile):
     c1.metric("Selected team", fan_nick(team_name))
     c2.metric("Opponent", fan_nick(opp) if opp else "TBD")
     c3.metric("Round", round_name)
-    c4.metric("Layer 1", "loaded")
+    c4.metric("Game room", "open")
     st.info(
-        "Basic Live Game Center is loaded from local app data only. "
-        "Live score, clock, box score, injuries, and play-by-play load only when you click the button below."
+        "You can always get here. The matchup, series, and team identity load first; live score and highlights come in when you tap the button."
     )
     return opp, round_name, series_text, source
 
@@ -8780,23 +8825,23 @@ def _render_live_gc_layer1(team_name, profile):
 def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None):
     """Small debug block that never triggers API calls by itself."""
     errors = errors or []
-    with st.expander("Live Game Center debug", expanded=True):
+    with st.expander("Connection check", expanded=True):
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Selected team", team_name)
         d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
         d3.metric("Opponent", opp or "TBD")
-        d4.metric("Layer 1 loaded", "yes" if layer1_loaded else "no")
+        d4.metric("Game hub loaded", "yes" if layer1_loaded else "no")
         e1, e2, e3 = st.columns(3)
-        e1.metric("Live fetch attempted", "yes" if live_attempted else "no")
+        e1.metric("Live check", "tried" if live_attempted else "not yet")
         e2.metric(
-            "Live scoreboard returned games",
+            "League board",
             "not requested" if live_count is None else ("yes" if live_count > 0 else "no"),
         )
-        e3.metric("Live games found", "not requested" if live_count is None else str(live_count))
+        e3.metric("Games found", "not requested" if live_count is None else str(live_count))
         if errors:
-            st.warning("API notes: " + " | ".join(str(x) for x in errors[:4]))
+            st.warning("Feed notes: " + " | ".join(str(x) for x in errors[:4]))
         else:
-            st.caption("No API errors recorded for this page render.")
+            st.caption("No feed issues recorded for this page render.")
 
 
 def _fetch_live_gc_snapshot(team_name):
@@ -8827,11 +8872,12 @@ def _fetch_live_gc_snapshot(team_name):
 
 def render_live_game_center(team_name, profile):
     """Two-layer, fail-safe Live Game Center. Layer 1 never calls external APIs."""
+    ident = team_fan_identity(team_name)
     render_fan_page_hero(
         team_name,
         "Live Game Center",
-        f"Guaranteed local shell first for {fan_nick(team_name)}.",
-        "FAIL-SAFE MODE",
+        f"{ident['stakes']} The room opens first; live details arrive when you ask for them.",
+        "GAME NIGHT",
     )
     if st.session_state.get("_live_gc_sel_team") != team_name:
         for k in list(st.session_state.keys()):
@@ -8859,26 +8905,26 @@ def render_live_game_center(team_name, profile):
                     pass
             st.rerun()
     with col_b:
-        st.caption("Live APIs, ESPN injuries, box score, play-by-play, and shot chart are not touched until you click the button.")
+        st.caption("The game room opens instantly. Live score, injuries, box score, and highlights load only when you ask.")
 
     if not st.session_state.get(layer_key):
         _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=False)
         return
 
     st.divider()
-    team_section_header("Layer 2 · Optional live data", "🔴")
+    team_section_header("Live feed", "🔴")
     snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
     _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
 
     if not snap or not snap.get("game_found"):
-        msg = (snap or {}).get("detection_message") or "Live feed is unavailable right now."
+        msg = (snap or {}).get("detection_message") or "The league feed is quiet right now."
         if (snap or {}).get("detection_tier") == "scheduled_today":
             st.warning("Game scheduled today — live feed not detected yet.")
         elif (snap or {}).get("detection_tier") == "likely_live_feed_gap":
             st.error("Game may be in progress, but the live feed is delayed.")
         else:
             st.warning(msg)
-        st.caption("Layer 1 remains usable above; no general outlook is shown unless there is truly no live/today game data.")
+        st.caption("The game room above stays usable while the live feed catches up.")
         return
 
     game_row = snap.get("game_row")
@@ -8914,19 +8960,19 @@ def render_live_game_center(team_name, profile):
             box_game = get_live_boxscore(gid) if gid else {}
             box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
         except Exception as exc:
-            st.caption(f"Box score unavailable: {exc!r}")
+            st.caption(f"Box score is not ready yet: {exc!r}")
         if box_df is not None and not box_df.empty:
             _live_gc_top_performers(box_df, team_name, parsed["opp_name"])
             render_fan_stat_table(box_df, team_name)
         else:
-            st.caption("Box score has not published or could not be fetched.")
+            st.caption("Box score has not published yet.")
 
     with st.expander("Play-by-play and shot chart", expanded=False):
         actions = []
         try:
             actions = get_live_playbyplay(gid) if gid else []
         except Exception as exc:
-            st.caption(f"Play-by-play unavailable: {exc!r}")
+            st.caption(f"Play-by-play is not ready yet: {exc!r}")
         if actions:
             try:
                 tp = top_plays_from_game_id(gid, team_name, limit=8)
@@ -8936,15 +8982,15 @@ def render_live_game_center(team_name, profile):
                 if not shots.empty:
                     st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
             except Exception as exc:
-                st.caption(f"Advanced play analysis unavailable: {exc!r}")
+                st.caption(f"Highlight view is not ready yet: {exc!r}")
         else:
-            st.caption("Play-by-play has not published or could not be fetched.")
+            st.caption("Play-by-play has not published yet.")
 
     with st.expander("Injuries", expanded=False):
         try:
             render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name)
         except Exception as exc:
-            st.caption(f"Injury report unavailable: {exc!r}")
+            st.caption(f"Injury report is not ready yet: {exc!r}")
 
 # ==========================================================
 # Sidebar
