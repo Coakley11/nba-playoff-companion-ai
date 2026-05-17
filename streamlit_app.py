@@ -2996,26 +2996,26 @@ def player_resume_profile(player_name, team_name=""):
         "brunson": {
             "baseline": 68, "ceiling": 96, "role": "lead guard",
             "resume": "Brunson is already the face of how the Knicks score in the half court: the late-clock initiator fans trust when the Garden gets loud.",
-            "team_context": "A longer run cements him next to the names New York remembers at guard—Frazier, Monroe, and the modern stars who owned spring at MSG.",
-            "comps": ["Walt Frazier", "Earl Monroe", "Chauncey Billups", "Damian Lillard", "Isiah Thomas", "Allen Iverson"]
+            "team_context": "A longer run cements him next to the names New York remembers at guard: Walt Frazier, Earl Monroe, and the modern stars who owned spring at MSG.",
+            "comps": ["Walt Frazier", "Willis Reed", "Patrick Ewing", "Earl Monroe", "Carmelo Anthony", "Bernard King"]
         },
         "towns": {
             "baseline": 61, "ceiling": 91, "role": "scoring big",
             "resume": "Towns arrives as a proven offensive big: spacing, touch, and the ability to bend a defense without needing a gimmick.",
             "team_context": "For the Knicks, a deep push ties him to the franchise's big-man lineage; the chapter gets louder if he authors a few unmistakable playoff nights.",
-            "comps": ["Patrick Ewing", "Willis Reed", "Chris Bosh", "Dirk Nowitzki", "Anthony Davis", "Pau Gasol"]
+            "comps": ["Patrick Ewing", "Willis Reed", "Dave DeBusschere", "Charles Oakley", "Chris Bosh", "Pau Gasol"]
         },
         "anunoby": {
             "baseline": 50, "ceiling": 82, "role": "two-way wing",
             "resume": "OG is known for winning basketball: guarding the other team's best wing and doing the small things that show up in close games.",
             "team_context": "In New York, the story is simple—become the defender and connector fans replay when they talk about this run.",
-            "comps": ["Kawhi Leonard", "Andre Iguodala", "Tayshaan Prince", "Shane Battier", "Scottie Pippen", "Bruce Bowen"]
+            "comps": ["Kawhi Leonard", "Andre Iguodala", "Tayshaun Prince", "Shane Battier", "Scottie Pippen", "Bruce Bowen"]
         },
         "bridges": {
             "baseline": 48, "ceiling": 82, "role": "two-way wing",
             "resume": "Bridges brings ironman minutes, switchable defense, and the kind of reliability coaches lean on when the rotation shortens.",
             "team_context": "For the Knicks, he levels up if he is the guy taking the toughest assignment and still cashing the shots that quiet the road crowd.",
-            "comps": ["Andre Iguodala", "Tayshaan Prince", "Shane Battier", "Khris Middleton", "Jimmy Butler", "Kawhi Leonard"]
+            "comps": ["Andre Iguodala", "Tayshaun Prince", "Shane Battier", "Khris Middleton", "Jimmy Butler", "Kawhi Leonard"]
         },
         "hart": {
             "baseline": 44, "ceiling": 76, "role": "winning role star",
@@ -3040,6 +3040,12 @@ def player_resume_profile(player_name, team_name=""):
             "resume": "Davis already has a ring and a body of work built on rim protection, switchability, and nights where he looks like the best two-way big on the floor.",
             "team_context": "Another Lakers deep run sharpens the simple argument: where he ranks among the great bigs of this generation.",
             "comps": ["Kevin Garnett", "David Robinson", "Hakeem Olajuwon", "Tim Duncan", "Dwight Howard", "Pau Gasol"]
+        },
+        "edwards": {
+            "baseline": 68, "ceiling": 97, "role": "franchise scoring guard",
+            "resume": "Edwards brings the playoff star package Minnesota has waited on: downhill pressure, shot-making confidence, and the personality to own the room.",
+            "team_context": "For Minnesota, the live question is whether he becomes the greatest Timberwolves playoff figure since Kevin Garnett, or eventually pushes into a higher tier.",
+            "comps": ["Kevin Garnett", "Dwyane Wade", "Kobe Bryant", "Michael Jordan", "Jimmy Butler", "Clyde Drexler"]
         },
     }
 
@@ -3138,23 +3144,90 @@ def legacy_tier(score):
         return "quiet shift"
     return "little movement in the story"
 
+def specific_legacy_comparison(player, team, pts, fg, three, plus_minus, rounds, title, score):
+    """Ground legacy copy in real names and realistic tiers instead of generic greatness language."""
+    n = str(player or "").lower()
+    nick = fan_nick(team)
+    role = player_resume_profile(player, team).get("role", "playoff contributor")
+    efficient = fg >= 0.47 and three >= 0.36
+    weak = fg < 0.42 or plus_minus < -2
+    huge = pts >= 35
+    star_line = pts >= 28
+
+    if "brunson" in n:
+        if title and huge and efficient:
+            return "If Brunson averages 35+ with strong efficiency and wins the championship, this becomes more than a great playoff run. It puts him near the Frazier/Reed/Ewing tier of defining Knicks figures, with a real top-three Knick argument if the Finals stage is his."
+        if title and star_line:
+            return "A championship with Brunson as the clear engine would move him from modern Knicks star into the Walt Frazier, Willis Reed, Patrick Ewing conversation for most important playoff figures in franchise history."
+        if rounds >= 3 and star_line:
+            return "A Finals trip on this line would put Brunson above the Carmelo Anthony and Bernard King style of beloved scoring chapter and closer to a franchise-defining guard tier."
+        if weak:
+            return "The team success would still matter, but weak efficiency keeps the leap closer to modern Knicks star than Frazier/Reed/Ewing territory."
+        return "This strengthens Brunson's place among modern Knicks stars; the jump into top-five franchise talk needs either a title or a truly outrageous scoring run."
+
+    if "towns" in n:
+        if title and efficient and plus_minus >= 2:
+            return "A title with Towns spacing the floor and punishing mismatches would make him a championship big in New York's story: not Patrick Ewing's role, but a Dave DeBusschere/Chris Bosh/Pau Gasol type second-star chapter with real weight."
+        if title:
+            return "A ring makes Towns part of Knicks big-man history, but the tier depends on whether he looks like a centerpiece or the elite spacing big who unlocked the offense."
+        if rounds >= 3 and efficient:
+            return "Conference Finals production with this efficiency pushes Towns toward the franchise's serious big-man conversation, somewhere between spacing star and championship-level second option."
+        if weak:
+            return "If the efficiency slips, the comparison stays closer to useful playoff big than Willis Reed or Ewing territory, even if the team keeps winning."
+        return "This profile builds the case for Towns as the spacing big who changed New York's offense, with Bosh/Gasol-style second-star comparisons more realistic than franchise centerpiece claims."
+
+    if "lebron" in n or n.strip() == "james":
+        if title:
+            return "Another Lakers title this late would not create a new LeBron tier; it would sharpen the Jordan/Kareem debate and add one more answer against Kobe, Magic, and Tim Duncan longevity arguments."
+        if rounds >= 3:
+            return "A Finals trip still matters because it adds late-career proof to the all-time resume, but without the ring it is more GOAT-debate evidence than a debate-ender."
+        return "For LeBron, early rounds rarely change the all-time table. The legacy movement comes from another Finals run or title-level control."
+
+    if "edwards" in n:
+        if title and star_line and efficient:
+            return "A title with Edwards as the lead scorer would put him above every Timberwolves playoff figure except the deepest Kevin Garnett arguments, while inviting Wade/Kobe-style young champion comparisons."
+        if rounds >= 3 and star_line:
+            return "A Finals-level run on this line would make Edwards the greatest Minnesota playoff figure since Garnett and start a real conversation about whether he can pass KG in franchise postseason memory."
+        if weak:
+            return "The athletic moments would travel, but inefficient scoring keeps the comparison closer to Jimmy Butler-style competitive force than Jordan/Kobe/Wade territory."
+        return "This keeps building Edwards as Minnesota's post-KG playoff face; the top-tier leap needs either the Finals stage or a title."
+
+    if any(x in role for x in ["contributor", "role", "wing", "rotation"]):
+        comps = _remove_self_comparisons(player, player_resume_profile(player, team).get("comps", []))
+        c0 = comps[0] if comps else "Robert Horry"
+        c1 = comps[1] if len(comps) > 1 else "Shane Battier"
+        if title and plus_minus >= 2:
+            return f"A title would make {player} part of the {nick} rotation lore: more {c0}/{c1} type winning-piece value than superstar ranking talk."
+        if rounds >= 3:
+            return f"This is the kind of run that makes role players memorable: not top-five franchise territory, but a real {c0}-style 'we do not get there without him' chapter."
+        return f"For a role player, the legacy jump is about trusted playoff possessions. Think {c0} or {c1} comparisons in role, not GOAT language."
+
+    if title and score >= 90:
+        return f"A championship with this profile pushes {player} into top-five {nick} playoff-run conversation, with the exact rank depending on Finals moments and matchup difficulty."
+    if title:
+        return f"A ring gives {player} a real franchise-history chapter, but the claim is grounded as a title-run cornerstone rather than automatic greatest-player talk."
+    if rounds >= 3:
+        return f"A Finals trip makes this a top-10 style {nick} playoff run if the production holds, especially if the biggest games match the box score."
+    if weak:
+        return "Team success helps the resume, but weak efficiency or impact keeps the individual leap modest."
+    return f"This moves {player} into a stronger {nick} playoff conversation without forcing an unrealistic all-time claim."
+
+
 def _scenario_meaning(player, team, score, _scenario_label, rounds, title):
     prof = player_resume_profile(player, team)
     comps = _remove_self_comparisons(player, prof["comps"])
     tier = player_specific_tier(score, player, team)
     nick = fan_nick(team)
     if title:
-        team_hist = (
-            f"A title for {nick} would hang {player}'s line next to the franchise's biggest banners—think the gravity of names like {comps[0]} and {comps[1]}, not as a clone, but as the neighborhood of pressure."
-        )
-        nba_hist = f"League-wide, a ring writes a championship chapter people do not forget. {tier}"
+        team_hist = specific_legacy_comparison(player, team, 30, 0.47, 0.36, 3, rounds, title, score)
+        nba_hist = f"League-wide comparison lane: {', '.join(comps[:3])}. {tier}"
     elif rounds >= 3:
-        team_hist = f"A Finals trip would make this one of the {nick} seasons people still reference—especially if {player} keeps producing at this clip."
+        team_hist = specific_legacy_comparison(player, team, 28, 0.46, 0.35, 2, rounds, title, score)
         nba_hist = (
-            f"Around the league, people start mentioning players like {comps[1]} and {comps[2]} when they describe the kind of impact he carried—not a perfect comp, but the shape of the role."
+            f"Around the league, the cleaner comp lane is {comps[1]} and {comps[2]}: not identical players, but the kind of impact tier being tested."
         )
     elif rounds >= 2:
-        team_hist = f"Conference finals basketball would stamp {player} as a central figure in this {nick} chapter, not just a good regular-season story."
+        team_hist = specific_legacy_comparison(player, team, 24, 0.45, 0.35, 1, rounds, title, score)
         nba_hist = f"The bar-talk comps drift toward names like {comps[2]} and {comps[3]}: guys who mattered when the possessions got ugly."
     elif rounds >= 1:
         team_hist = f"Winning this round ties {player}'s numbers to a series people will actually remember when they talk about {nick} in May."
@@ -3709,24 +3782,17 @@ def render_legacy_tracker_page(team_name):
         )
 
     def _legacy_profile_read(score, wins, title=False):
-        eff_ok = fg >= 0.47 and three >= 0.36
-        weak_eff = fg < 0.42 or plus_minus < -2
-        huge_scoring = pts >= 30
-        solid_scoring = pts >= 23
-        nick = fan_nick(team_name)
-        if title and huge_scoring and eff_ok and plus_minus >= 4:
-            return f"This is the dream version: {player} carries star production deep into June, and a title would make it one of the great {nick} playoff chapters."
-        if title and weak_eff:
-            return f"A banner still matters, but this profile reads more like team success lifting the legacy than an individual takeover."
-        if title:
-            return f"A title with this line gives {player} a real spring people remember, even if it stops short of franchise-GOAT territory."
-        if wins >= 3 and huge_scoring and eff_ok:
-            return f"Conference Finals production like this changes the room - {player} starts sounding like the defining player of this run."
-        if wins >= 3 and weak_eff:
-            return f"Getting that far helps, but the efficiency and impact numbers keep the individual leap smaller."
-        if solid_scoring and plus_minus >= 0:
-            return f"Winning the next round with this profile strengthens {player}'s place among modern {nick} playoff names."
-        return f"This helps the team story, but it does not rewrite the individual legacy unless the shot-making or impact climbs."
+        return specific_legacy_comparison(
+            player,
+            team_name,
+            pts,
+            fg,
+            three,
+            plus_minus,
+            wins,
+            title,
+            score,
+        )
 
     next_wins = min(4, series_wins_bracket + 1)
     cf_wins = max(next_wins, 3)
@@ -4863,6 +4929,332 @@ def matchup_advantages(team, opp):
             adv="Close"; why="This spot depends on current form, shooting, defense, matchup choices, and foul trouble."
         rows.append({"Position":pos, team:tp, opp:op, "Advantage":adv, "Why":why})
     return pd.DataFrame(rows)
+
+
+def _lineup_stat_num(stats, key):
+    try:
+        return float(stats.get(key, 0))
+    except Exception:
+        return 0.0
+
+
+def _lineup_player_html(player, team, pos, side_label=""):
+    esc = html.escape
+    stats = season_averages(player)
+    logo = TEAM_LOGOS.get(team, "")
+    stat_line = (
+        f"<span>{_lineup_stat_num(stats, 'PTS'):.1f} PTS</span>"
+        f"<span>{_lineup_stat_num(stats, 'REB'):.1f} REB</span>"
+        f"<span>{_lineup_stat_num(stats, 'AST'):.1f} AST</span>"
+    )
+    return f"""
+<div class="ml-player ml-player--{esc(side_label)}">
+  <div class="ml-player-top">
+    <img class="ml-headshot" src="{esc(headshot(player))}" alt=""/>
+    <img class="ml-mini-logo" src="{esc(logo)}" alt=""/>
+  </div>
+  <div class="ml-pos">{esc(pos)} · {esc(fan_nick(team))}</div>
+  <div class="ml-name">{esc(player)}</div>
+  <div class="ml-stats">{stat_line}</div>
+</div>
+"""
+
+
+def _lineup_badge_for_matchup(team_player, opp_player, pos, team, opp):
+    t = season_averages(team_player)
+    o = season_averages(opp_player)
+    t_pts, o_pts = _lineup_stat_num(t, "PTS"), _lineup_stat_num(o, "PTS")
+    t_reb, o_reb = _lineup_stat_num(t, "REB"), _lineup_stat_num(o, "REB")
+    t_ast, o_ast = _lineup_stat_num(t, "AST"), _lineup_stat_num(o, "AST")
+    t_def, o_def = _lineup_stat_num(t, "STL") + _lineup_stat_num(t, "BLK"), _lineup_stat_num(o, "STL") + _lineup_stat_num(o, "BLK")
+    star_names = ["Brunson", "Maxey", "LeBron", "Davis", "Edwards", "Towns", "Embiid", "Mitchell", "Shai", "Gilgeous", "Wembanyama", "Cunningham", "Tatum", "Brown"]
+    pair = f"{team_player} {opp_player}"
+    if any(x in pair for x in star_names):
+        label = "Star Matchup"
+    elif pos in ("PF", "C") and abs(t_reb - o_reb) >= 1.5:
+        label = "Rebounding Edge"
+    elif abs(t_pts - o_pts) >= 4:
+        label = "Scoring Edge"
+    elif t_def + o_def >= 2.4:
+        label = "Defensive Battle"
+    elif pos in ("PG", "SG") and abs(t_ast - o_ast) >= 1.5:
+        label = "Playmaking Edge"
+    else:
+        label = "X-Factor"
+
+    t_score = t_pts * 1.0 + t_reb * 0.55 + t_ast * 0.65 + t_def * 1.8
+    o_score = o_pts * 1.0 + o_reb * 0.55 + o_ast * 0.65 + o_def * 1.8
+    if abs(t_score - o_score) < 2.5:
+        adv = "Toss-up"
+        adv_team = "Close"
+    elif t_score > o_score:
+        adv = f"{fan_nick(team)} edge"
+        adv_team = team
+    else:
+        adv = f"{fan_nick(opp)} edge"
+        adv_team = opp
+
+    if label == "Star Matchup":
+        why = f"{team_player} and {opp_player} can both bend the first defensive coverage. The pace of this spot shapes the whole preview."
+    elif label == "Rebounding Edge":
+        why = "This is where extra possessions can swing the middle quarters, especially if misses turn into kick-out threes."
+    elif label == "Scoring Edge":
+        why = "The cleanest shot creator at this position can force help and open the next pass."
+    elif label == "Defensive Battle":
+        why = "Stops, deflections, and rim contests matter as much as the box-score line here."
+    elif label == "Playmaking Edge":
+        why = "Ball pressure and decision-making decide whether the offense gets organized or has to freelance late."
+    else:
+        why = "This spot may not lead the broadcast, but one hot stretch or foul-trouble twist can change the matchup math."
+    return label, adv, adv_team, why
+
+
+def _inject_matchup_lineups_css(team, opp):
+    t = get_team_theme(team)
+    o = get_team_theme(opp)
+    st.markdown(
+        f"""
+<style>
+.ml-shell {{
+  --ml-primary:{t['primary']}; --ml-secondary:{t['secondary']}; --ml-opp:{o['primary']}; --ml-opp2:{o['secondary']};
+  --ml-bg0:{t['bg0']}; --ml-bg1:{t['bg1']}; --ml-border:{t['border']};
+}}
+.ml-hero {{
+  border-radius:24px; padding:22px; margin:8px 0 18px;
+  background:
+    radial-gradient(circle at 15% 15%, {t['accent_soft']}, transparent 30%),
+    radial-gradient(circle at 85% 20%, {o['accent_soft']}, transparent 30%),
+    linear-gradient(135deg, {t['bg0']}, {t['bg1']});
+  border:1px solid {t['border']}; color:#f8fafc; box-shadow:0 18px 42px rgba(0,0,0,.24);
+}}
+.ml-hero-row {{ display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }}
+.ml-hero-team {{ display:flex; align-items:center; gap:12px; min-width:210px; }}
+.ml-hero-logo {{ width:82px; height:82px; object-fit:contain; filter:drop-shadow(0 10px 18px rgba(0,0,0,.45)); }}
+.ml-hero-name {{ font-size:1.45rem; font-weight:950; line-height:1.05; }}
+.ml-hero-meta {{ font-size:12px; color:#cbd5e1; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }}
+.ml-vs {{ font-size:2.2rem; font-weight:950; color:{t['accent']}; text-shadow:0 0 18px rgba(255,255,255,.18); }}
+.ml-headline {{ margin-top:16px; font-size:1.25rem; font-weight:900; line-height:1.25; }}
+.ml-sub {{ margin-top:6px; font-size:13px; color:#cbd5e1; max-width:900px; }}
+.ml-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:14px; margin:8px 0 20px; }}
+.ml-card {{
+  border-radius:20px; padding:14px; background:linear-gradient(180deg,#ffffff,#f8fafc);
+  border:1px solid rgba(148,163,184,.35); box-shadow:0 10px 28px rgba(15,23,42,.10);
+}}
+.ml-card-top {{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }}
+.ml-position {{ font-size:11px; font-weight:950; letter-spacing:.12em; text-transform:uppercase; color:#64748b; }}
+.ml-badge {{ padding:5px 10px; border-radius:999px; font-size:10px; font-weight:950; letter-spacing:.06em; text-transform:uppercase; color:#0f172a; background:{t['accent']}; }}
+.ml-match {{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; }}
+.ml-player {{ border-radius:16px; padding:10px; min-height:188px; background:#fff; border:1px solid rgba(148,163,184,.25); }}
+.ml-player--team {{ border-top:5px solid {t['primary']}; }}
+.ml-player--opp {{ border-top:5px solid {o['primary']}; }}
+.ml-player-top {{ position:relative; min-height:82px; }}
+.ml-headshot {{ width:92px; height:72px; object-fit:cover; object-position:top center; border-radius:14px; background:#e2e8f0; }}
+.ml-mini-logo {{ position:absolute; right:0; top:0; width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 3px 8px rgba(0,0,0,.25)); }}
+.ml-pos {{ font-size:10px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-top:6px; }}
+.ml-name {{ font-size:16px; line-height:1.05; font-weight:950; color:#0f172a; margin-top:3px; }}
+.ml-stats {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
+.ml-stats span {{ font-size:10px; font-weight:900; color:#334155; background:#f1f5f9; border-radius:999px; padding:4px 7px; }}
+.ml-card-vs {{ font-size:12px; font-weight:950; color:#64748b; }}
+.ml-adv {{ margin-top:12px; border-radius:14px; padding:10px 12px; background:linear-gradient(90deg,{t['accent_soft']},rgba(148,163,184,.10)); border:1px solid rgba(148,163,184,.25); }}
+.ml-adv-title {{ font-size:12px; font-weight:950; color:#0f172a; }}
+.ml-adv-body {{ font-size:12px; line-height:1.45; color:#475569; margin-top:3px; }}
+.ml-tile-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:8px 0 18px; }}
+.ml-tile {{ border-radius:16px; padding:13px; background:rgba(15,23,42,.86); color:#f8fafc; border:1px solid rgba(148,163,184,.28); }}
+.ml-tile-k {{ font-size:10px; font-weight:950; color:{t['accent']}; letter-spacing:.12em; text-transform:uppercase; }}
+.ml-tile-v {{ font-size:14px; font-weight:900; margin-top:5px; line-height:1.25; }}
+.ml-tile-s {{ font-size:12px; color:#cbd5e1; line-height:1.35; margin-top:5px; }}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _matchup_edge_tiles(team, opp):
+    tp = TEAM_PROFILES.get(team, {})
+    op = TEAM_PROFILES.get(opp, {})
+    t_strengths = tp.get("strengths") or []
+    o_strengths = op.get("strengths") or []
+    t_concerns = tp.get("concerns") or []
+    o_concerns = op.get("concerns") or []
+    return [
+        ("Shot creation", t_strengths[0] if t_strengths else "Half-court creation", o_concerns[0] if o_concerns else "Can the defense keep the ball out of the paint?"),
+        ("Wing defense", t_strengths[2] if len(t_strengths) > 2 else "Perimeter resistance", o_strengths[2] if len(o_strengths) > 2 else "Who wins the matchup-hunting minutes?"),
+        ("Rebounding", t_strengths[3] if len(t_strengths) > 3 else "Extra possessions", "The glass decides whether good defensive trips actually end."),
+        ("Rim pressure", o_strengths[0] if o_strengths else "Paint touches", t_concerns[0] if t_concerns else "Foul trouble can flip the rotation."),
+        ("Shooting", t_strengths[1] if len(t_strengths) > 1 else "Spacing", "The cleaner catch-and-shoot team gets the easiest runs."),
+    ]
+
+
+def render_matchup_lineups_page(team_name, profile):
+    hctx = resolve_home_matchup_context_fast(team_name)
+    possible = hctx.get("opponents") or []
+    default_opp = hctx.get("opponent") or profile.get("current_opponent") or hctx.get("opponent_display")
+    opponents = [op for op in possible if op in TEAM_PROFILES] or ([default_opp] if default_opp in TEAM_PROFILES else [])
+    if not opponents:
+        st.info("The next opponent is not settled enough for lineup cards yet. The matchup board will fill in once the bracket names a team.")
+        return
+    opp = opponents[0]
+    if len(opponents) > 1:
+        opp = st.selectbox("Preview possible opponent", opponents, format_func=lambda x: f"{team_name} vs {x}")
+
+    _inject_matchup_lineups_css(team_name, opp)
+    t_logo = TEAM_LOGOS.get(team_name, "")
+    o_logo = TEAM_LOGOS.get(opp, "")
+    series_obj = hctx.get("series") or _build_local_series_shell(team_name)
+    round_label = hctx.get("round_label") or (series_obj or {}).get("round") or profile.get("round", "Playoffs")
+    status = (hctx.get("ctx") or {}).get("status_text") or series_status_text(team_name, series_obj)
+    t_starters = estimated_starters_from_api(team_name)
+    o_starters = estimated_starters_from_api(opp)
+    lead_t = t_starters[0] if t_starters else fan_nick(team_name)
+    lead_o = o_starters[0] if o_starters else fan_nick(opp)
+    headline = f"{lead_t} vs {lead_o} sets the first pressure point"
+    if len(t_starters) > 1 and len(o_starters) > 1:
+        headline = f"{lead_t} vs {lead_o} controls the pace, but the wing and big battles decide the margins"
+
+    st.markdown(
+        f"""
+<div class="ml-shell">
+  <div class="ml-hero">
+    <div class="ml-hero-row">
+      <div class="ml-hero-team">
+        <img class="ml-hero-logo" src="{html.escape(t_logo)}" alt=""/>
+        <div><div class="ml-hero-meta">Selected team</div><div class="ml-hero-name">{html.escape(team_name)}</div></div>
+      </div>
+      <div class="ml-vs">VS</div>
+      <div class="ml-hero-team" style="justify-content:flex-end;text-align:right">
+        <div><div class="ml-hero-meta">{html.escape(str(round_label))}</div><div class="ml-hero-name">{html.escape(opp)}</div></div>
+        <img class="ml-hero-logo" src="{html.escape(o_logo)}" alt=""/>
+      </div>
+    </div>
+    <div class="ml-headline">{html.escape(headline)}</div>
+    <div class="ml-sub">{html.escape(status)} Lineups are estimated from current rotation data, so treat this like a playoff preview board rather than a final official starting five.</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Starting Lineup Matchups")
+    positions = ["PG", "SG", "SF", "PF", "C"]
+    cards = []
+    swing = None
+    swing_gap = -1
+    for i, pos in enumerate(positions):
+        tp = t_starters[i] if i < len(t_starters) else "TBD"
+        op = o_starters[i] if i < len(o_starters) else "TBD"
+        if "TBD" in (tp, op):
+            badge, adv, adv_team, why = "Rotation Watch", "TBD", "Close", "Official lineup data is still incomplete for this spot."
+        else:
+            badge, adv, adv_team, why = _lineup_badge_for_matchup(tp, op, pos, team_name, opp)
+            t_pts = _lineup_stat_num(season_averages(tp), "PTS")
+            o_pts = _lineup_stat_num(season_averages(op), "PTS")
+            gap = abs(t_pts - o_pts)
+            if gap > swing_gap:
+                swing_gap = gap
+                swing = (pos, tp, op, badge, why)
+        cards.append(
+            f"""
+<div class="ml-card">
+  <div class="ml-card-top"><div class="ml-position">{html.escape(pos)} vs {html.escape(pos)}</div><div class="ml-badge">{html.escape(badge)}</div></div>
+  <div class="ml-match">
+    {_lineup_player_html(tp, team_name, pos, "team")}
+    <div class="ml-card-vs">vs</div>
+    {_lineup_player_html(op, opp, pos, "opp")}
+  </div>
+  <div class="ml-adv"><div class="ml-adv-title">{html.escape(adv)}</div><div class="ml-adv-body">{html.escape(why)}</div></div>
+</div>
+"""
+        )
+    st.markdown('<div class="ml-shell"><div class="ml-grid">' + "".join(cards) + "</div></div>", unsafe_allow_html=True)
+
+    if swing:
+        pos, tp, op, badge, why = swing
+        st.markdown("### Biggest Matchup Swing")
+        st.markdown(
+            f"""
+<div class="ml-shell"><div class="ml-tile">
+  <div class="ml-tile-k">{html.escape(pos)} · {html.escape(badge)}</div>
+  <div class="ml-tile-v">{html.escape(tp)} vs {html.escape(op)}</div>
+  <div class="ml-tile-s">{html.escape(why)}</div>
+</div></div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Bench Battle")
+    bench_rows = []
+    for tm in (team_name, opp):
+        for p in estimated_bench_from_api(tm)[:4]:
+            stats = season_averages(p)
+            badge = "Bench Spark" if _lineup_stat_num(stats, "PTS") >= 8 else "Rotation Trust"
+            bench_rows.append(
+                f"""
+<div class="ml-tile">
+  <div class="ml-tile-k">{html.escape(badge)} · {html.escape(fan_nick(tm))}</div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+    <img class="ml-headshot" style="width:64px;height:52px" src="{html.escape(headshot(p))}" alt=""/>
+    <div><div class="ml-tile-v">{html.escape(p)}</div><div class="ml-tile-s">{_lineup_stat_num(stats, 'PTS'):.1f} PTS · {_lineup_stat_num(stats, 'REB'):.1f} REB · {_lineup_stat_num(stats, 'AST'):.1f} AST</div></div>
+  </div>
+</div>
+"""
+            )
+    st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(bench_rows) + "</div></div>", unsafe_allow_html=True)
+
+    st.markdown("### Key Tactical Edges")
+    edge_html = []
+    for label, value, sub in _matchup_edge_tiles(team_name, opp):
+        edge_html.append(
+            f"""<div class="ml-tile"><div class="ml-tile-k">{html.escape(label)}</div><div class="ml-tile-v">{html.escape(str(value))}</div><div class="ml-tile-s">{html.escape(str(sub))}</div></div>"""
+        )
+    st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(edge_html) + "</div></div>", unsafe_allow_html=True)
+
+    st.markdown("### X-Factor Players")
+    x_names = []
+    for arr in (TEAM_PROFILES.get(team_name, {}).get("starters", [])[2:5], TEAM_PROFILES.get(opp, {}).get("starters", [])[2:5]):
+        x_names.extend(arr[:2])
+    x_html = []
+    for p in x_names[:4]:
+        tm = team_name if p in TEAM_PROFILES.get(team_name, {}).get("starters", []) else opp
+        x_html.append(
+            f"""<div class="ml-tile"><div class="ml-tile-k">X-Factor · {html.escape(fan_nick(tm))}</div><div class="ml-tile-v">{html.escape(p)}</div><div class="ml-tile-s">If this player wins his role, the star matchup gets easier and the rotation can stay balanced.</div></div>"""
+        )
+    st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(x_html) + "</div></div>", unsafe_allow_html=True)
+
+    st.markdown("### Who Has the Edge?")
+    adv_df = matchup_advantages(team_name, opp)
+    team_edges = int((adv_df["Advantage"] == team_name).sum()) if not adv_df.empty else 0
+    opp_edges = int((adv_df["Advantage"] == opp).sum()) if not adv_df.empty else 0
+    close_edges = max(0, len(adv_df) - team_edges - opp_edges)
+    verdict = f"{fan_nick(team_name)} have the cleaner position-by-position edge." if team_edges > opp_edges else (
+        f"{fan_nick(opp)} show more obvious individual edges on paper." if opp_edges > team_edges else "This reads like a possession-margin matchup: shot quality, fouls, and the bench minutes decide it."
+    )
+    st.markdown(
+        f"""
+<div class="ml-shell"><div class="ml-tile-grid">
+  <div class="ml-tile"><div class="ml-tile-k">{html.escape(fan_nick(team_name))} edges</div><div class="ml-tile-v">{team_edges}</div><div class="ml-tile-s">Projected starter spots with a clear lean.</div></div>
+  <div class="ml-tile"><div class="ml-tile-k">{html.escape(fan_nick(opp))} edges</div><div class="ml-tile-v">{opp_edges}</div><div class="ml-tile-s">Projected starter spots with a clear lean.</div></div>
+  <div class="ml-tile"><div class="ml-tile-k">Toss-ups</div><div class="ml-tile-v">{close_edges}</div><div class="ml-tile-s">Where coaching, health, and form can flip the night.</div></div>
+</div>
+<div class="ml-tile" style="margin-top:10px"><div class="ml-tile-k">Matchup verdict</div><div class="ml-tile-v">{html.escape(verdict)}</div><div class="ml-tile-s">The board is visual by design: use the cards for the story, then open the raw rotation table only if you want the data underneath.</div></div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Raw rotation data", expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            rotation = fetch_team_rotation_by_minutes(team_name)
+            if not rotation.empty:
+                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(pd.DataFrame({"Player": current_roster_names(team_name, limit=12)}), use_container_width=True, hide_index=True)
+        with c2:
+            rotation = fetch_team_rotation_by_minutes(opp)
+            if not rotation.empty:
+                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(pd.DataFrame({"Player": current_roster_names(opp, limit=12)}), use_container_width=True, hide_index=True)
 
 
 # ==========================================================
@@ -9171,39 +9563,7 @@ elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
     if profile["status"] != "Active": st.warning("This team is eliminated, so current matchup lineups are not active.")
     else:
-        opp=profile["current_opponent"]
-        st.subheader("Projected Starter Matchups")
-        st.caption("Starter/rotation estimates use NBA API current-season minutes when available. Actual playoff starters can still change by injury, matchup choice, or coaching decision.")
-        st.dataframe(matchup_advantages(favorite_team, opp), use_container_width=True)
-
-        st.subheader("Current Rosters from NBA API")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**{favorite_team} current roster / rotation**")
-            roster = fetch_current_roster(favorite_team)
-            rotation = fetch_team_rotation_by_minutes(favorite_team)
-            if not rotation.empty:
-                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True)
-            elif not roster.empty:
-                st.dataframe(roster, use_container_width=True)
-            else:
-                st.warning("NBA API roster lookup failed. Showing backup saved names.")
-                st.dataframe(pd.DataFrame({"Player": current_roster_names(favorite_team)}), use_container_width=True)
-        with c2:
-            st.markdown(f"**{opp} current roster / rotation**")
-            roster = fetch_current_roster(opp)
-            rotation = fetch_team_rotation_by_minutes(opp)
-            if not rotation.empty:
-                st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True)
-            elif not roster.empty:
-                st.dataframe(roster, use_container_width=True)
-            else:
-                st.warning("NBA API roster lookup failed. Showing backup saved names.")
-                st.dataframe(pd.DataFrame({"Player": current_roster_names(opp)}), use_container_width=True)
-
-        st.subheader("Top Bench / Rotation Players")
-        bench=[{"Team":favorite_team,"Player":p} for p in estimated_bench_from_api(favorite_team)]+[{"Team":opp,"Player":p} for p in estimated_bench_from_api(opp)]
-        st.dataframe(pd.DataFrame(bench), use_container_width=True)
+        render_matchup_lineups_page(favorite_team, profile)
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | automatic series tracking | previous rounds | live game center | shot chart")
