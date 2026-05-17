@@ -3650,52 +3650,23 @@ def render_legacy_tracker_page(team_name):
     a2.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
     a3.metric("Room to title ceiling", round(float(player_legacy_ceiling(player, team_name)) - locked_score, 1))
 
-    st.markdown("### B · Fan simulator (stat line + intangibles · ladder from today forward)")
+    st.markdown("### B · Fan simulator - shape the playoff story")
     with st.container(border=True):
         st.caption(
-            f"Sliders default to this player’s **actual playoff averages**. Move them to stress-test scoring, efficiency, defense feel, "
-            f"clutch nights, turnover trend, and bench rescue — the ladder uses **{series_wins_bracket}** series win(s) as the floor, then adds hypothetical rounds."
+            "Move the core stat sliders and watch the story change. The model starts from the series already won on the bracket, then asks what this profile would mean if the run keeps going."
         )
         c1, c2, c3 = st.columns(3)
         with c1:
-            pts = st.slider("Scoring (PPG)", 0.0, 45.0, pts0, 0.5)
+            pts = st.slider("Scoring / points per game", 0.0, 45.0, pts0, 0.5)
             reb = st.slider("Rebounding (RPG)", 0.0, 20.0, reb0, 0.5)
-            ast = st.slider("Playmaking (APG)", 0.0, 15.0, ast0, 0.5)
+            ast = st.slider("Assists per game / playmaking", 0.0, 15.0, ast0, 0.5)
         with c2:
-            stl = st.slider("Defense activity — steals per game", 0.0, 4.0, stl0, 0.1)
-            blk = st.slider("Defense activity — blocks per game", 0.0, 5.0, blk0, 0.1)
-            plus_minus = st.slider("Efficiency / impact proxy — avg plus-minus", -20.0, 20.0, pm0, 0.5)
+            stl = st.slider("Steals per game", 0.0, 4.0, stl0, 0.1)
+            blk = st.slider("Blocks per game", 0.0, 5.0, blk0, 0.1)
+            plus_minus = st.slider("Average plus-minus / overall impact", -20.0, 20.0, pm0, 0.5)
         with c3:
-            fg = st.slider("Shooting efficiency — FG%", 0.300, 0.700, fg0, 0.005)
-            three = st.slider("Shooting efficiency — 3PT%", 0.200, 0.550, th0, 0.005)
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            clutch_momentum = st.slider(
-                "Clutch / late-game lift (narrative tilt)",
-                -5.0,
-                5.0,
-                0.0,
-                0.5,
-                help="Positive if you think the player is winning closing minutes beyond the box; negative if crunch-time fades show up.",
-            )
-        with d2:
-            turnover_trend = st.slider(
-                "Ball security vs turnovers",
-                -5.0,
-                5.0,
-                0.0,
-                0.5,
-                help="Positive if you expect cleaner possessions; negative if live-ball turnovers spike.",
-            )
-        with d3:
-            bench_support = st.slider(
-                "Bench / role-player rescue around this player",
-                -5.0,
-                5.0,
-                0.0,
-                0.5,
-                help="Positive if supporting cast lifts pressure off the star; negative if the rotation thins when it matters.",
-            )
+            fg = st.slider("Shooting efficiency", 0.300, 0.700, fg0, 0.005)
+            three = st.slider("Three-point shooting efficiency", 0.200, 0.550, th0, 0.005)
 
     path = build_legacy_path(
         player,
@@ -3709,18 +3680,15 @@ def render_legacy_tracker_page(team_name):
         three,
         plus_minus,
         base_series_wins=series_wins_bracket,
-        clutch_momentum=clutch_momentum,
-        turnover_trend=turnover_trend,
-        bench_support=bench_support,
     )
     sim_now = float(path.iloc[0]["Legacy score"]) if not path.empty else locked_score
     title_score = float(path.iloc[-1]["Legacy score"]) if not path.empty else locked_score
 
     x1, x2, x3, x4 = st.columns(4)
-    x1.metric("Simulator · first rung", sim_now)
-    x2.metric("If they win the title (model)", title_score)
-    x3.metric("Delta to banner outcome", round(title_score - sim_now, 1))
-    x4.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
+    x1.metric("Story now", sim_now)
+    x2.metric("If they win it all", title_score)
+    x3.metric("Banner jump", round(title_score - sim_now, 1))
+    x4.metric("Personal ceiling", player_legacy_ceiling(player, team_name))
 
     st.plotly_chart(
         px.bar(
@@ -3728,35 +3696,63 @@ def render_legacy_tracker_page(team_name):
             x="Playoff picture",
             y="Legacy score",
             color="Fan read",
-            title=f"{player}: ladder from today’s bracket position (not a prediction)",
+            title=f"{player}: how the story climbs if the run keeps going",
         ),
         use_container_width=True,
     )
-    st.dataframe(path, use_container_width=True)
+    with st.expander("See the full ladder", expanded=False):
+        st.dataframe(path, use_container_width=True, hide_index=True)
 
-    st.markdown("### Interpretation")
-    for line in legacy_takeaways(
-        player,
-        team_name,
-        pts,
-        reb,
-        ast,
-        stl,
-        blk,
-        fg,
-        three,
-        plus_minus,
-        base_series_wins=series_wins_bracket,
-        clutch_momentum=clutch_momentum,
-        turnover_trend=turnover_trend,
-        bench_support=bench_support,
-    ):
-        st.write(f"• {line}")
+    def _scenario_score(wins, title=False):
+        return legacy_score_from_inputs(
+            pts, reb, ast, stl, blk, fg, three, plus_minus, wins, title, player, team_name
+        )
 
-    st.info(
-        "Fan toy, not an official ranking. **Section A** is actual playoff logs plus bracket wins; **Section B** layers hypotheticals. "
-        "Real legacy still lives in signature games, matchups, health, and hardware."
-    )
+    def _legacy_profile_read(score, wins, title=False):
+        eff_ok = fg >= 0.47 and three >= 0.36
+        weak_eff = fg < 0.42 or plus_minus < -2
+        huge_scoring = pts >= 30
+        solid_scoring = pts >= 23
+        nick = fan_nick(team_name)
+        if title and huge_scoring and eff_ok and plus_minus >= 4:
+            return f"This is the dream version: {player} carries star production deep into June, and a title would make it one of the great {nick} playoff chapters."
+        if title and weak_eff:
+            return f"A banner still matters, but this profile reads more like team success lifting the legacy than an individual takeover."
+        if title:
+            return f"A title with this line gives {player} a real spring people remember, even if it stops short of franchise-GOAT territory."
+        if wins >= 3 and huge_scoring and eff_ok:
+            return f"Conference Finals production like this changes the room - {player} starts sounding like the defining player of this run."
+        if wins >= 3 and weak_eff:
+            return f"Getting that far helps, but the efficiency and impact numbers keep the individual leap smaller."
+        if solid_scoring and plus_minus >= 0:
+            return f"Winning the next round with this profile strengthens {player}'s place among modern {nick} playoff names."
+        return f"This helps the team story, but it does not rewrite the individual legacy unless the shot-making or impact climbs."
+
+    next_wins = min(4, series_wins_bracket + 1)
+    cf_wins = max(next_wins, 3)
+    title_wins = 4
+    scenarios = [
+        ("Win the next round", next_wins, False),
+        ("Win the Conference Finals", cf_wins, False),
+        ("Win the NBA Finals", title_wins, True),
+    ]
+    st.markdown("### What this stat profile would mean")
+    card_cols = st.columns(3)
+    for col, (label, wins, title) in zip(card_cols, scenarios):
+        sc = _scenario_score(wins, title)
+        with col:
+            st.markdown(
+                f"""
+<div class="team-card" style="min-height:190px">
+  <div style="font-size:10px;font-weight:900;letter-spacing:.12em;color:var(--team-accent);text-transform:uppercase">{html.escape(label)}</div>
+  <div style="font-size:1.6rem;font-weight:950;color:#0f172a;margin:4px 0">{sc}</div>
+  <div style="font-size:13px;line-height:1.45;color:#334155">{html.escape(_legacy_profile_read(sc, wins, title))}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+    st.caption("A fun fan model, not an official ranking. Signature games, matchups, health, and hardware still decide how the story really ages.")
 
 
 # --- Player Playoff Story Hub (narrative + impact layer on raw logs) ---
@@ -5625,11 +5621,13 @@ def next_round_context_for_team(team_name):
     Once conference finals (or finals) exist for this team, returns None — the home
     header uses ``series_for_team`` directly for that matchup.
     """
-    _, s_active = series_for_team(team_name)
-    if s_active and s_active.get("round") in ("Conference Finals", "NBA Finals"):
-        return None
+    stt = get_playoff_state_cached(True)
+    for coll_name in ("cf", "finals"):
+        for _k, s_active in (stt.get(coll_name) or {}).items():
+            if team_name in (s_active.get("a"), s_active.get("b")):
+                return None
 
-    series_map = get_playoff_state_cached(bool(globals().get("USE_DEMO_BACKUP", False)))["second"]
+    series_map = stt["second"]
     current_key = None
     current_series = None
     for key, series in series_map.items():
@@ -5654,13 +5652,15 @@ def next_round_context_for_team(team_name):
     if not paired:
         return None
     conf = current_series.get("conf", "")
-    round_label = "Eastern Conference Championship" if conf == "East" else "Western Conference Championship"
+    round_label = "Eastern Conference Finals" if conf == "East" else "Western Conference Finals"
     if paired.get("winner"):
         opponents = [paired["winner"]]
         opponent_text = paired["winner"]
+        status_text = f"{team_name} vs {opponent_text} - {round_label}"
     else:
         opponents = [paired.get("a"), paired.get("b")]
-        opponent_text = f"{paired.get('a')} / {paired.get('b')}"
+        opponent_text = f"{paired.get('a')}/{paired.get('b')} winner"
+        status_text = f"{team_name} await {paired.get('a')}/{paired.get('b')} winner"
     opponents = [op for op in opponents if op in TEAM_PROFILES]
     return {
         "advanced": True,
@@ -5668,15 +5668,21 @@ def next_round_context_for_team(team_name):
         "round_label": round_label,
         "opponents": opponents,
         "opponent_text": opponent_text,
-        "status_text": f"{team_name} advances to the {round_label} vs {opponent_text}.",
+        "status_text": status_text,
         "completed_series": current_series,
         "paired_series": paired,
     }
 
 
 def _build_local_series_shell(team_name):
-    """Current playoff series view: prefer active second round (bundled/API merge), else first-round history."""
-    second_map = get_playoff_state_cached(True).get("second") or {}
+    """Current playoff series view: newest formed bracket round first, then history."""
+    stt = get_playoff_state_cached(True)
+    for coll_name in ("finals", "cf"):
+        for _k, s in (stt.get(coll_name) or {}).items():
+            if team_name in (s.get("a"), s.get("b")):
+                return dict(s)
+
+    second_map = stt.get("second") or {}
     for _k, s in second_map.items():
         if team_name in (s.get("a"), s.get("b")):
             return dict(s)
@@ -5743,6 +5749,46 @@ def get_fast_series_snapshot(team_name):
 def resolve_home_matchup_context_fast(team_name):
     """Home hub context without ``series_for_team`` / bracket builders (instant)."""
     profile = TEAM_PROFILES[team_name]
+    ctx = next_round_context_for_team(team_name)
+    if ctx and ctx.get("eliminated"):
+        return {
+            "mode": "eliminated",
+            "series": None,
+            "round_label": "Eliminated",
+            "opponent": ctx.get("opponent_text"),
+            "opponent_display": ctx.get("opponent_text", "Opponent"),
+            "advanced": False,
+            "bracket_series": False,
+            "ctx": ctx,
+            "fast_snapshot": {
+                "team_name": team_name,
+                "opponent": ctx.get("opponent_text", "Opponent"),
+                "series_score": "complete",
+                "round": "Eliminated",
+                "latest_game": (ctx.get("completed_series") or {}).get("games", [])[-1] if (ctx.get("completed_series") or {}).get("games") else None,
+                "source": "bracket advancement",
+            },
+        }
+    if ctx and ctx.get("advanced"):
+        return {
+            "mode": "waiting_cf",
+            "series": None,
+            "round_label": ctx["round_label"],
+            "opponent": ctx.get("opponents", [None])[0] if len(ctx.get("opponents", [])) == 1 else None,
+            "opponent_display": ctx.get("opponent_text", "TBD"),
+            "opponents": ctx.get("opponents", []),
+            "advanced": True,
+            "bracket_series": False,
+            "ctx": ctx,
+            "fast_snapshot": {
+                "team_name": team_name,
+                "opponent": ctx.get("opponent_text", "TBD"),
+                "series_score": "awaiting matchup" if len(ctx.get("opponents", [])) != 1 else "next round set",
+                "round": ctx.get("round_label", "Playoffs"),
+                "latest_game": (ctx.get("completed_series") or {}).get("games", [])[-1] if (ctx.get("completed_series") or {}).get("games") else None,
+                "source": "bracket advancement",
+            },
+        }
     s = _build_local_series_shell(team_name)
     snap = get_fast_series_snapshot(team_name)
     if s and s.get("round") in ("Conference Finals", "NBA Finals"):
@@ -5790,6 +5836,17 @@ def resolve_home_matchup_context_impl(team_name):
             "ctx": None,
         }
     ctx = next_round_context_for_team(team_name)
+    if ctx and ctx.get("eliminated"):
+        return {
+            "mode": "eliminated",
+            "series": None,
+            "round_label": "Eliminated",
+            "opponent": ctx.get("opponent_text"),
+            "opponent_display": ctx.get("opponent_text", "Opponent"),
+            "advanced": False,
+            "bracket_series": False,
+            "ctx": ctx,
+        }
     if not ctx or not ctx.get("advanced"):
         opp = profile.get("current_opponent") or profile["first_round_opponent"]
         return {
@@ -5978,14 +6035,16 @@ def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_liv
         live = None
         if isinstance(fb, dict) and fb.get("game"):
             live = fb["game"]
-    s = hctx.get("series") or series_board
     mode = hctx.get("mode")
+    s = None if mode == "waiting_cf" else (hctx.get("series") or series_board)
     tw = ow = 0
     opp = None
     last_winner = None
     games_played = 0
     series_winner = None
-    rnd = profile.get("round", "Playoffs")
+    rnd = hctx.get("round_label") or profile.get("round", "Playoffs")
+    if mode == "waiting_cf":
+        opp = hctx.get("opponent") or hctx.get("opponent_display")
     if s:
         a, b = s["a"], s["b"]
         tw = int(s["a_wins"]) if team_name == a else int(s["b_wins"])
@@ -6051,6 +6110,8 @@ def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_liv
         "fb": fb,
         "live": live,
         "team_name": team_name,
+        "future_opponents": hctx.get("opponents", []),
+        "opponent_display": hctx.get("opponent_display"),
     }
 
 
@@ -6074,6 +6135,14 @@ def _dashboard_story_cards(team_name, pctx):
     on = fan_nick(pctx["opp"]) if pctx["opp"] else "the opponent"
     rnd = pctx.get("round") or "this round"
 
+    if pctx.get("mode") == "waiting_cf":
+        opponents = [fan_nick(op) for op in (pctx.get("future_opponents") or [])]
+        opp_txt = " / ".join(opponents) if opponents else str(pctx.get("opponent_display") or "the bracket")
+        return [
+            ("Next-round lens", f"{nick} are through; the next matchup is now the story, with {opp_txt} setting the prep board."),
+            ("Style question", f"{ax[0]} travels into the next round, but the matchup will decide how much help pressure comes from {ax[1]}."),
+            ("Pressure point", lens.get("pressure_axis", "The deeper the bracket gets, the more every empty possession shows up.")),
+        ]
     if pctx.get("phase_live"):
         return [
             ("Live board", f"The game is on the wire in real time — {nick} rotations and foul trouble matter immediately."),
@@ -6153,7 +6222,11 @@ def _dashboard_emphasis_html(team_name, pctx):
     on = esc(fan_nick(pctx["opp"])) if pctx["opp"] else esc("the opponent")
     rnd = esc(str(pctx.get("round") or "Playoffs"))
 
-    if pctx.get("phase_live"):
+    if pctx.get("mode") == "waiting_cf":
+        opps = [fan_nick(op) for op in (pctx.get("future_opponents") or [])]
+        opp_txt = " / ".join(opps) if opps else str(pctx.get("opponent_display") or "opponent TBD")
+        tag, sub = "NEXT ROUND WATCH", f"{nick} are through. Prep shifts to {opp_txt} while the bracket settles."
+    elif pctx.get("phase_live"):
         tag, sub = "LIVE BOARD", "Rotation, fouls, and late-clock shot quality are moving in real time."
     elif pctx.get("elimination_trailing"):
         tag, sub = f"MUST-WIN · {tw}–{ow}", "The series only extends with a win — empty possessions cost twice."
@@ -6171,10 +6244,12 @@ def _dashboard_emphasis_html(team_name, pctx):
 
     a0, a1, a2 = esc(ax[0]), esc(ax[1]) if len(ax) > 1 else "", esc(ax[2]) if len(ax) > 2 else ""
     hot = " cmd-emph-card--hot" if (pctx.get("phase_live") or pctx.get("elimination_trailing") or pctx.get("danger_down_3")) else ""
+    board_label = "Next matchup" if pctx.get("mode") == "waiting_cf" else "Series board"
+    board_value = esc(pctx.get("opponent_display") or "Awaiting opponent") if pctx.get("mode") == "waiting_cf" else f"{tw}–{ow} vs {on}"
     return f"""<div class="cmd-emph-shell"><div class="cmd-emph-grid">
   <div class="cmd-emph-card{hot}"><div class="cmd-emph-k">{esc(tag)}</div><div class="cmd-emph-v">{esc(sub)}</div></div>
   <div class="cmd-emph-card"><div class="cmd-emph-k">Identity lever</div><div class="cmd-emph-v">{a0}</div><div class="cmd-emph-s">{a1}</div></div>
-  <div class="cmd-emph-card"><div class="cmd-emph-k">Series board</div><div class="cmd-emph-v">{tw}–{ow} vs {on}</div><div class="cmd-emph-s">{a2}</div></div>
+  <div class="cmd-emph-card"><div class="cmd-emph-k">{board_label}</div><div class="cmd-emph-v">{board_value}</div><div class="cmd-emph-s">{a2}</div></div>
 </div></div>"""
 
 
@@ -6761,6 +6836,7 @@ def render_playoff_command_center(team_name):
         sections.append("fast_path")
 
     profile = pctx["profile"]
+    current_series_obj = None if hctx.get("advanced") else s_active
 
     if effective_live and isinstance(pctx.get("fb"), dict) and pctx["fb"].get("game"):
         render_home_live_hub_strip(team_name, pctx.get("fb"))
@@ -6776,11 +6852,11 @@ def render_playoff_command_center(team_name):
     sec1_title = "1 · How the run ended" if is_eliminated else "1 · Where the series stands"
     st.markdown(f'<div class="cmd-sec">{html.escape(sec1_title)}</div>', unsafe_allow_html=True)
     snap_cols = st.columns(4)
-    status_txt = series_status_text(team_name, s_active)
+    status_txt = (hctx.get("ctx") or {}).get("status_text") if hctx.get("advanced") else series_status_text(team_name, s_active)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
     snap_cols[0].metric("Playoff mood", "Still dancing" if adv_like else profile.get("status", "—"))
     snap_cols[1].metric("Seed", profile.get("seed", "—"))
-    s_disp = hctx.get("series") or s_active
+    s_disp = hctx.get("series") or current_series_obj
     snap_cols[2].metric(
         "Current chapter",
         (s_disp or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"),
@@ -6804,7 +6880,7 @@ def render_playoff_command_center(team_name):
         f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
         unsafe_allow_html=True,
     )
-    s_table = hctx.get("series") or s_active
+    s_table = hctx.get("series") or current_series_obj
     if s_table and s_table.get("games"):
         st.dataframe(
             pd.DataFrame(s_table["games"]),
@@ -6812,7 +6888,7 @@ def render_playoff_command_center(team_name):
             height=min(220, 38 + 28 * len(s_table["games"])),
         )
     elif hctx.get("advanced"):
-        st.info("Through the second round — Conference Finals pairings populate once both semis finish.")
+        st.info((hctx.get("ctx") or {}).get("status_text", "Through the completed series - the next matchup is the focus now."))
     elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
     sections.append("series_board")
@@ -6835,7 +6911,7 @@ def render_playoff_command_center(team_name):
                     f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
                 )
             else:
-                opp = profile.get("current_opponent")
+                opp = hctx.get("opponent_display") if hctx.get("advanced") else profile.get("current_opponent")
                 st.info(
                     f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
                     + (
@@ -6847,20 +6923,38 @@ def render_playoff_command_center(team_name):
     sections.append("runway")
 
     st.markdown('<div class="cmd-sec">3 · What it feels like</div>', unsafe_allow_html=True)
-    render_team_outlook(team_name, compact_home=True, series_obj=s_active)
+    render_team_outlook(team_name, compact_home=True, series_obj=current_series_obj)
     sections.append("outlook_compact")
 
-    st.markdown('<div class="cmd-sec">4 · Series at a glance</div>', unsafe_allow_html=True)
+    sec4_title = "4 · Next-round lens" if hctx.get("advanced") else "4 · Series at a glance"
+    st.markdown(f'<div class="cmd-sec">{html.escape(sec4_title)}</div>', unsafe_allow_html=True)
     fsnap = hctx.get("fast_snapshot") or get_fast_series_snapshot(team_name)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Opponent", fsnap.get("opponent") or "—")
-    c2.metric("Series", fsnap.get("series_score") or "—")
-    c3.metric("Latest read", (fsnap.get("source") or "—")[:28])
-    lg = fsnap.get("latest_game")
-    if isinstance(lg, dict) and lg:
-        st.caption(
-            f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
-        )
+    if hctx.get("advanced"):
+        opps = hctx.get("opponents") or []
+        cols = st.columns(max(1, min(3, len(opps) or 1)))
+        if opps:
+            for col, op in zip(cols, opps):
+                with col:
+                    logo = TEAM_LOGOS.get(op, "")
+                    if logo:
+                        st.image(logo, width=64)
+                    st.markdown(f"**{op}**")
+                    st.caption("Possible next opponent" if len(opps) > 1 else "Next opponent")
+        else:
+            st.info(fsnap.get("opponent") or "Opponent TBD")
+        ax = (pctx.get("lens") or {}).get("identity_axes") or ()
+        if ax:
+            st.caption("What carries forward — " + " · ".join(str(x) for x in ax[:3]))
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Opponent", fsnap.get("opponent") or "—")
+        c2.metric("Series", fsnap.get("series_score") or "—")
+        c3.metric("Latest read", (fsnap.get("source") or "—")[:28])
+        lg = fsnap.get("latest_game")
+        if isinstance(lg, dict) and lg:
+            st.caption(
+                f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
+            )
     sections.append("fast_series_snapshot")
 
     st.markdown("<div class='cmd-sec'>5 · Who's available</div>", unsafe_allow_html=True)
@@ -6916,20 +7010,24 @@ def render_playoff_command_center(team_name):
             )
 
     def sec_momentum():
-        hist = historic_series_context(team_name, s_active)
+        hist = historic_series_context(team_name, current_series_obj)
         if not hist.empty:
             st.markdown(
                 f"<div style='font-size:13px;color:#cbd5e1;line-height:1.45'>{hist.iloc[0].get('Historical Context','')}</div>",
                 unsafe_allow_html=True,
             )
         m1, m2, m3 = st.columns(3)
-        if s_active:
-            a, b = s_active["a"], s_active["b"]
-            tw = int(s_active["a_wins"]) if team_name == a else int(s_active["b_wins"])
-            ow = int(s_active["b_wins"]) if team_name == a else int(s_active["a_wins"])
+        if hctx.get("advanced"):
+            m1.metric("Momentum", "Advanced")
+            m2.metric("Prep board", "Next matchup")
+            m3.metric("Bracket stage", hctx.get("round_label", "Playoffs"))
+        elif current_series_obj:
+            a, b = current_series_obj["a"], current_series_obj["b"]
+            tw = int(current_series_obj["a_wins"]) if team_name == a else int(current_series_obj["b_wins"])
+            ow = int(current_series_obj["b_wins"]) if team_name == a else int(current_series_obj["a_wins"])
             m1.metric("Series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
             m2.metric("Games played", tw + ow)
-            m3.metric("Data source", (s_active.get("source") or "—")[:18])
+            m3.metric("Data source", (current_series_obj.get("source") or "—")[:18])
         else:
             m1.metric("Series edge", "—")
             m2.metric("Games played", "—")
@@ -6955,14 +7053,15 @@ def render_playoff_command_center(team_name):
                     st.caption(b)
 
     def sec_last_game():
-        if s_active and s_active.get("games"):
-            last = s_active["games"][-1]
-            opp = s_active["b"] if team_name == s_active["a"] else s_active["a"]
+        history_series = current_series_obj or ((hctx.get("ctx") or {}).get("completed_series") if hctx.get("advanced") else None)
+        if history_series and history_series.get("games"):
+            last = history_series["games"][-1]
+            opp = history_series["b"] if team_name == history_series["a"] else history_series["a"]
             gn = last.get("Game") if isinstance(last.get("Game"), int) else str(last.get("Game", "Game")).replace("Game ", "")
             try:
                 gn_i = int(str(gn).replace("Game ", ""))
             except Exception:
-                gn_i = len(s_active["games"])
+                gn_i = len(history_series["games"])
             mvp, why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
             st.success(f"**{mvp}** — _{why}_")
             st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
@@ -6970,7 +7069,7 @@ def render_playoff_command_center(team_name):
             st.caption("MVP tag unlocks when the most recent game row hits the log for this matchup.")
 
     def sec_outlook_full():
-        render_team_outlook(team_name, compact_home=False, series_obj=s_active)
+        render_team_outlook(team_name, compact_home=False, series_obj=current_series_obj)
 
     with st.expander("Who's available", expanded=False):
         if st.button("Fetch injury report", key=f"home_fetch_inj_{team_name}"):
@@ -7647,11 +7746,14 @@ def render_team_outlook(team, compact_home=False, series_obj=None):
     nick = fan_nick(team)
     if compact_home:
         st.markdown(f"##### Quick outlook · {nick}")
-        st.markdown(
-            f"<div class='big-status' style='margin:0 0 8px'>{series_status_text(team, series_obj)}</div>",
-            unsafe_allow_html=True,
-        )
-        st.info(latest_game_note(team, series_obj))
+        if series_obj:
+            st.markdown(
+                f"<div class='big-status' style='margin:0 0 8px'>{series_status_text(team, series_obj)}</div>",
+                unsafe_allow_html=True,
+            )
+            st.info(latest_game_note(team, series_obj))
+        else:
+            st.info("The current question is matchup prep: which strengths travel, which counters matter, and who drives the next round.")
         tops = p.get("strengths") or []
         if tops:
             st.caption("Strengths — " + " · ".join(str(x) for x in tops[:2]))
