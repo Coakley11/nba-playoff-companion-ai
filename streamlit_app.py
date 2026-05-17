@@ -1073,6 +1073,22 @@ SECOND_ROUND_DEMO_BACKUP = {
 PLAYOFF_START_DATE = "2026-04-18"
 PLAYOFF_END_DATE = "2026-06-30"
 
+# Local schedule fallback for known playoff games. This prevents the Home page
+# and Live Game Center from saying "no game" when NBA live feeds lag pregame.
+PLAYOFF_SCHEDULE_FALLBACK = [
+    {
+        "game_id": "fallback-det-cle-20260517",
+        "date": "2026-05-17",
+        "time_et": "19:30",
+        "away": "Cleveland Cavaliers",
+        "home": "Detroit Pistons",
+        "round": "Second Round",
+        "series_key": "DET-CLE",
+        "label": "Cavaliers at Pistons",
+        "source": "Local playoff schedule fallback",
+    },
+]
+
 FIRST_ROUND_GAME_SCORES = {
     "Detroit Pistons": [
         {"Game":1,"Date":"Apr 18","Matchup":"Magic at Pistons","Score":"Magic 112, Pistons 101","Winner":"Orlando Magic"},
@@ -2280,7 +2296,15 @@ def get_live_games():
         except TypeError:
             return scoreboard.ScoreBoard().get_dict().get("scoreboard", {}).get("games", []) or []
     except Exception:
-        return []
+        rows = []
+        seen = set()
+        for team in TEAM_PROFILES:
+            for g in _fallback_schedule_games_for_team(team):
+                gid = str(g.get("gameId") or "")
+                if gid and gid not in seen:
+                    seen.add(gid)
+                    rows.append(normalize_scoreboard_game(dict(g)))
+        return rows
 
 
 @st.cache_data(ttl=28)
@@ -2321,14 +2345,27 @@ def _gather_team_scoreboard_games(team_name):
             strict.append(g2)
         elif _game_involves_team_loose(g2, team_name) or (opponent and _game_involves_team_loose(g2, opponent)):
             loose.append(g2)
-    return strict if strict else loose
+    fallback = _fallback_schedule_games_for_team(team_name)
+    if strict:
+        return strict
+    if loose:
+        return loose
+    return fallback
 
 
 @st.cache_data(ttl=22)
 def _merged_stats_games_et_window():
     """All stats scoreboard games for yesterday→tomorrow Eastern (deduped by gameId). CDN not used."""
     if not NBA_STATS_AVAILABLE:
-        return []
+        rows = []
+        seen = set()
+        for team in TEAM_PROFILES:
+            for g in _fallback_schedule_games_for_team(team):
+                gid = str(g.get("gameId") or "")
+                if gid and gid not in seen:
+                    seen.add(gid)
+                    rows.append(normalize_scoreboard_game(dict(g)))
+        return rows
     merged = {}
     try:
         for d in _nba_calendar_dates_window(1):
@@ -2336,7 +2373,13 @@ def _merged_stats_games_et_window():
                 gid = str((g or {}).get("gameId") or "")
                 if gid:
                     merged[gid] = dict(g)
-        return [normalize_scoreboard_game(dict(x)) for x in merged.values()]
+        rows = [normalize_scoreboard_game(dict(x)) for x in merged.values()]
+        for team in TEAM_PROFILES:
+            for g in _fallback_schedule_games_for_team(team):
+                gid = str(g.get("gameId") or "")
+                if gid and gid not in merged:
+                    rows.append(normalize_scoreboard_game(dict(g)))
+        return rows
     except Exception:
         return []
 
@@ -2437,6 +2480,86 @@ def _seconds_to_tipoff(g):
         return None
     now = datetime.now(timezone.utc)
     return (tip.astimezone(timezone.utc) - now).total_seconds()
+
+
+def _fallback_schedule_tipoff_utc(row):
+    et = _nba_et_zone()
+    try:
+        d = datetime.strptime(str(row.get("date")), "%Y-%m-%d").date()
+        hh, mm = [int(x) for x in str(row.get("time_et", "19:30")).split(":", 1)]
+        if et:
+            return datetime.combine(d, time(hh, mm), tzinfo=et).astimezone(timezone.utc)
+        return datetime.combine(d, time(hh + 4, mm), tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _fallback_schedule_game_row(row):
+    away = row.get("away")
+    home = row.get("home")
+    tip = _fallback_schedule_tipoff_utc(row)
+    now = datetime.now(timezone.utc)
+    if tip:
+        sec = (tip - now).total_seconds()
+    else:
+        sec = None
+    if sec is not None and sec < -4.5 * 3600:
+        game_status = 3
+        status_text = "Final status pending league feed"
+    elif sec is not None and sec <= 0:
+        game_status = 1
+        status_text = "Scheduled today - live feed may be delayed"
+    else:
+        game_status = 1
+        if sec is not None and sec <= 3600:
+            mins = max(1, int(round(sec / 60)))
+            status_text = f"Game starting soon - {mins} min"
+        else:
+            status_text = "Scheduled"
+    return {
+        "gameId": row.get("game_id", ""),
+        "gameStatus": game_status,
+        "gameStatusText": status_text,
+        "period": 0,
+        "gameClock": "",
+        "gameTimeUTC": tip.isoformat().replace("+00:00", "Z") if tip else None,
+        "gameEt": row.get("time_et", ""),
+        "seriesText": row.get("round", ""),
+        "_source": row.get("source", "Local playoff schedule fallback"),
+        "_game_date_est": row.get("date", ""),
+        "_fallback_schedule": True,
+        "homeTeam": {
+            "teamId": TEAM_IDS.get(home, 0),
+            "teamTricode": TEAM_ALIASES.get(home, ""),
+            "teamName": fan_nick(home),
+            "teamCity": " ".join(str(home).split()[:-1]),
+            "score": 0,
+        },
+        "awayTeam": {
+            "teamId": TEAM_IDS.get(away, 0),
+            "teamTricode": TEAM_ALIASES.get(away, ""),
+            "teamName": fan_nick(away),
+            "teamCity": " ".join(str(away).split()[:-1]),
+            "score": 0,
+        },
+    }
+
+
+def _fallback_schedule_games_for_team(team_name, days_each_side=1):
+    if not team_name:
+        return []
+    today = _nba_et_date_today()
+    out = []
+    for row in PLAYOFF_SCHEDULE_FALLBACK:
+        if team_name not in (row.get("home"), row.get("away")):
+            continue
+        try:
+            d = datetime.strptime(str(row.get("date")), "%Y-%m-%d").date()
+        except Exception:
+            continue
+        if abs((d - today).days) <= days_each_side:
+            out.append(_fallback_schedule_game_row(row))
+    return out
 
 
 def _pick_featured_game_for_team_uncached(team_name):
@@ -2601,6 +2724,24 @@ def get_live_game_detection_context(team_name):
     return get_live_game_detection_context_cached(team_name)
 
 
+def _format_countdown(seconds):
+    if seconds is None:
+        return ""
+    try:
+        sec = int(seconds)
+    except Exception:
+        return ""
+    if sec < 0:
+        mins = abs(sec) // 60
+        return f"tip was about {mins} min ago"
+    mins = sec // 60
+    hrs = mins // 60
+    rem = mins % 60
+    if hrs:
+        return f"{hrs}h {rem}m"
+    return f"{max(1, mins)}m"
+
+
 def get_current_or_today_game_uncached(team_name):
     """Resolve the best scoreboard row for Live Game Center — multi-source, never a single point of failure."""
     errors = []
@@ -2669,12 +2810,20 @@ def get_current_or_today_game_uncached(team_name):
             errors.append(f"stats_rescue:{e!r}")
 
     phase = _live_broadcast_phase(game_row) if game_row else "unknown"
+    seconds_to_tip = _seconds_to_tipoff(game_row) if game_row else None
+    starting_soon = bool(seconds_to_tip is not None and 0 <= seconds_to_tip <= 3600)
+    fallback_schedule = bool(isinstance(game_row, dict) and game_row.get("_fallback_schedule"))
     if phase == "live":
         gstat = "live"
     elif phase == "postgame":
         gstat = "final"
     elif phase == "pregame":
-        gstat = "scheduled"
+        if starting_soon:
+            gstat = "starting soon"
+        elif fallback_schedule and seconds_to_tip is not None and seconds_to_tip < 0:
+            gstat = "scheduled"
+        else:
+            gstat = "scheduled"
     else:
         gstat = "unavailable"
 
@@ -2699,9 +2848,18 @@ def get_current_or_today_game_uncached(team_name):
 
     if game_row:
         det_ctx = dict(det_ctx)
-        det_ctx["tier"] = "ok"
-        det_ctx["likely_feed_gap"] = False
-        det_ctx["message"] = ""
+        if fallback_schedule and seconds_to_tip is not None and seconds_to_tip < 0 and seconds_to_tip > -4.5 * 3600:
+            det_ctx["tier"] = "likely_live_feed_gap"
+            det_ctx["likely_feed_gap"] = True
+            det_ctx["message"] = "Game may be in progress, but the live feed is delayed."
+        elif fallback_schedule:
+            det_ctx["tier"] = "scheduled_today"
+            det_ctx["likely_feed_gap"] = False
+            det_ctx["message"] = "Game scheduled today — live feed not detected yet."
+        else:
+            det_ctx["tier"] = "ok"
+            det_ctx["likely_feed_gap"] = False
+            det_ctx["message"] = ""
 
     return {
         "game_found": game_row is not None,
@@ -2714,6 +2872,10 @@ def get_current_or_today_game_uncached(team_name):
         "away_score": away_score,
         "period": period,
         "clock": clock,
+        "tipoff_time_utc": _tipoff_utc_dt(game_row).isoformat() if game_row and _tipoff_utc_dt(game_row) else None,
+        "seconds_to_tipoff": seconds_to_tip,
+        "countdown": _format_countdown(seconds_to_tip),
+        "starting_soon": starting_soon,
         "game_status_text": status_txt,
         "game_id": gid,
         "data_source": data_source or ("none" if not game_row else "unknown"),
@@ -2728,6 +2890,11 @@ def get_current_or_today_game_uncached(team_name):
 def get_current_or_today_game(team_name: str):
     """Cached snapshot for Live Game Center — refreshes quickly during live play."""
     return get_current_or_today_game_uncached(team_name)
+
+
+def get_current_or_upcoming_game(team_name: str):
+    """Public detector for Home + Live Game Center: scheduled, starting soon, live, final, unavailable."""
+    return get_current_or_today_game(team_name)
 
 
 @st.cache_data(ttl=30)
@@ -7405,6 +7572,102 @@ def render_home_live_hub_strip(team_name, fb_prefetched=None):
     # Live Game Center still runs full detection when the user opens it.
 
 
+def render_home_current_game_card(team_name):
+    """Prominent Home card for scheduled/starting-soon/live games."""
+    try:
+        snap = get_current_or_upcoming_game(team_name)
+    except Exception:
+        return
+    if not snap or not snap.get("game_found"):
+        return
+    status = str(snap.get("game_status") or "")
+    if status not in ("scheduled", "starting soon", "live", "final"):
+        return
+    game = snap.get("game_row") or {}
+    home = game.get("homeTeam") or {}
+    away = game.get("awayTeam") or {}
+    home_name = snap.get("home_team") or _live_team_full_name(_tricode_from_team_dict(home), home)
+    away_name = snap.get("away_team") or _live_team_full_name(_tricode_from_team_dict(away), away)
+    if team_name not in (home_name, away_name):
+        return
+    phase = snap.get("phase") or _live_broadcast_phase(game)
+    countdown = snap.get("countdown") or ""
+    sec = snap.get("seconds_to_tipoff")
+    if AUTOREFRESH_AVAILABLE and status in ("starting soon", "live"):
+        st_autorefresh(interval=45000 if status == "starting soon" else 30000, key=f"home_game_watch_refresh_{team_name}")
+
+    if status == "live":
+        title = "LIVE NOW"
+        tone = "home-live-strip home-live-strip--live"
+        score = f"{snap.get('away_score', 0)} — {snap.get('home_score', 0)}"
+        subtitle = f"{away_name} @ {home_name} · {snap.get('game_status_text') or 'In progress'}"
+        button_label = "Go to Live Game Center — LIVE NOW"
+    elif status == "final":
+        title = "FINAL IN THE FEED"
+        tone = "home-live-strip home-live-strip--post"
+        score = f"{snap.get('away_score', 0)} — {snap.get('home_score', 0)}"
+        subtitle = f"{away_name} @ {home_name} · recap loading from live hub"
+        button_label = "Go to Live Game Center — recap"
+    elif status == "starting soon":
+        title = "GAME STARTING SOON"
+        tone = "home-live-strip home-live-strip--soon"
+        score = f"Starts in {countdown}"
+        subtitle = f"{away_name} @ {home_name} · {snap.get('game_status_text') or 'Tipoff approaching'}"
+        button_label = f"{fan_nick(away_name)} vs {fan_nick(home_name)} — Starting Soon"
+    else:
+        title = "GAME SCHEDULED TODAY"
+        tone = "home-live-strip"
+        score = countdown or "Tipoff today"
+        subtitle = f"{away_name} @ {home_name} · game scheduled today — live feed not detected yet"
+        button_label = "Go to Live Game Center"
+
+    series_line, _series_src = _live_series_board(away_name, home_name)
+    st.markdown(
+        f"""
+<div class="{tone}">
+  <div class="home-live-strip-title">{html.escape(title)}</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div style="text-align:center"><img src="{html.escape(TEAM_LOGOS.get(away_name, ''))}" width="58"/><div style="font-size:12px;font-weight:900">{html.escape(away_name)}</div></div>
+    <div style="text-align:center;flex:1;min-width:220px">
+      <div class="home-live-strip-score">{html.escape(score)}</div>
+      <div class="home-live-strip-sub">{html.escape(subtitle)}</div>
+      <div class="home-live-strip-sub">Round: {html.escape(str((game.get('seriesText') or TEAM_PROFILES.get(team_name, {}).get('round') or 'Playoffs')))} · Series: {html.escape(series_line or '3-3 / updating')}</div>
+      <div class="home-live-strip-sub">Source: {html.escape(str(snap.get('data_source') or 'scoreboard'))}</div>
+    </div>
+    <div style="text-align:center"><img src="{html.escape(TEAM_LOGOS.get(home_name, ''))}" width="58"/><div style="font-size:12px;font-weight:900">{html.escape(home_name)}</div></div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    if st.button(button_label, key=f"home_current_game_open_{team_name}", type="primary"):
+        st.session_state["page_override"] = "🏀 Live Game Center"
+        st.session_state[f"live_gc__load_{team_name}"] = True
+        st.rerun()
+
+    with st.expander("Pregame context: injuries, key players, stakes", expanded=status in ("starting soon", "live")):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**Expected key players**")
+            for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:3]:
+                st.write(f"• {nm}")
+        with c2:
+            opp = home_name if team_name == away_name else away_name
+            st.markdown("**Opponent keys**")
+            for nm in (TEAM_PROFILES.get(opp, {}).get("starters") or [])[:3]:
+                st.write(f"• {nm}")
+        with c3:
+            st.markdown("**What is at stake**")
+            st.write(f"• {series_line or 'Winner takes control of the live series math.'}")
+            st.write("• The bracket should not crown anyone until the fourth win is final.")
+        st.markdown("**Injury monitor**")
+        inj_rows = (FALLBACK_INJURY_REPORT.get(team_name, []) or []) + (FALLBACK_INJURY_REPORT.get(home_name if team_name == away_name else away_name, []) or [])
+        if inj_rows:
+            st.dataframe(pd.DataFrame(inj_rows).head(6), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No fallback injury rows stored; open Live Game Center for the full injury fetch.")
+
+
 HOME_DASH_LIVE_UPDATES = "home_dash_live_updates"
 HOME_DASH_LOAD_INJ = "home_dash_load_inj"
 HOME_DASH_LOAD_STARS = "home_dash_load_stars"
@@ -7491,6 +7754,9 @@ def render_playoff_command_center(team_name):
 
     _inject_home_command_center_css()
     sections.append("inject_css")
+
+    render_home_current_game_card(team_name)
+    sections.append("current_game_watch")
 
     if is_eliminated:
         render_offseason_future_outlook_sections(team_name)
@@ -9713,9 +9979,21 @@ def render_live_game_center(team_name, profile):
 
     opp, _round_name, _series_text, _source = _render_live_gc_layer1(team_name, profile)
     layer_key = f"live_gc__load_{team_name}"
+    quick_snap = None
+    try:
+        quick_snap = get_current_or_upcoming_game(team_name)
+        if quick_snap and quick_snap.get("game_found"):
+            st.session_state[layer_key] = True
+    except Exception:
+        quick_snap = None
+    if AUTOREFRESH_AVAILABLE and quick_snap and quick_snap.get("game_status") in ("starting soon", "live"):
+        st_autorefresh(
+            interval=45000 if quick_snap.get("game_status") == "starting soon" else 30000,
+            key=f"live_gc_auto_refresh_{team_name}",
+        )
     col_a, col_b = st.columns([1, 3])
     with col_a:
-        if st.button("Load / Refresh Live Game Data", key=f"{layer_key}_btn", type="primary"):
+        if st.button("Refresh Live Game Data", key=f"{layer_key}_btn", type="primary"):
             st.session_state[layer_key] = True
             for fn in (
                 get_live_games,
@@ -9731,7 +10009,10 @@ def render_live_game_center(team_name, profile):
                     pass
             st.rerun()
     with col_b:
-        st.caption("The game room opens instantly. Live score, injuries, box score, and highlights load only when you ask.")
+        if quick_snap and quick_snap.get("game_found"):
+            st.caption(f"Detected **{quick_snap.get('away_team')} @ {quick_snap.get('home_team')}** · `{quick_snap.get('game_status')}` · source: {quick_snap.get('data_source')}")
+        else:
+            st.caption("The game room opens instantly. Live score, injuries, box score, and highlights load without blocking the page.")
 
     if not st.session_state.get(layer_key):
         _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=False)
@@ -9769,7 +10050,12 @@ def render_live_game_center(team_name, profile):
     if parsed["phase"] == "live":
         st.success("LIVE NOW")
     elif parsed["phase"] == "pregame":
-        st.info("Game Today / Starting Soon")
+        if snap.get("game_status") == "starting soon":
+            st.warning(f"**GAME STARTING SOON** · starts in **{snap.get('countdown') or 'soon'}**")
+        elif snap.get("detection_tier") == "likely_live_feed_gap":
+            st.error("Game may be in progress, but the live feed is delayed.")
+        else:
+            st.info("Game scheduled today — live feed not detected yet.")
     elif parsed["phase"] == "postgame":
         st.info("Final")
 
@@ -9779,6 +10065,28 @@ def render_live_game_center(team_name, profile):
     m1.metric("Win probability", f"{prob}%")
     m2.metric("Status", parsed["status"] or parsed["phase"])
     m3.metric("Game ID", gid or "unavailable")
+
+    if parsed["phase"] == "pregame":
+        team_section_header("Pregame command board", "⏳")
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("Tipoff", snap.get("countdown") or "today")
+        p2.metric("Round", game_row.get("seriesText") or profile.get("round", "Playoffs"))
+        p3.metric("Series", series_line or "3-3 / updating")
+        p4.metric("Preview win %", f"{prob}%")
+        st.markdown("**Major storyline**")
+        st.write(
+            f"{fan_nick(team_name)} vs {fan_nick(parsed['opp_name'])}: live possessions will decide the series math, "
+            "but the app will not advance or eliminate anyone until the fourth win is final."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"**{fan_nick(team_name)} key players**")
+            for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:5]:
+                st.write(f"• {nm}")
+        with c2:
+            st.markdown(f"**{fan_nick(parsed['opp_name'])} key players**")
+            for nm in (TEAM_PROFILES.get(parsed["opp_name"], {}).get("starters") or [])[:5]:
+                st.write(f"• {nm}")
 
     with st.expander("Box score and top performers", expanded=False):
         box_key = f"live_gc__box_{team_name}_{gid}"
