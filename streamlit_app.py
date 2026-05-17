@@ -1166,20 +1166,20 @@ def safe_float(x, default=0.0):
     try: return float(x or default)
     except Exception: return default
 
-@st.cache_data(ttl=300)
-def fetch_completed_games_recent(days_back=120, days_forward=1):
-    """API-first completed game pull for the custom playoff bracket.
+@st.cache_data(ttl=900)
+def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False):
+    """Opt-in completed game pull for the custom playoff bracket.
 
     This function uses TWO NBA.com-backed nba_api methods:
       1) scoreboardv2 by date, which is good for specific completed dates.
       2) leaguegamefinder for the full 2025-26 Playoffs, which is better when
          scoreboardv2 returns empty on Streamlit Cloud or misses older games.
 
-    Important: this does NOT invent scores. It only updates a custom matchup
+    Important: this does NOT run during normal fast page loads. It only updates a custom matchup
     such as NYK-PHI if NBA.com/nba_api has actual completed games for that pair.
     Demo backup scores can still appear only when the sidebar backup switch is on.
     """
-    if not NBA_STATS_AVAILABLE:
+    if not api_refresh or not NBA_STATS_AVAILABLE:
         return []
 
     records = []
@@ -1217,7 +1217,7 @@ def fetch_completed_games_recent(days_back=120, days_forward=1):
     while d <= end_date:
         for date_str in [d.strftime("%m/%d/%Y"), d.strftime("%Y-%m-%d")]:
             try:
-                df = scoreboardv2.ScoreboardV2(game_date=date_str, timeout=20).get_data_frames()[0]
+                df = scoreboardv2.ScoreboardV2(game_date=date_str, timeout=6).get_data_frames()[0]
             except Exception:
                 continue
             if df is None or df.empty:
@@ -1239,7 +1239,7 @@ def fetch_completed_games_recent(days_back=120, days_forward=1):
             league_id_nullable="00",
             season_nullable="2025-26",
             season_type_nullable="Playoffs",
-            timeout=30,
+            timeout=8,
         )
         logs = lgf.get_data_frames()[0]
     except Exception:
@@ -1346,8 +1346,8 @@ def clean_and_recount_series(series):
         s["source"] = "NBA API" if any(g.get("Source") == "NBA API" for g in cleaned) else ("Demo backup" if cleaned else "Waiting for API games")
     return series
 
-@st.cache_data(ttl=300)
-def build_second_round_series_cached(use_demo_backup=False):
+@st.cache_data(ttl=900)
+def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
     """Build second-round series automatically from NBA API data.
 
     If use_demo_backup=False, no scores are hard-coded for the current round.
@@ -1355,7 +1355,7 @@ def build_second_round_series_cached(use_demo_backup=False):
     """
     dynamic = {k: {**v, "a_wins":0, "b_wins":0, "winner":None, "games":[]} for k, v in SECOND_ROUND_SERIES_TEMPLATE.items()}
 
-    api_games = fetch_completed_games_recent()
+    api_games = fetch_completed_games_recent(api_refresh=api_refresh)
     for g in api_games:
         key = series_key_for_pair(g.get("Home"), g.get("Away"), SECOND_ROUND_SERIES_TEMPLATE)
         if not key:
@@ -1380,17 +1380,20 @@ def build_second_round_series_cached(use_demo_backup=False):
 
 def build_second_round_series():
     # The sidebar variable is created later; default is strict API mode.
-    return build_second_round_series_cached(globals().get("USE_DEMO_BACKUP", False))
+    return build_second_round_series_cached(
+        globals().get("USE_DEMO_BACKUP", False),
+        globals().get("ENABLE_BRACKET_API_REFRESH", False),
+    )
 
 
-@st.cache_data(ttl=300)
-def build_conference_finals_series_cached(use_demo_backup=False):
+@st.cache_data(ttl=900)
+def build_conference_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """East/West Conference Finals shells from second-round winners + API games.
 
     No hard-coded CF pairings: each conference finals matchup is the two teams
     that won the conference's second-round series, discovered from completed games.
     """
-    second = build_second_round_series_cached(use_demo_backup)
+    second = build_second_round_series_cached(use_demo_backup, api_refresh)
     out = {}
     for conf in ("East", "West"):
         semis = [(k, s) for k, s in second.items() if s.get("conf") == conf]
@@ -1405,7 +1408,7 @@ def build_conference_finals_series_cached(use_demo_backup=False):
         key = canonical_series_key(t1, t2)
         a, b = sorted([t1, t2], key=lambda t: (TEAM_PROFILES.get(t, {}).get("seed", 99), t))
         shell = {"conf": conf, "round": "Conference Finals", "a": a, "b": b, "a_wins": 0, "b_wins": 0, "winner": None, "games": []}
-        for g in fetch_completed_games_recent():
+        for g in fetch_completed_games_recent(api_refresh=api_refresh):
             h, aw = g.get("Home"), g.get("Away")
             if h and aw and {h, aw} == {a, b}:
                 shell["games"].append({
@@ -1422,7 +1425,10 @@ def build_conference_finals_series_cached(use_demo_backup=False):
 
 
 def build_conference_finals_series():
-    return build_conference_finals_series_cached(globals().get("USE_DEMO_BACKUP", False))
+    return build_conference_finals_series_cached(
+        globals().get("USE_DEMO_BACKUP", False),
+        globals().get("ENABLE_BRACKET_API_REFRESH", False),
+    )
 
 
 def _cf_champion_for_conference(cf_map, conf):
@@ -1432,10 +1438,10 @@ def _cf_champion_for_conference(cf_map, conf):
     return None
 
 
-@st.cache_data(ttl=300)
-def build_nba_finals_series_cached(use_demo_backup=False):
+@st.cache_data(ttl=900)
+def build_nba_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """NBA Finals shell once both conference champions exist; games from API only."""
-    cf = build_conference_finals_series_cached(use_demo_backup)
+    cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
     east_ch = _cf_champion_for_conference(cf, "East")
     west_ch = _cf_champion_for_conference(cf, "West")
     if not east_ch or not west_ch:
@@ -1443,7 +1449,7 @@ def build_nba_finals_series_cached(use_demo_backup=False):
     a, b = sorted([east_ch, west_ch], key=lambda t: (TEAM_PROFILES.get(t, {}).get("seed", 99), t))
     key = canonical_series_key(east_ch, west_ch)
     shell = {"conf": "NBA Finals", "round": "NBA Finals", "a": a, "b": b, "a_wins": 0, "b_wins": 0, "winner": None, "games": []}
-    for g in fetch_completed_games_recent():
+    for g in fetch_completed_games_recent(api_refresh=api_refresh):
         h, aw = g.get("Home"), g.get("Away")
         if h and aw and {h, aw} == {a, b}:
             shell["games"].append({
@@ -1459,19 +1465,22 @@ def build_nba_finals_series_cached(use_demo_backup=False):
 
 
 def build_nba_finals_series():
-    return build_nba_finals_series_cached(globals().get("USE_DEMO_BACKUP", False))
+    return build_nba_finals_series_cached(
+        globals().get("USE_DEMO_BACKUP", False),
+        globals().get("ENABLE_BRACKET_API_REFRESH", False),
+    )
 
 
-@st.cache_data(ttl=120)
-def get_playoff_state_cached(use_demo_backup: bool = True):
+@st.cache_data(ttl=900)
+def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = False):
     """Single cached snapshot: first-round results, semis, conference finals, and NBA Finals shells.
 
     ``use_demo_backup`` follows the sidebar toggle for strict API mode; the bracket page passes
     ``True`` so bundled second-round rows still render when the NBA feed is empty.
     """
-    second = build_second_round_series_cached(use_demo_backup)
-    cf = build_conference_finals_series_cached(use_demo_backup)
-    nf = build_nba_finals_series_cached(use_demo_backup)
+    second = build_second_round_series_cached(use_demo_backup, api_refresh)
+    cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
+    nf = build_nba_finals_series_cached(use_demo_backup, api_refresh)
     east_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "East"]
     west_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "West"]
     east_sr = [s for s in second.values() if s.get("conf") == "East"]
@@ -1572,7 +1581,7 @@ def _count_series_wins_for_team(team_name):
 def infer_next_round_series(round_name, conf=None):
     """Return series dict(s) for Conference Finals or NBA Finals (from cached playoff state)."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
-    stt = get_playoff_state_cached(use_demo)
+    stt = get_playoff_state_cached(use_demo, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
     if round_name == "Conference Finals":
         cf = stt["cf"]
         if not cf:
@@ -1595,7 +1604,7 @@ def series_for_team(team_name):
     instead of the finished semi game log as the 'current' series.
     """
     use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
-    stt = get_playoff_state_cached(use_demo)
+    stt = get_playoff_state_cached(use_demo, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
     nf = stt["finals"]
     cf = stt["cf"]
     second = stt["second"]
@@ -1619,6 +1628,58 @@ def series_for_team(team_name):
         if not in_cf:
             return None, None
     return sk, ss
+
+
+@st.cache_data(ttl=900)
+def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = False):
+    """Central lightweight team context reused by pages without rewalking bracket state."""
+    profile = TEAM_PROFILES.get(team_name, {})
+    stt = get_playoff_state_cached(use_demo_backup, api_refresh)
+    current_key, current_series = None, None
+    for coll_name in ("finals", "cf", "second"):
+        for key, s in (stt.get(coll_name) or {}).items():
+            if team_name in (s.get("a"), s.get("b")):
+                current_key, current_series = key, s
+                break
+        if current_series:
+            break
+    return {
+        "team_name": team_name,
+        "profile": profile,
+        "playoff_state": stt,
+        "series_key": current_key,
+        "series": current_series,
+        "logo": TEAM_LOGOS.get(team_name, ""),
+        "theme": get_team_theme(team_name) if "get_team_theme" in globals() else {},
+    }
+
+
+@st.cache_data(ttl=900)
+def get_series_snapshot_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = False):
+    """Central series snapshot for fast page headers and summaries."""
+    ctx = get_team_context_cached(team_name, use_demo_backup, api_refresh)
+    s = ctx.get("series")
+    profile = ctx.get("profile") or {}
+    if not s:
+        return {
+            "team_name": team_name,
+            "opponent": profile.get("current_opponent") or profile.get("first_round_opponent"),
+            "round": profile.get("round", "Playoffs"),
+            "series_score": "—",
+            "latest_game": None,
+            "source": "local team profile",
+        }
+    a, b = s["a"], s["b"]
+    tw = int(s["a_wins"]) if team_name == a else int(s["b_wins"])
+    ow = int(s["b_wins"]) if team_name == a else int(s["a_wins"])
+    return {
+        "team_name": team_name,
+        "opponent": b if team_name == a else a,
+        "round": s.get("round", profile.get("round", "Playoffs")),
+        "series_score": f"{tw}-{ow}",
+        "latest_game": (s.get("games") or [None])[-1],
+        "source": s.get("source", "local bracket"),
+    }
 
 
 def fan_nick(team_name):
@@ -2664,7 +2725,7 @@ def get_playbyplay_by_game_id(game_id):
     return get_live_playbyplay(game_id)
 
 
-@st.cache_data(ttl=21600)
+@st.cache_data(ttl=86400)
 def fetch_current_roster(team_name, season=CURRENT_NBA_SEASON):
     """Return current NBA.com roster for a team. Falls back safely if NBA API is unavailable."""
     if not NBA_STATS_AVAILABLE:
@@ -2673,7 +2734,7 @@ def fetch_current_roster(team_name, season=CURRENT_NBA_SEASON):
     if not tid:
         return pd.DataFrame()
     try:
-        df = commonteamroster.CommonTeamRoster(team_id=tid, season=season, timeout=20).get_data_frames()[0]
+        df = commonteamroster.CommonTeamRoster(team_id=tid, season=season, timeout=6).get_data_frames()[0]
         if df.empty:
             return pd.DataFrame()
         # CommonTeamRoster columns usually include PLAYER, NUM, POSITION, HEIGHT, WEIGHT, AGE, EXP, SCHOOL, PLAYER_ID
@@ -2684,7 +2745,7 @@ def fetch_current_roster(team_name, season=CURRENT_NBA_SEASON):
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=21600)
+@st.cache_data(ttl=86400)
 def fetch_team_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
     """Use current-season NBA.com player stats to estimate the active rotation by total minutes."""
     if not NBA_STATS_AVAILABLE:
@@ -2698,7 +2759,7 @@ def fetch_team_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
             season_type_all_star="Regular Season",
             team_id_nullable=tid,
             per_mode_detailed="Totals",
-            timeout=25,
+            timeout=7,
         ).get_data_frames()[0]
         if df.empty:
             return pd.DataFrame()
@@ -2713,6 +2774,7 @@ def fetch_team_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
     except Exception:
         return pd.DataFrame()
 
+@st.cache_data(ttl=86400)
 def current_roster_names(team_name, limit=None):
     """Current roster names from NBA API, with hard-coded profile only as backup."""
     rot = fetch_team_rotation_by_minutes(team_name)
@@ -2726,15 +2788,29 @@ def current_roster_names(team_name, limit=None):
     names = TEAM_PROFILES[team_name].get("starters", []) + TEAM_PROFILES[team_name].get("subs", [])
     return names[:limit] if limit else names
 
+@st.cache_data(ttl=86400)
 def estimated_starters_from_api(team_name):
     """Best available estimate: top 5 by current-season minutes, otherwise fallback profile starters."""
     return current_roster_names(team_name, limit=5)
 
+@st.cache_data(ttl=86400)
 def estimated_bench_from_api(team_name, start=5, end=12):
     names = current_roster_names(team_name, limit=end)
     return names[start:end] if len(names) > start else TEAM_PROFILES[team_name].get("subs", [])
 
-@st.cache_data(ttl=3600)
+
+@st.cache_data(ttl=86400)
+def get_roster_cached(team_name: str):
+    """Central roster context: names first, API tables cached and reused by lineups/player pages."""
+    return {
+        "names": current_roster_names(team_name),
+        "starters": estimated_starters_from_api(team_name),
+        "bench": estimated_bench_from_api(team_name),
+        "rotation": fetch_team_rotation_by_minutes(team_name),
+        "roster": fetch_current_roster(team_name),
+    }
+
+@st.cache_data(ttl=86400)
 def get_player_id(name):
     if not NBA_STATS_AVAILABLE: return None
     try:
@@ -2744,6 +2820,21 @@ def get_player_id(name):
 
 @st.cache_data(ttl=86400)
 def season_averages(name):
+    # Prefer cached team rotation rows; this avoids one playercareerstats API call per card.
+    for tm, prof in TEAM_PROFILES.items():
+        local_names = (prof.get("starters") or []) + (prof.get("subs") or [])
+        if name not in local_names:
+            continue
+        rot = fetch_team_rotation_by_minutes(tm)
+        if rot is not None and not rot.empty and "Player" in rot.columns:
+            hit = rot[rot["Player"].astype(str).str.lower() == str(name).lower()]
+            if not hit.empty:
+                r = hit.iloc[0]
+                gp = max(float(r.get("GP", 1) or 1), 1)
+                out = {}
+                for k in ["PTS", "REB", "AST", "STL", "BLK"]:
+                    out[k] = round(float(r.get(k, 0) or 0) / gp, 1)
+                return out
     pid = get_player_id(name)
     if not pid or not NBA_STATS_AVAILABLE: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
     try:
@@ -2756,11 +2847,12 @@ def season_averages(name):
         return {k: round(float(r.get(k, 0)) / gp, 1) for k in ["PTS","REB","AST","STL","BLK"]}
     except Exception: return {"PTS":"--","REB":"--","AST":"--","STL":"--","BLK":"--"}
 
+@st.cache_data(ttl=604800)
 def headshot(name):
     pid = get_player_id(name)
     return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png" if pid else "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=1800)
 def fetch_espn_injury_report(team_name):
     """Fetch current injury report from ESPN team injury page.
 
@@ -2862,7 +2954,7 @@ def get_injury_report(team_name):
     return get_injury_report_cached(str(team_name))
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1800)
 def get_injury_report_cached(team_name: str):
     """Injury rows + fallback — cached so Home + hero strip do not hammer ESPN every rerun."""
     df, source = fetch_espn_injury_report(team_name)
@@ -2923,7 +3015,7 @@ def render_injury_report(team_name, opponent_name=None, show_page_header=True, f
                 st.markdown("</div>", unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=21600)
+@st.cache_data(ttl=3600)
 def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
     """Return current playoff game logs for selected player from NBA API."""
     pid = get_player_id(name)
@@ -2934,13 +3026,14 @@ def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
             player_id=pid,
             season=season,
             season_type_all_star="Playoffs",
-            timeout=10,
+            timeout=7,
         ).get_data_frames()[0]
         return df if df is not None else pd.DataFrame()
     except Exception:
         return pd.DataFrame()
 
-def summarize_playoff_logs(logs):
+@st.cache_data(ttl=3600)
+def summarize_playoff_logs_cached(logs):
     """Create per-game playoff summary stats from NBA API game logs."""
     if logs is None or logs.empty:
         return {"GP":0,"PTS":0.0,"REB":0.0,"AST":0.0,"STL":0.0,"BLK":0.0,"TOV":0.0,"FG_PCT":0.0,"FG3_PCT":0.0,"FT_PCT":0.0,"PLUS_MINUS":0.0}
@@ -2951,6 +3044,10 @@ def summarize_playoff_logs(logs):
         vals = pd.to_numeric(logs.get(c, pd.Series(dtype=float)), errors="coerce").dropna()
         out[c] = round(float(vals.mean()), 3) if len(vals) else 0.0
     return out
+
+
+def summarize_playoff_logs(logs):
+    return summarize_playoff_logs_cached(logs)
 
 def _name_tokens(name):
     return {tok for tok in str(name).lower().replace(".", " ").replace("-", " ").split() if len(tok) >= 3}
@@ -3260,6 +3357,7 @@ def _legacy_path_label(target_series_wins, base_series_wins, title_won):
     return f"If they reach {target_series_wins} series wins"
 
 
+@st.cache_data(ttl=3600)
 def build_legacy_path(
     player,
     team,
@@ -3377,6 +3475,7 @@ def build_legacy_path(
     return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl=3600)
 def legacy_takeaways(
     player,
     team,
@@ -4911,6 +5010,7 @@ def game_story(team_name, margin, prob, box_df):
     lines.append("Next winning stretch: extra-pass threes, no live-ball giveaways, and the defensive glass to kill extra possessions.")
     return lines
 
+@st.cache_data(ttl=86400)
 def matchup_advantages(team, opp):
     t_starters = estimated_starters_from_api(team)
     o_starters = estimated_starters_from_api(opp)
@@ -4960,6 +5060,7 @@ def _lineup_player_html(player, team, pos, side_label=""):
 """
 
 
+@st.cache_data(ttl=86400)
 def _lineup_badge_for_matchup(team_player, opp_player, pos, team, opp):
     t = season_averages(team_player)
     o = season_averages(opp_player)
@@ -5069,6 +5170,7 @@ def _inject_matchup_lineups_css(team, opp):
     )
 
 
+@st.cache_data(ttl=86400)
 def _matchup_edge_tiles(team, opp):
     tp = TEAM_PROFILES.get(team, {})
     op = TEAM_PROFILES.get(opp, {})
@@ -5377,6 +5479,7 @@ def intel_games_opponent_and_record(team_name):
     return None, opp, [], 0, 0, round_label, "waiting"
 
 
+@st.cache_data(ttl=900)
 def build_matchup_intelligence_sections(team_name):
     """Return nine analyst-style sections; inputs are series + profiles + injuries."""
     s, opp, games, tw, ow, rnd, mode = intel_games_opponent_and_record(team_name)
@@ -5633,12 +5736,34 @@ def _inject_matchup_intel_css():
 
 def render_matchup_intelligence(team_name):
     _inject_matchup_intel_css()
+    prof = TEAM_PROFILES.get(team_name) or {}
+    opp_hint = (resolve_home_matchup_context_fast(team_name).get("opponent_display") or prof.get("current_opponent") or "opponent TBD")
+    render_fan_page_hero(
+        team_name,
+        "Matchup Intelligence",
+        f"Fast preview first: {fan_nick(team_name)} vs {opp_hint}. Load the full scouting board when you want the deeper read.",
+        "SCOUTING BOARD",
+    )
+    axes = team_dashboard_lens(team_name).get("identity_axes") or prof.get("strengths", [])
+    cols = st.columns(3)
+    for col, label in zip(cols, list(axes)[:3]):
+        with col:
+            st.markdown(
+                f"<div class='mi-card mi-neutral'><div class='mi-num'>FAST READ</div><div class='mi-title'>{html.escape(str(label))}</div><div class='mi-body'>Cached team context. Full injury and matchup intelligence loads only on request.</div></div>",
+                unsafe_allow_html=True,
+            )
+    load_key = f"load_matchup_intel_{team_name}"
+    if not st.session_state.get(load_key):
+        if st.button("Load full matchup intelligence", key=load_key + "_btn"):
+            st.session_state[load_key] = True
+            st.rerun()
+        return
+
     meta, payload = build_matchup_intelligence_sections(team_name)
     if meta is None:
         st.warning(payload)
         return
     render_mi_intelligence_hero(team_name, meta)
-    prof = TEAM_PROFILES.get(team_name) or {}
     anchor = (prof.get("starters") or [None])[0]
     if anchor:
         sa = season_averages(anchor)
@@ -7999,10 +8124,10 @@ def render_bracket(favorite_team=None):
             "YOUR TEAM",
         )
 
-    if AUTOREFRESH_AVAILABLE:
+    if AUTOREFRESH_AVAILABLE and bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)):
         st_autorefresh(interval=30000, key="bracket_refresh")
 
-    stt = get_playoff_state_cached(True)
+    stt = get_playoff_state_cached(True, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
     east_fr = stt["east_fr"]
     west_fr = stt["west_fr"]
     east_sr = stt["east_sr"]
@@ -9449,42 +9574,63 @@ def render_live_game_center(team_name, profile):
     m3.metric("Game ID", gid or "unavailable")
 
     with st.expander("Box score and top performers", expanded=False):
-        box_df = pd.DataFrame()
-        try:
-            box_game = get_live_boxscore(gid) if gid else {}
-            box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
-        except Exception as exc:
-            st.caption(f"Box score is not ready yet: {exc!r}")
-        if box_df is not None and not box_df.empty:
-            _live_gc_top_performers(box_df, team_name, parsed["opp_name"])
-            render_fan_stat_table(box_df, team_name)
+        box_key = f"live_gc__box_{team_name}_{gid}"
+        if not st.session_state.get(box_key):
+            if st.button("Load box score", key=f"{box_key}_btn"):
+                st.session_state[box_key] = True
+                st.rerun()
+            st.caption("Box score is loaded only on request so the live header stays instant.")
         else:
-            st.caption("Box score has not published yet.")
+            box_df = pd.DataFrame()
+            try:
+                box_game = get_live_boxscore(gid) if gid else {}
+                box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+            except Exception as exc:
+                st.caption(f"Box score is not ready yet: {exc!r}")
+            if box_df is not None and not box_df.empty:
+                _live_gc_top_performers(box_df, team_name, parsed["opp_name"])
+                render_fan_stat_table(box_df, team_name)
+            else:
+                st.caption("Box score has not published yet.")
 
     with st.expander("Play-by-play and shot chart", expanded=False):
-        actions = []
-        try:
-            actions = get_live_playbyplay(gid) if gid else []
-        except Exception as exc:
-            st.caption(f"Play-by-play is not ready yet: {exc!r}")
-        if actions:
-            try:
-                tp = top_plays_from_game_id(gid, team_name, limit=8)
-                if tp is not None and not tp.empty:
-                    st.dataframe(tp, use_container_width=True, hide_index=True)
-                shots = shot_df_from_pbp(actions, parsed["fav_alias"])
-                if not shots.empty:
-                    st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
-            except Exception as exc:
-                st.caption(f"Highlight view is not ready yet: {exc!r}")
+        pbp_key = f"live_gc__pbp_{team_name}_{gid}"
+        if not st.session_state.get(pbp_key):
+            if st.button("Load play-by-play / shot chart", key=f"{pbp_key}_btn"):
+                st.session_state[pbp_key] = True
+                st.rerun()
+            st.caption("Play-by-play and shot chart are deferred because they are the heaviest live-game calls.")
         else:
-            st.caption("Play-by-play has not published yet.")
+            actions = []
+            try:
+                actions = get_live_playbyplay(gid) if gid else []
+            except Exception as exc:
+                st.caption(f"Play-by-play is not ready yet: {exc!r}")
+            if actions:
+                try:
+                    tp = top_plays_from_game_id(gid, team_name, limit=8)
+                    if tp is not None and not tp.empty:
+                        st.dataframe(tp, use_container_width=True, hide_index=True)
+                    shots = shot_df_from_pbp(actions, parsed["fav_alias"])
+                    if not shots.empty:
+                        st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
+                except Exception as exc:
+                    st.caption(f"Highlight view is not ready yet: {exc!r}")
+            else:
+                st.caption("Play-by-play has not published yet.")
 
     with st.expander("Injuries", expanded=False):
-        try:
-            render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name)
-        except Exception as exc:
-            st.caption(f"Injury report is not ready yet: {exc!r}")
+        inj_key = f"live_gc__inj_{team_name}_{parsed['opp_name']}"
+        if not st.session_state.get(inj_key):
+            if st.button("Load injury report", key=f"{inj_key}_btn"):
+                st.session_state[inj_key] = True
+                st.rerun()
+            st.caption("Injury detail is cached and loaded only when opened.")
+        else:
+            try:
+                render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name)
+            except Exception as exc:
+                st.caption(f"Injury report is not ready yet: {exc!r}")
 
 # ==========================================================
 # Sidebar
@@ -9503,12 +9649,9 @@ PAGES={
 
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
-    try:
-        if _is_home_eliminated(team_name):
-            return f"📋 {team_name} (offseason view)"
-    except Exception:
-        if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
-            return f"📋 {team_name} (offseason view)"
+    # Keep the sidebar instant: dynamic bracket elimination is resolved inside pages.
+    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
+        return f"📋 {team_name} (offseason view)"
     return team_name
 
 
@@ -9521,9 +9664,19 @@ favorite_team = st.sidebar.selectbox(
     format_func=_sidebar_team_label,
 )
 USE_DEMO_BACKUP = st.sidebar.toggle(
-    "Use demo backup scores only if NBA API has no game data",
+    "Use local playoff cache",
+    value=True,
+    help="Fast mode: render bundled playoff state immediately. Turn off only when you want a strict live-API bracket."
+)
+ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
+    "Refresh bracket from NBA API (slower)",
     value=False,
-    help="Leave this OFF for true automatic tracking. Turn it ON only when testing or when nba_api is unavailable."
+    help="Optional live bracket sync. Keep off for the fastest page loads; live game center still has its own refresh."
+)
+SHOW_PERF_DEBUG = st.sidebar.toggle(
+    "Show performance debug",
+    value=False,
+    help="Shows page timing and cache mode details after the page renders."
 )
 profile=TEAM_PROFILES[favorite_team]
 inject_team_brand_css(favorite_team)
@@ -9531,6 +9684,7 @@ labels=list(PAGES.keys())
 def_label=st.session_state.pop("page_override", "🏀 Home Dashboard")
 page_label=st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
 page=PAGES[page_label]
+_APP_PAGE_T0 = pytime.perf_counter()
 
 # ==========================================================
 # Pages
@@ -9564,6 +9718,15 @@ elif page == "Matchup Lineups":
     if profile["status"] != "Active": st.warning("This team is eliminated, so current matchup lineups are not active.")
     else:
         render_matchup_lineups_page(favorite_team, profile)
+
+if globals().get("SHOW_PERF_DEBUG", False):
+    elapsed_ms = (pytime.perf_counter() - _APP_PAGE_T0) * 1000
+    with st.expander("Performance debug", expanded=False):
+        st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
+        st.caption(f"Page: {page} · Team: {favorite_team}")
+        st.caption(f"Local playoff cache: {'on' if USE_DEMO_BACKUP else 'off'}")
+        st.caption(f"Bracket NBA API refresh: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
+        st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
 st.divider()
 st.caption("Daniel Cohen — NBA Playoff Companion AI | automatic series tracking | previous rounds | live game center | shot chart")
