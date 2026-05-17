@@ -9840,12 +9840,445 @@ def render_live_game_center(team_name, profile):
                 st.caption(f"Injury report is not ready yet: {exc!r}")
 
 # ==========================================================
+# Franchise Playoff Legends / Team History Leaders
+# ==========================================================
+def _hist_player(rank, name, era, tier, accomplishments, why, pts=0, ppg=0.0, reb=0, ast=0, stl=0, blk=0, threes=0, g30=0, g40=0, gp=0, finals=0, titles=0, compare_to=None, current_watch=False):
+    return {
+        "rank": rank, "name": name, "era": era, "tier": tier,
+        "accomplishments": accomplishments, "why": why,
+        "pts": pts, "ppg": ppg, "reb": reb, "ast": ast, "stl": stl, "blk": blk,
+        "threes": threes, "g30": g30, "g40": g40, "gp": gp, "finals": finals, "titles": titles,
+        "compare_to": compare_to or [], "current_watch": current_watch,
+    }
+
+
+FRANCHISE_HISTORY_DATA = {
+    "New York Knicks": {
+        "context": "Knicks history is measured in Garden pressure: title-era toughness, Ewing-era longevity, and modern Brunson shot-making.",
+        "legends": [
+            _hist_player(1, "Patrick Ewing", "1985-2000", "Franchise anchor", "11x All-Star with New York; long playoff centerpiece.", "The Knicks' modern historical bar for two-way volume and repeated deep runs.", 2400, 21.9, 1180, 190, 80, 230, 0, 31, 5, 110, 1, 0),
+            _hist_player(2, "Willis Reed", "1964-1974", "Championship captain", "1970 Finals MVP; 1973 champion.", "Reed is the emotional and championship standard every Knicks big chases.", 1350, 17.4, 900, 170, 0, 0, 0, 10, 1, 78, 3, 2),
+            _hist_player(3, "Walt Frazier", "1967-1977", "Title guard standard", "Two championships; iconic Game 7 in 1970.", "Frazier owns the guard legacy lane: defense, control, and winning on the biggest stage.", 1750, 20.7, 520, 630, 120, 15, 0, 22, 3, 85, 3, 2),
+            _hist_player(4, "Carmelo Anthony", "2011-2017", "Scoring-era face", "2013 scoring champion; carried the modern Garden scoring burden.", "Melo is the reference point for high-volume Knicks playoff shot creation before Brunson.", 560, 28.3, 125, 35, 20, 8, 35, 12, 4, 20, 0, 0),
+            _hist_player(5, "Bernard King", "1982-1987", "Scoring peak", "One of the most explosive scoring peaks in franchise history.", "King's playoff scoring bursts remain the short-run standard for Garden eruption games.", 500, 34.8, 75, 30, 14, 4, 0, 11, 5, 15, 0, 0),
+            _hist_player(6, "Earl Monroe", "1971-1980", "Title-era artist", "1973 champion; Hall of Fame guard.", "Monroe added flair and late-clock creativity to a team already built on defense.", 980, 15.6, 170, 220, 55, 6, 0, 4, 0, 63, 2, 1),
+            _hist_player(7, "Jalen Brunson", "2022-present", "Current history watch", "Modern lead guard; already owns major Knicks playoff scoring nights.", "Brunson is chasing the Melo/King scoring tier and the Frazier guard-history tier.", 760, 31.5, 90, 150, 22, 2, 42, 14, 5, 24, 0, 0, ["Walt Frazier", "Bernard King", "Carmelo Anthony"], True),
+            _hist_player(8, "Allan Houston", "1996-2005", "Shot-making wing", "1999 Finals run; one of the franchise's cleanest postseason shooters.", "Houston connects the Ewing era to the later Garden scoring template.", 930, 18.2, 120, 95, 35, 7, 70, 8, 1, 51, 1, 0),
+            _hist_player(9, "Dave DeBusschere", "1968-1974", "Title forward glue", "Two championships; elite defensive forward.", "The Knicks' classic role-star model: toughness, rebounding, and winning possessions.", 880, 13.8, 720, 160, 0, 0, 0, 2, 0, 64, 3, 2),
+            _hist_player(10, "Karl-Anthony Towns", "2025-present", "Current big watch", "Current frontcourt star with a chance to write a Knicks playoff chapter.", "Towns' franchise case starts with whether his shooting-big skill set travels deep into May.", 120, 19.5, 70, 25, 6, 7, 18, 2, 0, 6, 0, 0, ["Patrick Ewing", "Willis Reed", "Dave DeBusschere"], True),
+        ],
+    },
+    "Los Angeles Lakers": {
+        "context": "Lakers history is a banner argument: guards, dominant bigs, and stars judged by how often the run ends in June.",
+        "legends": [
+            _hist_player(1, "Magic Johnson", "1979-1991, 1996", "Showtime engine", "5 championships; 3 Finals MVPs.", "Magic is the Lakers' playmaking and winning standard.", 3700, 19.5, 1450, 2300, 350, 70, 80, 35, 4, 190, 9, 5),
+            _hist_player(2, "Kobe Bryant", "1996-2016", "Modern icon", "5 championships; 2 Finals MVPs.", "Kobe is the late-clock and volume-scoring measuring stick.", 5600, 25.6, 1100, 1040, 310, 140, 290, 88, 13, 220, 7, 5),
+            _hist_player(3, "Kareem Abdul-Jabbar", "1975-1989", "Interior dynasty star", "5 Lakers championships; Finals MVP-level longevity.", "Kareem defines elite Lakers big-man production over multiple title windows.", 4200, 22.0, 1600, 550, 170, 390, 0, 45, 6, 190, 8, 5),
+            _hist_player(4, "Shaquille O'Neal", "1996-2004", "Peak-force center", "3 straight Finals MVPs.", "Shaq is the franchise's most overwhelming playoff physical force.", 3300, 27.7, 1500, 350, 70, 260, 0, 55, 12, 120, 4, 3),
+            _hist_player(5, "Jerry West", "1960-1974", "Logo-era scorer", "1972 champion; 1969 Finals MVP.", "West set the franchise playoff scoring standard before Showtime.", 4400, 29.1, 650, 970, 0, 0, 0, 80, 20, 153, 9, 1),
+            _hist_player(6, "LeBron James", "2018-present", "Current legend", "2020 champion and Finals MVP with Los Angeles.", "LeBron's Lakers chapter is about extending a historic career into one more banner chase.", 1250, 26.0, 450, 430, 70, 45, 120, 20, 6, 48, 1, 1, ["Magic Johnson", "Kobe Bryant", "Jerry West"], True),
+            _hist_player(7, "Wilt Chamberlain", "1968-1973", "Title-era giant", "1972 champion and Finals MVP.", "Wilt is the rebounding and interior dominance reference for older Lakers runs.", 1450, 15.8, 1800, 300, 0, 0, 0, 8, 1, 92, 4, 1),
+            _hist_player(8, "Anthony Davis", "2019-present", "Current two-way big", "2020 champion; elite defensive playoff ceiling.", "Davis is chasing the franchise's big-man defensive lineage.", 950, 25.0, 430, 120, 45, 90, 45, 15, 3, 38, 1, 1, ["Kareem Abdul-Jabbar", "Shaquille O'Neal", "Wilt Chamberlain"], True),
+        ],
+    },
+    "Boston Celtics": {
+        "context": "Celtics history is a championship ladder: Russell's rings, Bird's peak, Pierce's longevity, and the Tatum/Brown era trying to stack its own tier.",
+        "legends": [
+            _hist_player(1, "Bill Russell", "1956-1969", "Dynasty standard", "11 championships; defensive dynasty anchor.", "Russell is the reason Celtics history starts with rings.", 2700, 16.2, 4100, 770, 0, 0, 0, 12, 1, 165, 12, 11),
+            _hist_player(2, "Larry Bird", "1979-1992", "Peak superstar", "3 championships; 2 Finals MVPs.", "Bird is the franchise's skill, shot-making, and alpha-forward template.", 3900, 23.8, 1700, 1050, 300, 130, 80, 55, 8, 164, 5, 3),
+            _hist_player(3, "John Havlicek", "1962-1978", "Endurance winner", "8 championships; Finals MVP.", "Havlicek is the Celtics' two-way longevity model.", 3800, 22.0, 1250, 1050, 180, 60, 0, 45, 5, 172, 8, 8),
+            _hist_player(4, "Paul Pierce", "1998-2013", "Modern captain", "2008 Finals MVP.", "Pierce bridges the post-Bird era to the modern championship standard.", 3200, 20.9, 1100, 650, 210, 95, 230, 35, 5, 150, 2, 1),
+            _hist_player(5, "Jayson Tatum", "2017-present", "Current title face", "Finals appearance and championship-tier scoring runs.", "Tatum is climbing toward the Bird/Pierce wing-scorer tier.", 2700, 24.0, 850, 520, 120, 80, 260, 35, 8, 112, 2, 1, ["Larry Bird", "Paul Pierce", "John Havlicek"], True),
+            _hist_player(6, "Jaylen Brown", "2016-present", "Current two-way scorer", "Finals MVP-level modern wing run.", "Brown's case is about two-way playoff reliability next to Tatum.", 2100, 20.0, 620, 310, 115, 45, 180, 20, 3, 105, 2, 1, ["Paul Pierce", "John Havlicek", "Larry Bird"], True),
+        ],
+    },
+    "San Antonio Spurs": {
+        "context": "Spurs history is big-man excellence plus guard craft: Duncan's titles, Robinson's foundation, and Wembanyama's new ceiling.",
+        "legends": [
+            _hist_player(1, "Tim Duncan", "1997-2016", "Dynasty anchor", "5 championships; 3 Finals MVPs.", "Duncan is the franchise's entire playoff measuring stick.", 5100, 20.6, 2850, 760, 160, 560, 5, 60, 10, 251, 6, 5),
+            _hist_player(2, "David Robinson", "1989-2003", "Foundation star", "2 championships; MVP-level two-way center.", "Robinson made the Spurs a serious playoff franchise before Duncan arrived.", 2200, 18.1, 1300, 280, 150, 310, 0, 20, 3, 123, 2, 2),
+            _hist_player(3, "Tony Parker", "2001-2018", "Championship guard", "4 championships; 2007 Finals MVP.", "Parker owns the Spurs guard-scoring and paint-touch legacy.", 4000, 17.9, 520, 1140, 180, 20, 95, 35, 4, 226, 5, 4),
+            _hist_player(4, "Manu Ginobili", "2002-2018", "Chaos creator", "4 championships; elite sixth-man playoff impact.", "Manu is the franchise's creativity and pressure-play wild card.", 3100, 14.0, 850, 830, 290, 70, 320, 18, 1, 218, 5, 4),
+            _hist_player(5, "Kawhi Leonard", "2011-2018", "Two-way peak", "2014 Finals MVP.", "Kawhi's Spurs chapter is short, but his defensive and Finals peak is enormous.", 1150, 16.5, 580, 150, 130, 45, 90, 8, 2, 70, 2, 1),
+            _hist_player(6, "Victor Wembanyama", "2023-present", "Current future watch", "Current franchise centerpiece beginning his playoff file.", "Wembanyama is chasing the Duncan/Robinson big-man standard, not just rookie excitement.", 130, 21.5, 75, 20, 8, 20, 12, 2, 0, 6, 0, 0, ["Tim Duncan", "David Robinson", "Kawhi Leonard"], True),
+        ],
+    },
+    "Oklahoma City Thunder": {
+        "context": "Thunder/Sonics history includes Seattle roots and OKC superstars: Payton, Kemp, Durant, Westbrook, and Shai's current climb.",
+        "legends": [
+            _hist_player(1, "Kevin Durant", "2007-2016", "OKC scoring peak", "2012 Finals run; MVP-level playoff scorer.", "Durant is the Thunder-era scoring standard.", 2850, 28.8, 760, 360, 100, 115, 150, 45, 10, 99, 1, 0),
+            _hist_player(2, "Russell Westbrook", "2008-2019", "OKC engine", "Finals run; triple-double pressure.", "Westbrook is the franchise's chaos, pace, and usage icon.", 2600, 25.4, 760, 850, 210, 25, 120, 35, 7, 103, 1, 0),
+            _hist_player(3, "Gary Payton", "1990-2003", "Sonics guard legend", "1996 Finals; elite defense and creation.", "Payton connects the franchise's Seattle history to its guard legacy.", 2600, 20.0, 620, 900, 240, 35, 130, 25, 4, 130, 1, 0),
+            _hist_player(4, "Shawn Kemp", "1989-1997", "Sonics force", "1996 Finals; explosive frontcourt star.", "Kemp is the franchise's vertical athleticism and power-forward reference.", 1350, 17.3, 920, 120, 95, 115, 5, 10, 1, 78, 1, 0),
+            _hist_player(5, "Shai Gilgeous-Alexander", "2019-present", "Current MVP-level guard", "Current Thunder lead creator and title-window face.", "Shai is chasing Durant's scoring tier and Westbrook/Payton's guard legacy.", 760, 30.2, 150, 160, 35, 20, 28, 13, 4, 25, 0, 0, ["Kevin Durant", "Russell Westbrook", "Gary Payton"], True),
+        ],
+    },
+    "Cleveland Cavaliers": {
+        "context": "Cavaliers history is LeBron's title peak plus guard shot-making eras trying to build their own playoff identity.",
+        "legends": [
+            _hist_player(1, "LeBron James", "2003-2010, 2014-2018", "Franchise king", "2016 champion and Finals MVP.", "LeBron is the entire Cavaliers playoff ceiling.", 5400, 30.8, 1500, 1400, 300, 170, 250, 90, 20, 175, 5, 1),
+            _hist_player(2, "Kyrie Irving", "2011-2017", "Finals shot-maker", "2016 champion; iconic Game 7 shot.", "Kyrie defines the Cavs' modern guard shot-making bar.", 1300, 23.9, 180, 250, 60, 20, 115, 18, 4, 54, 3, 1),
+            _hist_player(3, "Mark Price", "1986-1995", "Precision guard", "All-Star floor general for playoff Cavs teams.", "Price is the pre-LeBron guard standard in Cleveland.", 800, 19.2, 100, 310, 45, 5, 55, 8, 1, 42, 0, 0),
+            _hist_player(4, "Donovan Mitchell", "2022-present", "Current scoring watch", "Current playoff shot creator with major scoring nights.", "Mitchell is chasing the Kyrie/Price guard-scoring lane in Cleveland colors.", 620, 29.5, 95, 105, 25, 8, 55, 12, 5, 21, 0, 0, ["Kyrie Irving", "Mark Price", "LeBron James"], True),
+            _hist_player(5, "Darius Garland", "2019-present", "Current guard watch", "Current lead-playmaking guard.", "Garland's climb is about pairing scoring with Price-style control.", 260, 19.0, 35, 85, 12, 2, 30, 3, 0, 14, 0, 0, ["Mark Price", "Kyrie Irving"], True),
+        ],
+    },
+    "Detroit Pistons": {
+        "context": "Pistons history is guard leadership and defense: Isiah's titles, Billups' calm, and Cade trying to start a new chapter.",
+        "legends": [
+            _hist_player(1, "Isiah Thomas", "1981-1994", "Bad Boys captain", "2 championships; 1990 Finals MVP.", "Isiah is the Pistons' playoff guard standard.", 3000, 20.4, 600, 1300, 230, 40, 35, 30, 4, 150, 3, 2),
+            _hist_player(2, "Chauncey Billups", "2002-2008, 2013-2014", "Going to Work leader", "2004 Finals MVP.", "Billups is the calm, efficient playoff organizer Cade is measured against.", 1700, 18.6, 250, 520, 95, 15, 190, 18, 2, 92, 2, 1),
+            _hist_player(3, "Joe Dumars", "1985-1999", "Two-way guard", "1989 Finals MVP; 2 championships.", "Dumars is the Pistons' guard-defense and title-efficiency model.", 2100, 15.6, 300, 650, 160, 20, 80, 10, 1, 135, 3, 2),
+            _hist_player(4, "Ben Wallace", "2000-2006, 2009-2012", "Defensive backbone", "2004 champion; elite playoff defender.", "Wallace proves Pistons legends do not need scoring to own a series.", 650, 7.0, 1200, 130, 150, 210, 0, 0, 0, 95, 2, 1),
+            _hist_player(5, "Cade Cunningham", "2021-present", "Current guard watch", "Current face of the next Pistons playoff chapter.", "Cade is chasing the Isiah/Billups possession-command lane.", 180, 25.5, 45, 58, 8, 3, 16, 3, 1, 7, 0, 0, ["Isiah Thomas", "Chauncey Billups", "Joe Dumars"], True),
+        ],
+    },
+    "Minnesota Timberwolves": {
+        "context": "Wolves history is Garnett's foundation and Edwards trying to turn short bursts into sustained franchise memory.",
+        "legends": [
+            _hist_player(1, "Kevin Garnett", "1995-2007, 2015-2016", "Franchise soul", "2004 MVP; Western Conference Finals run.", "Garnett is the Wolves' defensive, emotional, and postseason bar.", 1050, 21.0, 650, 240, 65, 75, 10, 12, 2, 50, 0, 0),
+            _hist_player(2, "Anthony Edwards", "2020-present", "Current scoring face", "Modern Wolves shot creator with deep-run upside.", "Edwards is chasing Garnett for the clearest Wolves playoff signature.", 980, 28.0, 210, 180, 45, 22, 90, 17, 6, 35, 0, 0, ["Kevin Garnett", "Sam Cassell", "Karl-Anthony Towns"], True),
+            _hist_player(3, "Karl-Anthony Towns", "2015-2024", "Stretch-big era", "Multi-time All-Star; key playoff big before New York.", "Towns is a major modern Wolves big even as his Knicks chapter starts separately.", 560, 19.0, 300, 75, 20, 28, 70, 5, 1, 29, 0, 0),
+            _hist_player(4, "Sam Cassell", "2003-2005", "2004 guard spark", "Key shot-maker on the 2004 WCF team.", "Cassell is still the short-run guard benchmark for winning Wolves playoff offense.", 350, 18.5, 50, 95, 18, 2, 25, 4, 0, 19, 0, 0),
+            _hist_player(5, "Rudy Gobert", "2022-present", "Current defensive anchor", "Current interior defender for deep-run attempts.", "Gobert's Wolves legacy depends on whether the defense survives elite playoff spacing.", 260, 10.5, 285, 28, 12, 35, 0, 0, 0, 25, 0, 0, ["Kevin Garnett"], True),
+        ],
+    },
+    "Philadelphia 76ers": {
+        "context": "Sixers history runs through dominant stars: Wilt, Dr. J, Moses, Iverson, and Embiid trying to solve May.",
+        "legends": [
+            _hist_player(1, "Julius Erving", "1976-1987", "Championship wing", "1983 champion; multiple Finals runs.", "Dr. J is the Sixers' blend of style and winning.", 3600, 22.0, 1200, 700, 260, 220, 15, 45, 7, 165, 4, 1),
+            _hist_player(2, "Allen Iverson", "1996-2006, 2009-2010", "Scoring icon", "2001 Finals run; MVP.", "Iverson is the franchise's modern playoff scoring mythology.", 2400, 29.7, 300, 500, 150, 15, 105, 40, 12, 81, 1, 0),
+            _hist_player(3, "Moses Malone", "1982-1986", "Title big", "1983 champion and Finals MVP.", "Moses owns the Sixers' most direct modern title-star blueprint.", 1050, 22.0, 690, 70, 35, 70, 0, 12, 2, 48, 1, 1),
+            _hist_player(4, "Joel Embiid", "2014-present", "Current MVP center", "MVP-era scoring big; still chasing conference-final breakthrough.", "Embiid is chasing Moses/Wilt-level dominance with a deeper team result.", 1700, 24.8, 760, 210, 55, 115, 80, 20, 4, 68, 0, 0, ["Moses Malone", "Wilt Chamberlain", "Allen Iverson"], True),
+            _hist_player(5, "Tyrese Maxey", "2020-present", "Current speed guard", "Current playoff scoring guard next to Embiid.", "Maxey's chase is toward the Iverson guard-scoring lane, with a different style.", 760, 20.5, 120, 175, 32, 10, 95, 8, 1, 37, 0, 0, ["Allen Iverson", "Hal Greer"], True),
+        ],
+    },
+}
+
+FRANCHISE_HISTORY_DATA.update({
+    "Denver Nuggets": {
+        "context": "Nuggets history now runs through Jokic's title standard, with Murray's playoff shot-making beside the older English/Mutombo/Carmelo eras.",
+        "legends": [
+            _hist_player(1, "Nikola Jokic", "2015-present", "Championship fulcrum", "2023 champion and Finals MVP.", "Jokic is the franchise's clear playoff ceiling and the standard every future Nugget chases.", 2400, 27.5, 1150, 780, 120, 70, 150, 35, 8, 88, 1, 1, ["Alex English", "Carmelo Anthony"], True),
+            _hist_player(2, "Jamal Murray", "2016-present", "Current shot-maker", "Bubble scoring eruption; 2023 title guard.", "Murray owns many of Denver's modern pressure-shot memories.", 1650, 24.8, 270, 360, 65, 20, 210, 25, 7, 67, 1, 1, ["Nikola Jokic", "Carmelo Anthony"], True),
+            _hist_player(3, "Alex English", "1980-1990", "Scoring-era icon", "Longtime franchise scoring face.", "English is the pre-Jokic regular-season and playoff scoring reference.", 1450, 24.0, 360, 250, 55, 35, 5, 18, 3, 60, 0, 0),
+            _hist_player(4, "Carmelo Anthony", "2003-2011", "Modern scoring star", "2009 Western Conference Finals run.", "Melo lifted Denver into a louder playoff era before the Jokic title window.", 1700, 24.5, 460, 180, 70, 25, 80, 22, 4, 70, 0, 0),
+            _hist_player(5, "Dikembe Mutombo", "1991-1996", "Defensive landmark", "1994 upset symbol and elite rim protector.", "Mutombo is the image of Denver's underdog defensive playoff identity.", 520, 12.0, 620, 35, 25, 150, 0, 1, 0, 43, 0, 0),
+        ],
+    },
+    "Houston Rockets": {
+        "context": "Rockets history is built around championship centers, Harden's volume era, and a new young core trying to earn its own May credibility.",
+        "legends": [
+            _hist_player(1, "Hakeem Olajuwon", "1984-2001", "Championship standard", "2 championships; 2 Finals MVPs.", "Hakeem is the Rockets' ultimate playoff tier: defense, footwork, and title proof.", 3750, 25.9, 1620, 430, 240, 470, 5, 55, 12, 145, 3, 2),
+            _hist_player(2, "James Harden", "2012-2021", "Volume engine", "Multiple deep runs and historic usage.", "Harden is the modern Rockets offense benchmark, even without the final banner.", 3000, 28.4, 600, 780, 190, 60, 330, 48, 11, 106, 0, 0),
+            _hist_player(3, "Moses Malone", "1976-1982", "Interior force", "1981 Finals run; MVP-level rebounding.", "Moses is the pre-Hakeem big-man playoff force.", 1150, 24.0, 760, 70, 35, 80, 0, 15, 3, 48, 1, 0),
+            _hist_player(4, "Yao Ming", "2002-2011", "Global franchise star", "Efficient playoff center when healthy.", "Yao's Houston legacy is a peak-and-health question fans still revisit.", 555, 19.8, 275, 42, 8, 42, 0, 5, 0, 28, 0, 0),
+            _hist_player(5, "Alperen Sengun", "2021-present", "Current big watch", "Current hub for Houston's young playoff identity.", "Sengun's chase starts with proving his interior creation can anchor a series.", 105, 17.5, 55, 30, 5, 4, 2, 1, 0, 6, 0, 0, ["Hakeem Olajuwon", "Yao Ming"], True),
+            _hist_player(6, "Jalen Green", "2021-present", "Current scoring watch", "Current young scoring guard.", "Green needs efficient scoring bursts to join Houston's guard/wing playoff memory.", 115, 19.2, 22, 18, 4, 2, 16, 2, 0, 6, 0, 0, ["James Harden"], True),
+        ],
+    },
+    "Orlando Magic": {
+        "context": "Magic history is star-big peaks, Finals what-ifs, and the Banchero/Wagner era trying to create the next real chapter.",
+        "legends": [
+            _hist_player(1, "Dwight Howard", "2004-2012", "Finals-era anchor", "2009 Finals run; elite defensive center.", "Dwight is Orlando's deepest modern playoff standard.", 1100, 19.0, 850, 90, 45, 150, 0, 12, 2, 58, 1, 0),
+            _hist_player(2, "Shaquille O'Neal", "1992-1996", "Original superstar", "1995 Finals run.", "Shaq gave Orlando its first true superstar playoff identity.", 720, 25.0, 420, 65, 20, 85, 0, 10, 3, 29, 1, 0),
+            _hist_player(3, "Penny Hardaway", "1993-1999", "Signature guard", "1995 Finals run; elite creator.", "Penny is the Magic's guard-skill and what-if standard.", 760, 21.8, 210, 280, 60, 15, 45, 9, 2, 35, 1, 0),
+            _hist_player(4, "Tracy McGrady", "2000-2004", "Scoring peak", "Explosive individual playoff scorer.", "McGrady is Orlando's high-usage scoring reference despite short series exits.", 600, 31.0, 130, 95, 20, 15, 45, 10, 4, 19, 0, 0),
+            _hist_player(5, "Paolo Banchero", "2022-present", "Current franchise watch", "Current scoring-forward centerpiece.", "Paolo is chasing the Shaq/Dwight/Penny tier by turning talent into series wins.", 190, 27.0, 60, 28, 5, 6, 12, 4, 1, 7, 0, 0, ["Tracy McGrady", "Penny Hardaway", "Dwight Howard"], True),
+            _hist_player(6, "Franz Wagner", "2021-present", "Current wing watch", "Current two-way scoring forward.", "Wagner's chase is about becoming the playoff connector Orlando lacked in prior eras.", 125, 18.0, 35, 25, 6, 3, 10, 1, 0, 7, 0, 0, ["Penny Hardaway", "Hedo Turkoglu"], True),
+        ],
+    },
+    "Toronto Raptors": {
+        "context": "Raptors history changed forever in 2019; every new core is measured against Lowry's climb and Kawhi's title peak.",
+        "legends": [
+            _hist_player(1, "Kyle Lowry", "2012-2021", "Franchise engine", "2019 champion; longest playoff identity.", "Lowry is the Raptors' culture and winning standard.", 1900, 15.5, 620, 820, 175, 25, 220, 12, 1, 125, 1, 1),
+            _hist_player(2, "Kawhi Leonard", "2018-2019", "Title peak", "2019 champion and Finals MVP.", "Kawhi owns the highest single-run peak in Raptors history.", 732, 30.5, 220, 85, 40, 20, 55, 14, 4, 24, 1, 1),
+            _hist_player(3, "DeMar DeRozan", "2009-2018", "Pre-title scorer", "Multiple playoff runs as lead scorer.", "DeRozan carried the franchise through the climb before the title trade.", 1450, 21.9, 300, 260, 70, 20, 35, 18, 3, 66, 0, 0),
+            _hist_player(4, "Pascal Siakam", "2016-2024", "Title forward", "2019 champion; later first option.", "Siakam connects the title team to the next competitive era.", 1100, 18.0, 520, 230, 70, 45, 65, 8, 1, 61, 1, 1),
+            _hist_player(5, "Scottie Barnes", "2021-present", "Current two-way watch", "Current franchise forward.", "Barnes' chase is toward the Siakam/Lowry tier if the Raptors return to deep series.", 95, 16.0, 45, 30, 8, 5, 6, 1, 0, 6, 0, 0, ["Pascal Siakam", "Kyle Lowry"], True),
+        ],
+    },
+    "Phoenix Suns": {
+        "context": "Suns history is full of brilliant runs without the final banner: Barkley, Nash, Booker, Westphal, and Durant's late chapter.",
+        "legends": [
+            _hist_player(1, "Charles Barkley", "1992-1996", "Finals-era force", "1993 Finals run; MVP.", "Barkley is the Suns' peak playoff superstar reference.", 1250, 26.6, 650, 230, 90, 40, 35, 22, 5, 47, 1, 0),
+            _hist_player(2, "Steve Nash", "1996-1998, 2004-2012", "Seven Seconds engine", "Multiple Western Conference Finals runs.", "Nash is Phoenix's offensive identity standard.", 1500, 18.0, 230, 950, 80, 8, 180, 12, 1, 83, 0, 0),
+            _hist_player(3, "Devin Booker", "2015-present", "Current scoring face", "2021 Finals run; elite playoff shot-maker.", "Booker is chasing Barkley's peak and Nash's sustained Suns memory.", 1500, 28.0, 300, 280, 65, 18, 140, 26, 8, 54, 1, 0, ["Charles Barkley", "Steve Nash", "Paul Westphal"], True),
+            _hist_player(4, "Kevin Durant", "2023-present", "Current title-chase star", "All-time playoff scorer in a late Suns chapter.", "Durant's Suns legacy depends on whether individual scoring becomes a deep team run.", 420, 27.0, 115, 65, 18, 20, 45, 7, 2, 16, 0, 0, ["Charles Barkley", "Devin Booker"], True),
+            _hist_player(5, "Paul Westphal", "1975-1980", "Finals-era guard", "1976 Finals run.", "Westphal is the older Suns guard standard before Nash and Booker.", 900, 22.0, 150, 300, 65, 12, 0, 10, 1, 41, 1, 0),
+        ],
+    },
+    "Portland Trail Blazers": {
+        "context": "Blazers history is Walton's title, Clyde's Finals years, Dame's shots, and a young group trying to find the next face.",
+        "legends": [
+            _hist_player(1, "Bill Walton", "1974-1979", "Championship big", "1977 champion and Finals MVP.", "Walton is Portland's only title standard.", 680, 18.2, 520, 160, 35, 85, 0, 6, 1, 37, 1, 1),
+            _hist_player(2, "Clyde Drexler", "1983-1995", "Finals-era wing", "Two Finals runs with Portland.", "Drexler is the Blazers' sustained star-wing standard.", 2700, 22.2, 850, 730, 250, 90, 85, 28, 5, 121, 2, 0),
+            _hist_player(3, "Damian Lillard", "2012-2023", "Modern icon", "Series-ending shots; 2019 WCF run.", "Dame owns Portland's modern shot-making mythology.", 1600, 25.7, 260, 380, 55, 18, 190, 24, 7, 61, 0, 0),
+            _hist_player(4, "Brandon Roy", "2006-2011", "What-if star", "Iconic playoff scoring moments before injuries.", "Roy is the franchise's most painful modern what-if.", 380, 19.0, 90, 75, 18, 6, 25, 4, 0, 20, 0, 0),
+            _hist_player(5, "Scoot Henderson", "2023-present", "Current guard watch", "Young guard starting a playoff file.", "Scoot needs series reps before the Dame/Clyde conversation is real.", 40, 10.0, 15, 18, 4, 1, 3, 0, 0, 4, 0, 0, ["Damian Lillard", "Clyde Drexler"], True),
+        ],
+    },
+    "Atlanta Hawks": {
+        "context": "Hawks history is Pettit's title-era greatness, Dominique's scoring, and Trae's modern conference-finals run.",
+        "legends": [
+            _hist_player(1, "Bob Pettit", "1954-1965", "Title-era giant", "1958 champion; all-time scoring big.", "Pettit is the franchise's championship-era foundation.", 2500, 25.5, 1500, 280, 0, 0, 0, 35, 8, 98, 4, 1),
+            _hist_player(2, "Dominique Wilkins", "1982-1994", "Scoring icon", "Legendary playoff scoring duels.", "Dominique is Atlanta's athletic scoring identity.", 1900, 25.4, 520, 210, 85, 35, 40, 28, 6, 75, 0, 0),
+            _hist_player(3, "Trae Young", "2018-present", "Current guard face", "2021 Eastern Conference Finals run.", "Trae is chasing Dominique for the clearest modern Hawks playoff identity.", 1200, 26.8, 120, 430, 45, 5, 130, 20, 5, 45, 0, 0, ["Dominique Wilkins", "Bob Pettit"], True),
+            _hist_player(4, "Dikembe Mutombo", "1996-2001", "Defensive anchor", "Elite rim protection in Hawks playoff years.", "Mutombo is the defensive counterweight to Atlanta's scoring legends.", 400, 9.0, 520, 25, 25, 120, 0, 0, 0, 44, 0, 0),
+            _hist_player(5, "Jalen Johnson", "2021-present", "Current wing watch", "Current two-way forward with upside.", "Johnson's chase starts with becoming the frontcourt bridge Trae needs for a deep run.", 90, 15.0, 45, 20, 6, 5, 5, 1, 0, 6, 0, 0, ["Dominique Wilkins"], True),
+        ],
+    },
+})
+
+
+def _default_franchise_history(team_name):
+    prof = TEAM_PROFILES.get(team_name, {})
+    starters = prof.get("starters", []) or []
+    legends = []
+    for idx, (name, role, context) in enumerate(_franchise_playoff_touchstones(team_name), start=1):
+        legends.append(_hist_player(idx, name, "Franchise history", role.title(), context, f"{name} is a reference point for how {fan_nick(team_name)} fans talk about playoff impact.", 700 - idx * 60, 18.0 - idx, 180, 140, 35, 20, 20, max(0, 8 - idx), max(0, 2 - idx // 2), 40 - idx * 4))
+    for nm in starters[:3]:
+        if not any(x["name"] == nm for x in legends):
+            legends.append(_hist_player(len(legends) + 1, nm, "Current era", "Current watch", "Current rotation player with a chance to add franchise playoff equity.", f"{nm} needs real series wins and repeat production to enter the franchise-history conversation.", 80, 14.0, 35, 25, 5, 4, 8, 1, 0, 6, current_watch=True))
+    return {"context": f"{fan_nick(team_name)} history page uses curated fallback context until a deeper team-specific file is added.", "legends": legends}
+
+
+def franchise_history_data(team_name):
+    return FRANCHISE_HISTORY_DATA.get(team_name) or _default_franchise_history(team_name)
+
+
+def _history_current_names(team_name):
+    try:
+        names = current_roster_names(team_name, limit=18)
+    except Exception:
+        names = []
+    fallback = (TEAM_PROFILES.get(team_name, {}).get("starters") or []) + (TEAM_PROFILES.get(team_name, {}).get("subs") or [])
+    out, seen = [], set()
+    for n in list(names or []) + fallback:
+        key = str(n).strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(str(n))
+    return out
+
+
+def _is_current_history_player(player_name, current_names):
+    p = str(player_name).strip().lower()
+    return any(p == str(n).strip().lower() for n in current_names)
+
+
+def _history_table_df(legends, current_names):
+    rows = []
+    for p in legends:
+        cur = _is_current_history_player(p["name"], current_names) or bool(p.get("current_watch"))
+        rows.append({
+            "Rank": p["rank"], "Player": p["name"], "Era": p["era"], "Tier": p["tier"],
+            "Playoff PTS (est.)": p["pts"], "Playoff PPG (est.)": p["ppg"], "REB (est.)": p["reb"],
+            "AST (est.)": p["ast"], "STL (est.)": p["stl"], "BLK (est.)": p["blk"],
+            "3PM (est.)": p["threes"], "30-pt games (est.)": p["g30"], "40-pt games (est.)": p["g40"],
+            "Playoff GP (est.)": p["gp"], "Finals": p["finals"], "Titles": p["titles"],
+            "Current": "Current Player" if cur else "",
+        })
+    return pd.DataFrame(rows)
+
+
+def _history_card_html(team_name, p, current=False):
+    e = html.escape
+    current_badge = "<span class='hist-badge hist-badge-current'>Current Player</span>" if current else ""
+    watch_badge = "<span class='hist-badge'>Franchise History Watch</span>" if p.get("current_watch") else ""
+    img = e(headshot(p["name"]))
+    logo = e(TEAM_LOGOS.get(team_name, ""))
+    cls = "hist-card hist-card-current" if current else "hist-card"
+    why = str(p.get("why", ""))
+    if len(why) > 145:
+        why = why[:142] + "..."
+    return f"""
+<div class="{cls}">
+  <div class="hist-rank">#{int(p.get('rank', 0))}</div>
+  <div class="hist-img-wrap"><img class="hist-head" src="{img}" alt=""/><img class="hist-logo" src="{logo}" alt=""/></div>
+  <div class="hist-name">{e(p['name'])}</div>
+  <div class="hist-era">{e(p.get('era', ''))}</div>
+  <div class="hist-tier">{e(p.get('tier', ''))}</div>
+  <div class="hist-copy"><b>{e(p.get('accomplishments', ''))}</b><br>{e(why)}</div>
+  <div class="hist-badges">{current_badge}{watch_badge}</div>
+</div>
+"""
+
+
+def _history_sort_col(label):
+    return {
+        "Total playoff points": "Playoff PTS (est.)", "Playoff points per game": "Playoff PPG (est.)",
+        "Rebounds": "REB (est.)", "Assists": "AST (est.)", "Steals": "STL (est.)",
+        "Blocks": "BLK (est.)", "Three-pointers": "3PM (est.)",
+        "40-point playoff games": "40-pt games (est.)", "30-point playoff games": "30-pt games (est.)",
+        "Playoff games played": "Playoff GP (est.)", "Finals appearances": "Finals", "Championships": "Titles",
+    }.get(label, "Playoff PTS (est.)")
+
+
+def _milestone_lines_for_player(player, legends):
+    lines = []
+    for stat, label, verb in [("pts", "points", "score"), ("ast", "assists", "create"), ("reb", "rebounds", "own the glass"), ("g30", "30-point playoff games", "stack scoring nights"), ("g40", "40-point playoff games", "author explosion games")]:
+        val = float(player.get(stat, 0) or 0)
+        higher = sorted([x for x in legends if x["name"] != player["name"] and float(x.get(stat, 0) or 0) > val], key=lambda x: float(x.get(stat, 0) or 0))
+        if not higher:
+            continue
+        target = higher[0]
+        gap = float(target.get(stat, 0) or 0) - val
+        if stat == "pts":
+            text = f"Needs about {int(round(gap))} playoff points to pass {target['name']} on this curated franchise scoring board."
+        elif stat in ("g30", "g40"):
+            text = f"Needs about {int(round(gap))} more {label} to pass {target['name']} and {verb} in franchise memory."
+        else:
+            text = f"Needs about {int(round(gap))} {label} to pass {target['name']} among these franchise playoff estimates."
+        lines.append((label, text, min(0.98, val / max(float(target.get(stat, 1) or 1), 1))))
+        if len(lines) >= 3:
+            break
+    if player.get("finals", 0) == 0:
+        lines.append(("Tier jump", "One Conference Finals win or Finals run would move this from a stats chase into a different franchise-history tier.", 0.35))
+    return lines[:4]
+
+
+def _comparison_card_html(cur, legend):
+    e = html.escape
+    ratio_pts = min(1.0, float(cur.get("pts", 0) or 0) / max(float(legend.get("pts", 1) or 1), 1))
+    ratio_ppg = min(1.0, float(cur.get("ppg", 0) or 0) / max(float(legend.get("ppg", 1) or 1), 1))
+    return f"""
+<div class="hist-compare">
+  <div class="hist-compare-top">
+    <div><img src="{e(headshot(cur['name']))}" alt=""/><b>{e(cur['name'])}</b><span>Current chase</span></div>
+    <div class="hist-vs">vs</div>
+    <div><img src="{e(headshot(legend['name']))}" alt=""/><b>{e(legend['name'])}</b><span>{e(legend.get('tier','Legend'))}</span></div>
+  </div>
+  <div class="hist-mini-grid">
+    <div><b>{cur.get('ppg', 0):.1f}</b><span>PPG est.</span></div><div><b>{legend.get('ppg', 0):.1f}</b><span>PPG est.</span></div>
+    <div><b>{int(cur.get('pts', 0))}</b><span>PTS est.</span></div><div><b>{int(legend.get('pts', 0))}</b><span>PTS est.</span></div>
+    <div><b>{int(cur.get('ast', 0))}</b><span>AST est.</span></div><div><b>{int(legend.get('ast', 0))}</b><span>AST est.</span></div>
+    <div><b>{int(cur.get('reb', 0))}</b><span>REB est.</span></div><div><b>{int(legend.get('reb', 0))}</b><span>REB est.</span></div>
+  </div>
+  <div class="hist-meter"><span style="width:{ratio_pts * 100:.0f}%"></span></div>
+  <div class="hist-meter-label">Total scoring chase: {ratio_pts * 100:.0f}% of {e(legend['name'])}'s curated estimate</div>
+  <div class="hist-meter hist-meter-ppg"><span style="width:{ratio_ppg * 100:.0f}%"></span></div>
+  <div class="hist-meter-label">Scoring-rate chase: {ratio_ppg * 100:.0f}% of the estimated PPG mark</div>
+</div>
+"""
+
+
+def _inject_history_leaders_css():
+    st.markdown(
+        """
+<style>
+.hist-note { color:#475569; font-size:12px; line-height:1.45; margin:4px 0 12px; }
+.hist-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:12px 0 16px; }
+.hist-card { position:relative; border:1px solid var(--team-border); border-radius:18px; padding:14px; background:linear-gradient(180deg,#fff,var(--team-card-tint)); box-shadow:0 10px 26px rgba(15,23,42,.10); overflow:hidden; min-height:270px; }
+.hist-card-current { border-width:2px; box-shadow:0 0 0 3px var(--team-accent-soft), 0 14px 32px rgba(15,23,42,.16); }
+.hist-rank { position:absolute; top:10px; right:12px; font-weight:950; color:var(--team-primary); font-size:1.1rem; }
+.hist-img-wrap { position:relative; width:92px; height:78px; margin-bottom:8px; }
+.hist-head { width:92px; height:68px; object-fit:cover; object-position:top center; border-radius:14px; background:#e2e8f0; }
+.hist-logo { position:absolute; right:-8px; bottom:0; width:32px; height:32px; object-fit:contain; filter:drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+.hist-name { font-size:1.02rem; font-weight:950; color:#0f172a; line-height:1.15; }
+.hist-era { font-size:12px; color:#64748b; font-weight:700; margin-top:2px; }
+.hist-tier { display:inline-block; margin-top:7px; font-size:11px; font-weight:900; color:#fff; background:linear-gradient(135deg,var(--team-primary),var(--team-accent)); border-radius:999px; padding:4px 9px; }
+.hist-copy { margin-top:9px; color:#334155; font-size:12.5px; line-height:1.42; }
+.hist-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.hist-badge { display:inline-block; font-size:10px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; padding:4px 7px; border-radius:999px; color:var(--team-primary); background:var(--team-accent-soft); border:1px solid var(--team-border); }
+.hist-badge-current { color:#fff; background:var(--team-primary); }
+.hist-section { margin:20px 0 8px; font-size:13px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; color:#475569; border-bottom:1px solid rgba(100,116,139,.28); padding-bottom:7px; }
+.hist-milestone-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; margin:10px 0 14px; }
+.hist-milestone { border:1px solid rgba(100,116,139,.25); border-left:5px solid var(--team-accent); border-radius:14px; padding:12px; background:#fff; }
+.hist-progress { height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden; margin-top:8px; }
+.hist-progress span { display:block; height:100%; background:linear-gradient(90deg,var(--team-primary),var(--team-accent)); border-radius:999px; }
+.hist-compare-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; margin:12px 0 16px; }
+.hist-compare { border:1px solid var(--team-border); border-radius:18px; background:#fff; padding:12px; box-shadow:0 10px 24px rgba(15,23,42,.10); }
+.hist-compare-top { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; text-align:center; }
+.hist-compare-top img { width:78px; height:58px; border-radius:12px; object-fit:cover; object-position:top center; background:#e2e8f0; display:block; margin:0 auto 4px; }
+.hist-compare-top b { display:block; font-size:13px; color:#0f172a; }
+.hist-compare-top span { display:block; font-size:11px; color:#64748b; }
+.hist-vs { font-weight:950; color:var(--team-primary); }
+.hist-mini-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+.hist-mini-grid div { background:var(--team-card-tint); border-radius:10px; padding:7px; text-align:center; }
+.hist-mini-grid b { display:block; color:#0f172a; }
+.hist-mini-grid span { display:block; color:#64748b; font-size:10px; text-transform:uppercase; font-weight:800; }
+.hist-meter { height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden; margin-top:10px; }
+.hist-meter span { display:block; height:100%; background:linear-gradient(90deg,var(--team-primary),var(--team-accent)); border-radius:999px; }
+.hist-meter-ppg span { background:linear-gradient(90deg,#0f172a,var(--team-accent)); }
+.hist-meter-label { font-size:11px; color:#64748b; margin-top:4px; }
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_team_history_leaders_page(team_name):
+    data = franchise_history_data(team_name)
+    legends = sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 999)))
+    current_names = _history_current_names(team_name)
+    current_entries = [p for p in legends if _is_current_history_player(p["name"], current_names) or p.get("current_watch")]
+    _inject_history_leaders_css()
+    render_fan_page_hero(team_name, f"{fan_nick(team_name)} Franchise Playoff Legends", data.get("context", "Franchise history and current-player chase board."), "TEAM HISTORY LEADERS")
+    st.markdown("<div class='hist-note'><b>Data note:</b> this page uses curated franchise-history fallback boards with estimates where full historical playoff leader feeds are not available. Estimated columns are labeled as estimates; live/current-player context comes from the selected team's roster helpers.</div>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Legends on board", len(legends))
+    c2.metric("Current players highlighted", len(current_entries))
+    c3.metric("History mode", "Curated estimates")
+
+    st.markdown("<div class='hist-section'>1 - Franchise Legends Overview</div>", unsafe_allow_html=True)
+    st.markdown("<div class='hist-grid'>" + "".join(_history_card_html(team_name, p, current=(_is_current_history_player(p["name"], current_names) or p.get("current_watch"))) for p in legends[:10]) + "</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='hist-section'>2 - Franchise Playoff Leaders</div>", unsafe_allow_html=True)
+    df = _history_table_df(legends, current_names)
+    sort_label = st.selectbox("Sort leaderboard by", ["Total playoff points", "Playoff points per game", "Rebounds", "Assists", "Steals", "Blocks", "Three-pointers", "40-point playoff games", "30-point playoff games", "Playoff games played", "Finals appearances", "Championships"], key=f"history_sort_{team_name}")
+    show_df = df.sort_values(_history_sort_col(sort_label), ascending=False).reset_index(drop=True)
+    render_fan_stat_table(show_df, team_name)
+
+    st.markdown("<div class='hist-section'>3 - Current Players Climbing the List</div>", unsafe_allow_html=True)
+    if current_entries:
+        st.markdown("<div class='hist-grid'>" + "".join(_history_card_html(team_name, p, current=True) for p in current_entries) + "</div>", unsafe_allow_html=True)
+    else:
+        st.info("No current roster player is on this curated top board yet. A deep run is how someone starts forcing their way onto it.")
+
+    st.markdown("<div class='hist-section'>4 - Chase / Projection Storylines</div>", unsafe_allow_html=True)
+    if current_entries:
+        for p in current_entries:
+            st.markdown(f"**{p['name']} history watch**")
+            milestone_html = []
+            for label, text, progress in _milestone_lines_for_player(p, legends):
+                milestone_html.append(f"<div class='hist-milestone'><b>{html.escape(label.title())}</b><br><span style='font-size:12px;color:#475569'>{html.escape(text)}</span><div class='hist-progress'><span style='width:{max(5, min(98, progress * 100)):.0f}%'></span></div></div>")
+            st.markdown("<div class='hist-milestone-grid'>" + "".join(milestone_html) + "</div>", unsafe_allow_html=True)
+    else:
+        st.caption("Milestone cards appear when a current player is on the franchise board.")
+
+    st.markdown("<div class='hist-section'>5 - Player Comparison Cards</div>", unsafe_allow_html=True)
+    cards = []
+    by_name = {p["name"]: p for p in legends}
+    for cur in current_entries[:3]:
+        targets = [by_name[n] for n in cur.get("compare_to", []) if n in by_name] or [p for p in legends[:4] if p["name"] != cur["name"]]
+        for target in targets[:2]:
+            cards.append(_comparison_card_html(cur, target))
+    if cards:
+        st.markdown("<div class='hist-compare-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+    else:
+        st.caption("Comparison cards appear when a current player is part of the curated history board.")
+
+    st.markdown("<div class='hist-section'>6 - Milestones Within Reach</div>", unsafe_allow_html=True)
+    if current_entries:
+        rows = []
+        for cur in current_entries:
+            for label, text, _progress in _milestone_lines_for_player(cur, legends):
+                rows.append({"Player": cur["name"], "Milestone": label.title(), "What is within reach": text, "Data type": "Curated estimate"})
+        render_fan_stat_table(pd.DataFrame(rows), team_name)
+    else:
+        st.info("No current-player milestones yet for this team board.")
+
+
+# ==========================================================
 # Sidebar
 # ==========================================================
 PAGES={
     "🏀 Home Dashboard":"Home Dashboard",
     "🏀 Live Game Center":"Live Game Center",
     "🏀 Playoff Bracket":"Playoff Bracket",
+    "🏛️ Team History Leaders":"Team History Leaders",
     "🧠 Matchup Intelligence":"Matchup Intelligence",
     "🏀 Matchup Lineups":"Matchup Lineups",
     "🏀 Player Playoff Tracker":"Player Playoff Tracker",
@@ -9900,6 +10333,9 @@ if page == "Home Dashboard":
 
 elif page == "Playoff Bracket":
     render_bracket(favorite_team)
+
+elif page == "Team History Leaders":
+    render_team_history_leaders_page(favorite_team)
 
 elif page == "Matchup Intelligence":
     render_matchup_intelligence(favorite_team)
