@@ -379,9 +379,9 @@ TEAM_PROFILES = {
     "Philadelphia 76ers": {"seed":7,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"New York Knicks","first_round_opponent":"Boston Celtics","first_round_result":"Defeated Boston Celtics, 4-3","starters":["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],"subs":["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"],"strengths":["Embiid pressure","Maxey speed","Paul George wing scoring","free-throw pressure"],"concerns":["Embiid health","transition defense","bench depth"]},
     "Detroit Pistons": {"seed":1,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"],"strengths":["Cade Cunningham control","Duren rebounding","young athleticism","transition pressure"],"concerns":["late-game execution","playoff inexperience","half-court droughts"]},
     "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Garland playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
-    "Oklahoma City Thunder": {"seed":1,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"Los Angeles Lakers","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","Chet rim protection","spacing","pace"],"concerns":["Lakers size","physicality","late-game pressure"]},
+    "Oklahoma City Thunder": {"seed":1,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","Chet rim protection","spacing","pace"],"concerns":["Spurs length","physicality","late-game pressure"]},
     "Los Angeles Lakers": {"seed":4,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"],"strengths":["LeBron control","Anthony Davis defense","rim pressure","playoff experience"],"concerns":["transition defense","age","three-point consistency"]},
-    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"Minnesota Timberwolves","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
+    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
     "Minnesota Timberwolves": {"seed":6,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"],"strengths":["Edwards scoring","Gobert/McDaniels defense","Naz Reid spacing","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
 }
 # Eliminated teams
@@ -404,6 +404,8 @@ def _is_home_eliminated(team_name):
     p = TEAM_PROFILES.get(team_name) or {}
     if not p:
         return False
+    if _dynamic_playoff_eliminated(team_name):
+        return True
     if p.get("status") == "Eliminated":
         return True
     stt = str(p.get("status") or "").strip().lower()
@@ -414,8 +416,6 @@ def _is_home_eliminated(team_name):
         return True
     res = str(p.get("first_round_result") or "")
     if p.get("current_opponent") is None and res.startswith("Lost"):
-        return True
-    if _dynamic_playoff_eliminated(team_name):
         return True
     return False
 
@@ -1036,7 +1036,8 @@ SECOND_ROUND_SERIES_TEMPLATE = {
 }
 
 # Emergency/demo backup only. Merged into the bracket when API has no rows for a series
-# (see ``get_playoff_state_cached(True)``). Enough games here to crown winners so CF shells form.
+# (see ``get_playoff_state_cached(True)``). It should mirror known results without
+# crowning a winner before a team reaches four wins.
 SECOND_ROUND_DEMO_BACKUP = {
     "DET-CLE": {"games":[
         {"Game":"Game 1","Date":"May 4","Score":"Pistons 111, Cavaliers 101","Winner":"Detroit Pistons","GameID":"demo-det-cle-g1"},
@@ -1045,7 +1046,6 @@ SECOND_ROUND_DEMO_BACKUP = {
         {"Game":"Game 4","Date":"May 10","Score":"Pistons 102, Cavaliers 99","Winner":"Detroit Pistons","GameID":"demo-det-cle-g4"},
         {"Game":"Game 5","Date":"May 12","Score":"Cavaliers 118, Pistons 114","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g5"},
         {"Game":"Game 6","Date":"May 14","Score":"Cavaliers 101, Pistons 98","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g6"},
-        {"Game":"Game 7","Date":"May 16","Score":"Pistons 110, Cavaliers 102","Winner":"Detroit Pistons","GameID":"demo-det-cle-g7"},
     ]},
     "NYK-PHI": {"games":[
         {"Game":"Game 1","Date":"May 4","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks","GameID":"demo-nyk-phi-g1"},
@@ -1061,12 +1061,12 @@ SECOND_ROUND_DEMO_BACKUP = {
         {"Game":"Game 5","Date":"May 13","Score":"Thunder 115, Lakers 98","Winner":"Oklahoma City Thunder","GameID":"demo-okc-lal-g5"},
     ]},
     "SAS-MIN": {"games":[
-        {"Game":"Game 1","Date":"May 5","Score":"Timberwolves 104, Spurs 102","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g1"},
+        {"Game":"Game 1","Date":"May 5","Score":"Spurs 104, Timberwolves 102","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g1"},
         {"Game":"Game 2","Date":"May 7","Score":"Timberwolves 110, Spurs 106","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g2"},
         {"Game":"Game 3","Date":"May 9","Score":"Spurs 112, Timberwolves 108","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g3"},
-        {"Game":"Game 4","Date":"May 11","Score":"Timberwolves 114, Spurs 105","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g4"},
-        {"Game":"Game 5","Date":"May 13","Score":"Spurs 109, Timberwolves 107","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g5"},
-        {"Game":"Game 6","Date":"May 15","Score":"Timberwolves 118, Spurs 112","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g6"},
+        {"Game":"Game 4","Date":"May 11","Score":"Spurs 114, Timberwolves 105","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g4"},
+        {"Game":"Game 5","Date":"May 13","Score":"Timberwolves 109, Spurs 107","Winner":"Minnesota Timberwolves","GameID":"demo-sas-min-g5"},
+        {"Game":"Game 6","Date":"May 15","Score":"Spurs 118, Timberwolves 112","Winner":"San Antonio Spurs","GameID":"demo-sas-min-g6"},
     ]},
 }
 
@@ -1370,7 +1370,7 @@ def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
             "Source": "NBA API",
         })
 
-    # Optional demo backup only if the API has not produced any games for that series.
+    # Optional local playoff cache only if the API has not produced any games for that series.
     if use_demo_backup:
         for key, backup in SECOND_ROUND_DEMO_BACKUP.items():
             if key in dynamic and not dynamic[key].get("games"):
@@ -1508,6 +1508,37 @@ ROUND_DEPTH_FOR_EXIT = {
 }
 
 
+def _series_has_confirmed_winner(series):
+    """A playoff series is complete only when one side has four wins."""
+    if not series:
+        return False
+    a_wins = int(series.get("a_wins", 0) or 0)
+    b_wins = int(series.get("b_wins", 0) or 0)
+    winner = series.get("winner")
+    if winner == series.get("a"):
+        return a_wins == 4 and b_wins < 4
+    if winner == series.get("b"):
+        return b_wins == 4 and a_wins < 4
+    return False
+
+
+def _team_series_record(team_name, series):
+    if team_name == series.get("a"):
+        return int(series.get("a_wins", 0) or 0), int(series.get("b_wins", 0) or 0), series.get("b")
+    if team_name == series.get("b"):
+        return int(series.get("b_wins", 0) or 0), int(series.get("a_wins", 0) or 0), series.get("a")
+    return 0, 0, None
+
+
+def _team_lost_confirmed_series(team_name, series):
+    if team_name not in (series.get("a"), series.get("b")):
+        return False
+    if not _series_has_confirmed_winner(series):
+        return False
+    team_wins, opp_wins, _opp = _team_series_record(team_name, series)
+    return opp_wins == 4 and team_wins < 4 and series.get("winner") != team_name
+
+
 def _iter_playoff_series_shells_merged():
     """All playoff series shells: semis, CF, Finals (cached merge) plus static first round."""
     stt = get_playoff_state_cached(True)
@@ -1529,6 +1560,7 @@ def _iter_playoff_series_shells_merged():
             "winner": s.get("winner"),
             "round": "First Round",
             "games": [],
+            "source": "Local first-round results",
         }
 
 
@@ -1539,8 +1571,7 @@ def _last_elimination_series_for_team(team_name):
     for s in _iter_playoff_series_shells_merged():
         if team_name not in (s.get("a"), s.get("b")):
             continue
-        w = s.get("winner")
-        if not w or w == team_name:
+        if not _team_lost_confirmed_series(team_name, s):
             continue
         rd = str(s.get("round") or "")
         depth = ROUND_DEPTH_FOR_EXIT.get(rd, 0)
@@ -1734,6 +1765,10 @@ def series_status_text(team_name, series_obj=None):
     opp_w = bw if team_name == a else aw
     source_note = "" if s.get("source") == "NBA API" else f" ({s.get('source','')})"
     rnd = s.get("round", "Playoffs")
+    if _series_has_confirmed_winner(s):
+        if s.get("winner") == team_name:
+            return f"{rnd}: You won the series {team_w}-{opp_w} over {fan_nick(opp)}{source_note}"
+        return f"{rnd}: {fan_nick(opp)} won the series {opp_w}-{team_w}; {fan_nick(team_name)} are eliminated{source_note}"
     if team_w > opp_w:
         ledger = f"You're up {team_w}-{opp_w} on {fan_nick(opp)}"
     elif team_w < opp_w:
@@ -5190,7 +5225,7 @@ def _matchup_edge_tiles(team, opp):
 def render_matchup_lineups_page(team_name, profile):
     hctx = resolve_home_matchup_context_fast(team_name)
     possible = hctx.get("opponents") or []
-    default_opp = hctx.get("opponent") or profile.get("current_opponent") or hctx.get("opponent_display")
+    default_opp = hctx.get("opponent") or hctx.get("opponent_display") or profile.get("current_opponent")
     opponents = [op for op in possible if op in TEAM_PROFILES] or ([default_opp] if default_opp in TEAM_PROFILES else [])
     if not opponents:
         st.info("The next opponent is not settled enough for lineup cards yet. The matchup board will fill in once the bracket names a team.")
@@ -5460,8 +5495,10 @@ def intel_games_opponent_and_record(team_name):
         round_label = s.get("round", round_label)
         tw = int(s.get("a_wins", 0)) if team_name == s["a"] else int(s.get("b_wins", 0))
         ow = int(s.get("b_wins", 0)) if team_name == s["a"] else int(s.get("a_wins", 0))
+        if _team_lost_confirmed_series(team_name, s):
+            return s, opp, games, tw, ow, f"{round_label} (series complete)", "eliminated"
         return s, opp, games, tw, ow, round_label, "current"
-    if prof.get("status") == "Eliminated":
+    if _is_home_eliminated(team_name):
         opp = prof.get("first_round_opponent")
         games = [dict(g) for g in FIRST_ROUND_GAME_SCORES.get(team_name, [])]
         tw = sum(1 for g in games if g.get("Winner") == team_name)
@@ -5474,6 +5511,12 @@ def intel_games_opponent_and_record(team_name):
         round_label = s2.get("round", round_label)
         tw = int(s2.get("a_wins", 0)) if team_name == s2["a"] else int(s2.get("b_wins", 0))
         ow = int(s2.get("b_wins", 0)) if team_name == s2["a"] else int(s2.get("a_wins", 0))
+        if _series_has_confirmed_winner(s2) and s2.get("winner") == team_name:
+            ctx = next_round_context_for_team(team_name)
+            if ctx and ctx.get("advanced"):
+                return s2, ctx.get("opponents", [None])[0] or ctx.get("opponent_text"), games, tw, ow, ctx.get("round_label", "Next Round"), "advanced"
+        if _team_lost_confirmed_series(team_name, s2):
+            return s2, opp, games, tw, ow, f"{round_label} (series complete)", "eliminated"
         return s2, opp, games, tw, ow, round_label, "current"
     opp = prof.get("current_opponent") or prof.get("first_round_opponent")
     return None, opp, [], 0, 0, round_label, "waiting"
@@ -5810,11 +5853,17 @@ def render_matchup_intelligence(team_name):
 # ==========================================================
 def render_matchup_header(team_name, first_round=False):
     p=TEAM_PROFILES[team_name]
-    opp=p["first_round_opponent"] if first_round else (p.get("current_opponent") or p["first_round_opponent"])
-    round_label="Previous Rounds / First Round Review" if first_round else p["round"]
+    if first_round:
+        opp=p["first_round_opponent"]
+        round_label="Previous Rounds / First Round Review"
+    else:
+        hctx = resolve_home_matchup_context_fast(team_name)
+        opp = hctx.get("opponent") or hctx.get("opponent_display") or p.get("current_opponent") or p["first_round_opponent"]
+        round_label = hctx.get("round_label") or p["round"]
     header=f"{p['conference']} {round_label}"
     oseed = TEAM_PROFILES.get(opp, {}).get("seed", "—")
     e = html.escape
+    opp_logo = TEAM_LOGOS.get(opp, "")
     st.markdown(
         (
             '<div class="team-match-header"><div style="display:flex;align-items:center;'
@@ -5824,7 +5873,7 @@ def render_matchup_header(team_name, first_round=False):
             f"({p['seed']}) {e(team_name)} <span style='opacity:.5'>vs</span> "
             f"({oseed}) {e(opp)}</h1>"
             f"<h3>{e(p['conference'])} · {e(round_label)}</h3></div>"
-            f'<img src="{e(TEAM_LOGOS.get(opp, ""))}" width="88" alt=""/>'
+            f'<img src="{e(opp_logo)}" width="88" alt=""/>'
             "</div></div>"
         ),
         unsafe_allow_html=True,
@@ -6189,6 +6238,161 @@ def next_round_context_for_team(team_name):
         "completed_series": current_series,
         "paired_series": paired,
     }
+
+
+def _round_depth(series):
+    rd = str((series or {}).get("round") or "")
+    depth = ROUND_DEPTH_FOR_EXIT.get(rd, 0)
+    if depth == 0 and "first" in rd.lower():
+        depth = 1
+    return depth
+
+
+def _all_playoff_series_with_keys(use_demo_backup=True, api_refresh=False):
+    stt = get_playoff_state_cached(use_demo_backup, api_refresh)
+    rows = []
+    for coll_name in ("finals", "cf", "second"):
+        for key, s in (stt.get(coll_name) or {}).items():
+            if s:
+                rows.append((coll_name, key, s))
+    for key, s in FIRST_ROUND_SERIES.items():
+        rows.append((
+            "first",
+            key,
+            {
+                "conf": s.get("conf"),
+                "round": "First Round",
+                "a": s.get("a"),
+                "b": s.get("b"),
+                "a_wins": int(s.get("a_wins", 0) or 0),
+                "b_wins": int(s.get("b_wins", 0) or 0),
+                "winner": s.get("winner"),
+                "games": [],
+                "source": "Local first-round results",
+            },
+        ))
+    return rows
+
+
+def playoff_status_for_team(team_name, use_demo_backup=True, api_refresh=False):
+    """Single source of truth for active/advanced/awaiting/eliminated UI labels."""
+    profile = TEAM_PROFILES.get(team_name) or {}
+    series_rows = _all_playoff_series_with_keys(use_demo_backup, api_refresh)
+    team_series = [(coll, key, s) for coll, key, s in series_rows if team_name in (s.get("a"), s.get("b"))]
+    if not team_series:
+        return {
+            "team": team_name,
+            "current_round": profile.get("round", "Playoffs"),
+            "status": "active" if profile.get("status") == "Active" else "eliminated",
+            "current_opponent": profile.get("current_opponent") or profile.get("first_round_opponent") or "",
+            "series_wins": 0,
+            "elimination_reason": "" if profile.get("status") == "Active" else profile.get("first_round_result", ""),
+            "data_source": "TEAM_PROFILES",
+            "series": None,
+        }
+
+    lost = None
+    for _coll, _key, s in team_series:
+        if _team_lost_confirmed_series(team_name, s):
+            if lost is None or _round_depth(s) > _round_depth(lost):
+                lost = s
+    if lost:
+        tw, ow, opp = _team_series_record(team_name, lost)
+        rd = str(lost.get("round") or "Playoffs")
+        return {
+            "team": team_name,
+            "current_round": rd,
+            "status": "eliminated",
+            "current_opponent": opp,
+            "series_wins": _count_series_wins_for_team(team_name),
+            "elimination_reason": f"Lost {rd} to {opp}, {tw}-{ow}; opponent reached 4 wins.",
+            "data_source": lost.get("source", "Bracket state"),
+            "series": lost,
+        }
+
+    active = [
+        s for _coll, _key, s in team_series
+        if not _series_has_confirmed_winner(s) and _round_depth(s) == max(_round_depth(x[2]) for x in team_series)
+    ]
+    if active:
+        s = active[0]
+        tw, ow, opp = _team_series_record(team_name, s)
+        return {
+            "team": team_name,
+            "current_round": s.get("round", profile.get("round", "Playoffs")),
+            "status": "active",
+            "current_opponent": opp,
+            "series_wins": _count_series_wins_for_team(team_name),
+            "elimination_reason": "",
+            "data_source": s.get("source", "Bracket state"),
+            "series_record": f"{tw}-{ow}",
+            "series": s,
+        }
+
+    won = [s for _coll, _key, s in team_series if _series_has_confirmed_winner(s) and s.get("winner") == team_name]
+    last_won = max(won, key=_round_depth) if won else None
+    next_ctx = next_round_context_for_team(team_name)
+    if next_ctx and next_ctx.get("advanced"):
+        status = "awaiting opponent" if len(next_ctx.get("opponents") or []) != 1 else "advanced"
+        return {
+            "team": team_name,
+            "current_round": next_ctx.get("round_label", "Next Round"),
+            "status": status,
+            "current_opponent": next_ctx.get("opponent_text", "TBD"),
+            "series_wins": _count_series_wins_for_team(team_name),
+            "elimination_reason": "",
+            "data_source": (next_ctx.get("completed_series") or {}).get("source", "Bracket advancement"),
+            "series": next_ctx.get("completed_series"),
+        }
+    if last_won:
+        return {
+            "team": team_name,
+            "current_round": last_won.get("round", "Playoffs"),
+            "status": "advanced",
+            "current_opponent": "TBD",
+            "series_wins": _count_series_wins_for_team(team_name),
+            "elimination_reason": "",
+            "data_source": last_won.get("source", "Bracket state"),
+            "series": last_won,
+        }
+
+    return {
+        "team": team_name,
+        "current_round": profile.get("round", "Playoffs"),
+        "status": "active",
+        "current_opponent": profile.get("current_opponent") or profile.get("first_round_opponent") or "",
+        "series_wins": _count_series_wins_for_team(team_name),
+        "elimination_reason": "",
+        "data_source": "TEAM_PROFILES fallback",
+        "series": None,
+    }
+
+
+def playoff_status_debug_dataframe(use_demo_backup=True, api_refresh=False):
+    rows = []
+    for team in sorted(TEAM_PROFILES):
+        st_row = playoff_status_for_team(team, use_demo_backup, api_refresh)
+        rows.append({
+            "Team": team,
+            "Current round": st_row.get("current_round", ""),
+            "Status": st_row.get("status", ""),
+            "Current opponent": st_row.get("current_opponent", ""),
+            "Series wins": st_row.get("series_wins", 0),
+            "Series record": st_row.get("series_record", ""),
+            "Elimination reason": st_row.get("elimination_reason", ""),
+            "Data source": st_row.get("data_source", ""),
+        })
+    return pd.DataFrame(rows)
+
+
+def render_playoff_status_debug_expander(location_key="playoff_status"):
+    with st.expander("Playoff status debug", expanded=False):
+        st.caption("Bracket-derived status table. Elimination requires a completed series where the opponent has exactly 4 wins and this team has fewer than 4.")
+        df = playoff_status_debug_dataframe(
+            bool(globals().get("USE_DEMO_BACKUP", True)),
+            bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)),
+        )
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 def _build_local_series_shell(team_name):
@@ -6873,7 +7077,7 @@ def _home_storyline_headline(team_name, hctx, pctx=None):
             f"{nick} cleared the second round while the other semi finishes — the bracket names the next matchup.",
         )
     if not s:
-        if profile.get("status") == "Eliminated":
+        if _is_home_eliminated(team_name):
             return f"The postseason run stopped for {nick} — the tape and box scores still carry the story of how it broke."
         return f"{nick} are queued for the next bracket update — the schedule feed still decides when the next chapter opens."
 
@@ -7631,6 +7835,8 @@ def render_playoff_command_center(team_name):
         f"Updated {datetime.now().strftime('%b %d %I:%M %p')} · Playoff story refreshes as new results land."
     )
     sections.append("footer_caption")
+    render_playoff_status_debug_expander("home")
+    sections.append("playoff_status_debug")
 
     live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
     perf_fast = (not live_flag) or is_eliminated
@@ -8237,6 +8443,7 @@ def render_bracket(favorite_team=None):
             use_container_width=True,
             hide_index=True,
         )
+    render_playoff_status_debug_expander("bracket")
 
 
 def latest_game_note(team, series_obj=None):
@@ -9649,9 +9856,8 @@ PAGES={
 
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
-    # Keep the sidebar instant: dynamic bracket elimination is resolved inside pages.
-    if TEAM_PROFILES.get(team_name, {}).get("status") == "Eliminated":
-        return f"📋 {team_name} (offseason view)"
+    if _is_home_eliminated(team_name):
+        return f"📋 {team_name} (offseason outlook)"
     return team_name
 
 
@@ -9715,7 +9921,7 @@ elif page == "Legacy Tracker":
 
 elif page == "Matchup Lineups":
     render_matchup_header(favorite_team)
-    if profile["status"] != "Active": st.warning("This team is eliminated, so current matchup lineups are not active.")
+    if _is_home_eliminated(favorite_team): st.warning("This team is eliminated, so current matchup lineups are not active.")
     else:
         render_matchup_lineups_page(favorite_team, profile)
 
