@@ -294,6 +294,9 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 .broadcast-team-name { font-size: 13px; font-weight: 950; margin-top: 5px; }
 .broadcast-status { display:inline-block; font-size: 11px; font-weight: 950; letter-spacing:.12em; text-transform:uppercase; padding:5px 11px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(15,23,42,.58); color:#e2e8f0; }
 .broadcast-status.live { background:rgba(220,38,38,.24); color:#fecaca; border-color:rgba(248,113,113,.5); animation: homeLivePulse 2.4s ease-in-out infinite; }
+.broadcast-status.soon { background:rgba(251,191,36,.22); color:#fde68a; border-color:rgba(251,191,36,.55); }
+.broadcast-status.final { background:rgba(56,189,248,.18); color:#bae6fd; border-color:rgba(56,189,248,.45); }
+.broadcast-status.pregame { background:rgba(148,163,184,.16); color:#e2e8f0; }
 .broadcast-main-score { font-size: clamp(2.4rem, 7vw, 4.3rem); font-weight: 1000; letter-spacing:.04em; line-height:1; margin:8px 0; }
 .broadcast-clock { font-size: 14px; color:#cbd5e1; font-weight:800; }
 .broadcast-sub { font-size:12px; color:#94a3b8; margin-top:6px; }
@@ -5158,6 +5161,25 @@ def win_prob(margin, period, is_home):
     w = {1:1.2, 2:1.8, 3:2.8, 4:4.5}.get(max(1,min(safe_int(period,1),4)), 4.5)
     return int(max(1, min(99, round(50 + margin*w + (2.5 if is_home else 0)))))
 
+
+def live_win_probability(team_name, opp_name, margin, period, is_home, box_df=None):
+    """Broadcast model: score/time first, then small home/seed/momentum nudges."""
+    base = win_prob(margin, period, is_home)
+    team_seed = safe_int((TEAM_PROFILES.get(team_name) or {}).get("seed"), 8)
+    opp_seed = safe_int((TEAM_PROFILES.get(opp_name) or {}).get("seed"), 8)
+    seed_adj = max(-4, min(4, (opp_seed - team_seed) * 0.8))
+    momentum_adj = 0
+    try:
+        if box_df is not None and not box_df.empty:
+            alias = TEAM_ALIASES.get(team_name, "")
+            opp_alias = TEAM_ALIASES.get(opp_name, "")
+            plus = pd.to_numeric(box_df[box_df["Team"] == alias]["+/-"], errors="coerce").fillna(0).max()
+            opp_plus = pd.to_numeric(box_df[box_df["Team"] == opp_alias]["+/-"], errors="coerce").fillna(0).max()
+            momentum_adj = max(-3, min(3, (float(plus) - float(opp_plus)) / 8.0))
+    except Exception:
+        momentum_adj = 0
+    return int(max(1, min(99, round(base + seed_adj + momentum_adj))))
+
 def shot_df_from_pbp(actions, alias):
     rows=[]; rng=np.random.default_rng(17)
     for a in actions:
@@ -9246,6 +9268,16 @@ def _broadcast_status_label(phase, status, snap=None):
     return "Pregame"
 
 
+def _broadcast_phase_class(phase, snap=None):
+    if phase == "live":
+        return "live"
+    if phase == "postgame":
+        return "final"
+    if snap and snap.get("game_status") == "starting soon":
+        return "soon"
+    return "pregame"
+
+
 def _broadcast_clock_label(parsed, snap=None):
     if parsed.get("phase") == "live":
         if parsed.get("period") and parsed.get("clock"):
@@ -9316,7 +9348,7 @@ def _top_box_rows(box_df, alias, stat="PTS", limit=3):
 def _render_broadcast_header(team_name, parsed, snap, series_line, prob):
     phase = parsed.get("phase")
     status_label = _broadcast_status_label(phase, parsed.get("status"), snap)
-    status_cls = " live" if phase == "live" else ""
+    status_cls = f" {_broadcast_phase_class(phase, snap)}"
     clock = _broadcast_clock_label(parsed, snap)
     source = str((snap or {}).get("data_source") or "scoreboard")
     st.markdown(
@@ -9344,6 +9376,7 @@ def _render_broadcast_header(team_name, parsed, snap, series_line, prob):
     <div class="broadcast-metric"><div class="k">Margin</div><div class="v">{parsed['margin']:+d}</div></div>
     <div class="broadcast-metric"><div class="k">Feed</div><div class="v" style="font-size:1rem">{html.escape(source[:22])}</div></div>
   </div>
+  <div class="broadcast-sub" style="text-align:center;margin-top:10px">Model starts with score margin, quarter, home/away, and seed strength; player-card sections add box-score context as it publishes.</div>
 </div>
 """,
         unsafe_allow_html=True,
@@ -9450,6 +9483,39 @@ def _render_styled_box_score(team_name, opp_name, box_df):
         render_fan_stat_table(pd.DataFrame(leaders), team_name)
     show_cols = [c for c in ["Team", "Player", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "PF", "FGM", "FGA", "3PM", "3PA", "+/-"] if c in box_df.columns]
     render_fan_stat_table(box_df[show_cols].sort_values(["Team", "PTS"], ascending=[True, False]), team_name)
+
+
+def _render_live_matchup_swing(team_name, opp_name, box_df, parsed):
+    nick = fan_nick(team_name)
+    opp_nick = fan_nick(opp_name)
+    if box_df is None or box_df.empty:
+        st.markdown(
+            f"<div class='broadcast-card'><div class='broadcast-card-title'>Key Matchup Swing</div>"
+            f"<div style='font-size:13px;color:#334155;line-height:1.45'>{html.escape(nick)} need the first clean run from the starting group. The live box score will identify whether guard creation, rebounding, or turnovers are driving the game once player rows publish.</div></div>",
+            unsafe_allow_html=True,
+        )
+        return
+    alias = TEAM_ALIASES.get(team_name, "")
+    opp_alias = TEAM_ALIASES.get(opp_name, "")
+    fav = box_df[box_df["Team"] == alias]
+    opp = box_df[box_df["Team"] == opp_alias]
+    fav_to = pd.to_numeric(fav.get("TO", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    opp_to = pd.to_numeric(opp.get("TO", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    fav_reb = pd.to_numeric(fav.get("REB", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    opp_reb = pd.to_numeric(opp.get("REB", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    if fav_to > opp_to + 2:
+        text = f"{nick} are leaking possessions. The fastest path to stabilizing is fewer live-ball turnovers and a simpler first action."
+    elif fav_reb < opp_reb - 4:
+        text = f"{opp_nick} are tilting the glass. {nick} need gang rebounding before the transition game can breathe."
+    elif parsed.get("margin", 0) >= 0:
+        text = f"{nick} are holding the scoreboard position. Keep forcing contested half-court looks and avoid bailout fouls."
+    else:
+        text = f"{nick} need a cleaner two-way stretch: one stop chain, one paint touch, one open three."
+    st.markdown(
+        f"<div class='broadcast-card'><div class='broadcast-card-title'>Key Matchup Swing</div>"
+        f"<div style='font-size:13px;color:#334155;line-height:1.45'>{html.escape(text)}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _live_gc_detection_banner(det_ctx, has_merged_live, phase):
@@ -10131,7 +10197,7 @@ def _local_live_gc_series_context(team_name, profile):
 
 
 def _render_live_gc_layer1(team_name, profile):
-    """Guaranteed basic shell. Must stay local-only."""
+    """Legacy local shell. Kept for fallback/debug, not the primary broadcast view."""
     opp, round_name, series_text, source = _local_live_gc_series_context(team_name, profile)
     logo = TEAM_LOGOS.get(team_name, "")
     opp_logo = TEAM_LOGOS.get(opp, "") if opp else ""
@@ -10160,16 +10226,14 @@ def _render_live_gc_layer1(team_name, profile):
     c2.metric("Opponent", fan_nick(opp) if opp else "TBD")
     c3.metric("Round", round_name)
     c4.metric("Game room", "open")
-    st.info(
-        "You can always get here. The matchup, series, and team identity load first; live score and highlights come in when you tap the button."
-    )
+    st.caption("Local matchup shell. Live broadcast details appear above when a scoreboard row is available.")
     return opp, round_name, series_text, source
 
 
 def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None):
     """Small debug block that never triggers API calls by itself."""
     errors = errors or []
-    with st.expander("Connection check", expanded=True):
+    with st.expander("Feed diagnostics", expanded=False):
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Selected team", team_name)
         d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
@@ -10215,7 +10279,7 @@ def _fetch_live_gc_snapshot(team_name):
 
 
 def render_live_game_center(team_name, profile):
-    """Two-layer, fail-safe Live Game Center. Layer 1 never calls external APIs."""
+    """Professional, fail-safe Live Game Center with broadcast-first rendering."""
     ident = team_fan_identity(team_name)
     render_fan_page_hero(
         team_name,
@@ -10229,7 +10293,7 @@ def render_live_game_center(team_name, profile):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = team_name
 
-    opp, _round_name, _series_text, _source = _render_live_gc_layer1(team_name, profile)
+    opp, _round_name, _series_text, _source = _local_live_gc_series_context(team_name, profile)
     layer_key = f"live_gc__load_{team_name}"
     quick_snap = None
     try:
@@ -10264,16 +10328,19 @@ def render_live_game_center(team_name, profile):
         if quick_snap and quick_snap.get("game_found"):
             st.caption(f"Detected **{quick_snap.get('away_team')} @ {quick_snap.get('home_team')}** · `{quick_snap.get('game_status')}` · source: {quick_snap.get('data_source')}")
         else:
-            st.caption("The game room opens instantly. Live score, injuries, box score, and highlights load without blocking the page.")
+            st.caption("Broadcast shell loads first. Live score, injuries, box score, and highlights load without blocking the page.")
 
     if not st.session_state.get(layer_key):
-        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=False)
+        st.markdown(
+            f"<div class='broadcast-card'><div class='broadcast-card-title'>Awaiting Scoreboard Row</div>"
+            f"<div style='font-size:13px;color:#334155;line-height:1.45'>"
+            f"{html.escape(fan_nick(team_name))} vs {html.escape(fan_nick(opp) if opp else 'opponent')} is ready to monitor. "
+            "Tap refresh when you want to pull live league feeds.</div></div>",
+            unsafe_allow_html=True,
+        )
         return
 
-    st.divider()
-    team_section_header("Live feed", "🔴")
     snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
-    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
 
     if not snap or not snap.get("game_found"):
         msg = (snap or {}).get("detection_message") or "The league feed is quiet right now."
@@ -10283,14 +10350,14 @@ def render_live_game_center(team_name, profile):
             st.error("Game may be in progress, but the live feed is delayed.")
         else:
             st.warning(msg)
-        st.caption("The game room above stays usable while the live feed catches up.")
+        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
         return
 
     game_row = snap.get("game_row")
     parsed = _live_gc_parse_game_row(game_row, team_name)
     series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
     gid = parsed["gid"]
-    prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
+    prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"])
     box_df = pd.DataFrame()
 
     _render_broadcast_header(team_name, parsed, snap, series_line, prob)
@@ -10312,19 +10379,23 @@ def render_live_game_center(team_name, profile):
             box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
         except Exception:
             box_df = pd.DataFrame()
+    if box_df is not None and not box_df.empty:
+        prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"], box_df)
 
     st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1])
     with c1:
         _render_probability_command(team_name, parsed, prob, box_df)
     with c2:
-        st.markdown(
-            f"<div class='broadcast-card'><div class='broadcast-card-title'>Current Pressure Point</div>"
-            f"<div style='font-size:13px;color:#334155;line-height:1.5'>{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}</div>"
-            f"<div style='margin-top:10px;font-size:12px;color:#64748b'>Game ID: {html.escape(gid or 'unavailable')} · Status: {html.escape(parsed['status'] or parsed['phase'])}</div></div>",
-            unsafe_allow_html=True,
-        )
+        _render_live_matchup_swing(team_name, parsed["opp_name"], box_df, parsed)
     st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        f"<div class='broadcast-card dark'><div class='broadcast-card-title' style='color:#fbbf24'>Live Storyline</div>"
+        f"<div style='font-size:14px;line-height:1.55'>{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}</div>"
+        f"<div style='margin-top:8px;font-size:12px;color:#cbd5e1'>Game ID: {html.escape(gid or 'unavailable')} · Status: {html.escape(parsed['status'] or parsed['phase'])}</div></div>",
+        unsafe_allow_html=True,
+    )
 
     team_section_header("Top performers", "⭐")
     _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
@@ -10443,6 +10514,8 @@ def render_live_game_center(team_name, profile):
             mvp, why = mvp_for_game(team_name, parsed["opp_name"], 1, team_name if parsed["margin"] > 0 else parsed["opp_name"])
             st.success(f"Game MVP candidate: **{mvp}** — {why}")
             st.caption("Updated series score appears from the bracket feed once the final imports.")
+
+    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
 
 # ==========================================================
 # Franchise Playoff Legends / Team History Leaders
