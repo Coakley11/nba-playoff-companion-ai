@@ -282,6 +282,38 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 .live-gc-series { font-size: 12px; color: #94a3b8; margin-top: 6px; text-align: center; }
 .live-gc-perf { border: 1px solid var(--team-border); border-radius: 12px; padding: 10px 12px;
   background: linear-gradient(180deg, #fff, var(--team-card-tint)); margin-bottom: 8px; }
+.broadcast-shell {
+  border-radius: 22px; padding: 18px; margin: 12px 0 14px; color: #f8fafc;
+  background: radial-gradient(circle at 20% 0%, var(--team-accent-soft), transparent 34%),
+    linear-gradient(135deg, var(--team-bg0), var(--team-bg1) 56%, #020617);
+  border: 1px solid var(--team-border); box-shadow: 0 18px 50px rgba(2,6,23,.38);
+}
+.broadcast-score-row { display:grid; grid-template-columns: minmax(120px,1fr) minmax(230px,1.2fr) minmax(120px,1fr); gap:14px; align-items:center; }
+.broadcast-team { text-align:center; }
+.broadcast-team img { width: clamp(68px, 11vw, 104px); height: clamp(68px, 11vw, 104px); object-fit:contain; filter: drop-shadow(0 8px 20px rgba(0,0,0,.45)); }
+.broadcast-team-name { font-size: 13px; font-weight: 950; margin-top: 5px; }
+.broadcast-status { display:inline-block; font-size: 11px; font-weight: 950; letter-spacing:.12em; text-transform:uppercase; padding:5px 11px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(15,23,42,.58); color:#e2e8f0; }
+.broadcast-status.live { background:rgba(220,38,38,.24); color:#fecaca; border-color:rgba(248,113,113,.5); animation: homeLivePulse 2.4s ease-in-out infinite; }
+.broadcast-main-score { font-size: clamp(2.4rem, 7vw, 4.3rem); font-weight: 1000; letter-spacing:.04em; line-height:1; margin:8px 0; }
+.broadcast-clock { font-size: 14px; color:#cbd5e1; font-weight:800; }
+.broadcast-sub { font-size:12px; color:#94a3b8; margin-top:6px; }
+.broadcast-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:14px; }
+.broadcast-metric { border:1px solid rgba(148,163,184,.28); border-radius:14px; padding:10px 12px; background:rgba(15,23,42,.48); text-align:center; }
+.broadcast-metric .k { font-size:10px; font-weight:900; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; }
+.broadcast-metric .v { font-size:1.35rem; font-weight:950; color:#fff; margin-top:2px; }
+.broadcast-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(245px,1fr)); gap:12px; margin:12px 0; }
+.broadcast-card { border:1px solid var(--team-border); border-radius:18px; background:linear-gradient(180deg,#fff,var(--team-card-tint)); padding:12px; box-shadow:0 10px 26px rgba(15,23,42,.10); }
+.broadcast-card.dark { background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(30,41,59,.88)); color:#f8fafc; }
+.broadcast-card-title { font-size:12px; font-weight:950; color:var(--team-primary); text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
+.player-tile { display:flex; gap:10px; align-items:center; border:1px solid rgba(100,116,139,.18); border-radius:14px; padding:9px; background:rgba(255,255,255,.72); margin-bottom:8px; }
+.player-tile img { width:58px; height:46px; object-fit:cover; object-position:top center; border-radius:10px; background:#e2e8f0; }
+.player-tile .name { font-weight:950; color:#0f172a; line-height:1.15; }
+.player-tile .line { font-size:12px; color:#475569; margin-top:2px; }
+.player-stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-top:6px; }
+.player-stat-grid span { display:block; border-radius:8px; background:var(--team-card-tint); color:#0f172a; text-align:center; padding:4px 3px; font-size:11px; font-weight:800; }
+.prob-bar { height:12px; border-radius:999px; background:#e2e8f0; overflow:hidden; margin:8px 0 5px; }
+.prob-bar span { display:block; height:100%; background:linear-gradient(90deg,var(--team-primary),var(--team-accent)); border-radius:999px; }
+@media (max-width: 720px) { .broadcast-score-row { grid-template-columns:1fr; } }
 /* Bracket — your team highlight */
 .bracket-wrap { border-color: var(--team-border) !important; }
 .bmk-card--yours { border-color: var(--team-accent) !important;
@@ -5142,7 +5174,7 @@ def shot_df_from_pbp(actions, alias):
             x, y = float(rng.uniform(-5,5)), float(rng.uniform(1,8))
         else:
             x, y = float(rng.uniform(-16,16)), float(rng.uniform(8,22))
-        rows.append({"Player":player,"Made":made,"x":x,"y":y,"Description":desc})
+        rows.append({"Player":player,"Made":made,"x":x,"y":y,"Period":a.get("period",""),"Clock":a.get("clock",""),"Description":desc})
     return pd.DataFrame(rows)
 
 def draw_court(shots, title):
@@ -7558,13 +7590,13 @@ def render_home_live_hub_strip(team_name, fb_prefetched=None):
         )
         label = "Go to Live Game Center"
         if phase == "live":
-            label = "🏀 Live Game Center — LIVE NOW"
+            label = "🔴 Live Game Center — LIVE NOW"
         elif phase == "pregame" and soon:
-            label = "🏀 Live Game Center — starting soon"
+            label = "⏱️ Live Game Center — starting soon"
         elif phase == "postgame":
-            label = "🏀 Live Game Center — wrap & series"
+            label = "📡 Live Game Center — wrap & series"
         if st.button(label, key="home_strip_open_live"):
-            st.session_state["page_override"] = "🏀 Live Game Center"
+            st.session_state["page_override"] = "🔴 Live Game Center"
             st.rerun()
         return
 
@@ -7641,7 +7673,7 @@ def render_home_current_game_card(team_name):
         unsafe_allow_html=True,
     )
     if st.button(button_label, key=f"home_current_game_open_{team_name}", type="primary"):
-        st.session_state["page_override"] = "🏀 Live Game Center"
+        st.session_state["page_override"] = "🔴 Live Game Center"
         st.session_state[f"live_gc__load_{team_name}"] = True
         st.rerun()
 
@@ -8793,13 +8825,13 @@ def render_game_countdown(team):
         st.error(f"🔴 LIVE NOW: {matchup}")
         st.write(status)
         if st.button("Go to Live Game Center", key="countdown_open_live"):
-            st.session_state["page_override"] = "🏀 Live Game Center"
+            st.session_state["page_override"] = "🔴 Live Game Center"
             st.rerun()
     elif ph == "pregame" and fb.get("starting_soon"):
         st.warning(f"Starting soon: {matchup}")
         st.write(status)
         if st.button("Go to Live Game Center", key="countdown_open_pregame"):
-            st.session_state["page_override"] = "🏀 Live Game Center"
+            st.session_state["page_override"] = "🔴 Live Game Center"
             st.rerun()
     else:
         st.info(f"Upcoming: {matchup}")
@@ -9058,7 +9090,7 @@ def _render_live_game_center_empty(favorite_team, profile):
         st.rerun()
     if tier in ("likely_live_feed_gap", "scheduled_today", "window_off_today"):
         if st.button("Open Live Game Center anyway", key="live_empty_open"):
-            st.session_state["page_override"] = "🏀 Live Game Center"
+            st.session_state["page_override"] = "🔴 Live Game Center"
             st.rerun()
 
 
@@ -9198,6 +9230,226 @@ def _live_gc_parse_game_row(game_row, favorite_team):
         "status": status,
         "phase": phase,
     }
+
+
+def _broadcast_status_label(phase, status, snap=None):
+    txt = str(status or "").strip()
+    if phase == "live":
+        lower = txt.lower()
+        if "half" in lower:
+            return "Halftime"
+        return "Live Now"
+    if phase == "postgame":
+        return "Final"
+    if snap and snap.get("game_status") == "starting soon":
+        return "Starting Soon"
+    return "Pregame"
+
+
+def _broadcast_clock_label(parsed, snap=None):
+    if parsed.get("phase") == "live":
+        if parsed.get("period") and parsed.get("clock"):
+            return f"Q{parsed['period']} · {parsed['clock']}"
+        if parsed.get("period"):
+            return f"Q{parsed['period']}"
+    if parsed.get("phase") == "postgame":
+        return "Final"
+    if snap and snap.get("countdown"):
+        return f"Tipoff in {snap.get('countdown')}"
+    return parsed.get("status") or "Pregame"
+
+
+def _box_stat(row, key):
+    return safe_int((row or {}).get(key, 0))
+
+
+def _shooting_line(row):
+    fgm, fga = _box_stat(row, "FGM"), _box_stat(row, "FGA")
+    tpm, tpa = _box_stat(row, "3PM"), _box_stat(row, "3PA")
+    if fga:
+        return f"{fgm}/{fga} FG · {tpm}/{tpa} 3P"
+    return "shooting pending"
+
+
+def _player_tile_html(row, team_name=None, badge=""):
+    name = str((row or {}).get("Player") or "Player")
+    pts, reb, ast = _box_stat(row, "PTS"), _box_stat(row, "REB"), _box_stat(row, "AST")
+    stl, blk, tov = _box_stat(row, "STL"), _box_stat(row, "BLK"), _box_stat(row, "TO")
+    pm = _box_stat(row, "+/-")
+    badge_html = f"<div style='font-size:10px;font-weight:900;color:var(--team-primary);text-transform:uppercase'>{html.escape(badge)}</div>" if badge else ""
+    return f"""
+<div class="player-tile">
+  <img src="{html.escape(headshot(name))}" alt=""/>
+  <div style="flex:1;min-width:0">
+    {badge_html}
+    <div class="name">{html.escape(name)}</div>
+    <div class="line">{pts} PTS · {reb} REB · {ast} AST · +/- {pm:+d}</div>
+    <div class="line">{stl} STL · {blk} BLK · {tov} TO · {_shooting_line(row)}</div>
+  </div>
+</div>
+"""
+
+
+def _estimated_player_tile_html(name, badge="Estimated lineup"):
+    return f"""
+<div class="player-tile">
+  <img src="{html.escape(headshot(name))}" alt=""/>
+  <div style="flex:1;min-width:0">
+    <div style='font-size:10px;font-weight:900;color:var(--team-primary);text-transform:uppercase'>{html.escape(badge)}</div>
+    <div class="name">{html.escape(name)}</div>
+    <div class="line">Projected active group · live on-court feed unavailable</div>
+  </div>
+</div>
+"""
+
+
+def _top_box_rows(box_df, alias, stat="PTS", limit=3):
+    if box_df is None or box_df.empty or not alias:
+        return []
+    sub = box_df[box_df["Team"].astype(str) == str(alias)].copy()
+    if sub.empty or stat not in sub.columns:
+        return []
+    sub[stat] = pd.to_numeric(sub[stat], errors="coerce").fillna(0)
+    return sub.sort_values(stat, ascending=False).head(limit).to_dict("records")
+
+
+def _render_broadcast_header(team_name, parsed, snap, series_line, prob):
+    phase = parsed.get("phase")
+    status_label = _broadcast_status_label(phase, parsed.get("status"), snap)
+    status_cls = " live" if phase == "live" else ""
+    clock = _broadcast_clock_label(parsed, snap)
+    source = str((snap or {}).get("data_source") or "scoreboard")
+    st.markdown(
+        f"""
+<div class="broadcast-shell">
+  <div class="broadcast-score-row">
+    <div class="broadcast-team">
+      <img src="{html.escape(TEAM_LOGOS.get(parsed['away_name'], ''))}" alt=""/>
+      <div class="broadcast-team-name">{html.escape(parsed['away_name'])}</div>
+    </div>
+    <div style="text-align:center">
+      <div class="broadcast-status{status_cls}">{html.escape(status_label)}</div>
+      <div class="broadcast-main-score">{parsed['away_score']} - {parsed['home_score']}</div>
+      <div class="broadcast-clock">{html.escape(clock)}</div>
+      <div class="broadcast-sub">Series: {html.escape(series_line or 'updating')} · {html.escape(str(parsed.get('status') or ''))}</div>
+    </div>
+    <div class="broadcast-team">
+      <img src="{html.escape(TEAM_LOGOS.get(parsed['home_name'], ''))}" alt=""/>
+      <div class="broadcast-team-name">{html.escape(parsed['home_name'])}</div>
+    </div>
+  </div>
+  <div class="broadcast-metrics">
+    <div class="broadcast-metric"><div class="k">Win Probability</div><div class="v">{prob}%</div></div>
+    <div class="broadcast-metric"><div class="k">Selected Team</div><div class="v">{html.escape(fan_nick(team_name))}</div></div>
+    <div class="broadcast-metric"><div class="k">Margin</div><div class="v">{parsed['margin']:+d}</div></div>
+    <div class="broadcast-metric"><div class="k">Feed</div><div class="v" style="font-size:1rem">{html.escape(source[:22])}</div></div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _win_probability_story(team_name, parsed, prob, box_df=None):
+    nick = fan_nick(team_name)
+    opp = fan_nick(parsed.get("opp_name"))
+    margin = int(parsed.get("margin", 0))
+    period = safe_int(parsed.get("period", 1), 1)
+    is_home = bool(parsed.get("is_fav_home"))
+    if margin < 0:
+        need = abs(margin)
+        return (
+            f"{nick} trail by {need}. The path back starts with two clean defensive trips, no live-ball turnovers, "
+            f"and cutting the gap under 10 before {opp} can set the half-court shell."
+        )
+    if margin > 0:
+        return (
+            f"{nick} lead by {margin}. The lead is only safe if the defensive glass holds and the offense avoids empty early-clock jumpers."
+        )
+    return f"{nick} and {opp} are even. The next 6-0 run probably decides who controls the substitutions."
+
+
+def _render_probability_command(team_name, parsed, prob, box_df=None):
+    margin = int(parsed.get("margin", 0))
+    period = safe_int(parsed.get("period", 1), 1)
+    is_home = bool(parsed.get("is_fav_home"))
+    st.markdown(
+        f"""
+<div class="broadcast-card">
+  <div class="broadcast-card-title">Win Probability Command Center</div>
+  <div style="font-size:1.8rem;font-weight:950;color:#0f172a">{prob}%</div>
+  <div class="prob-bar"><span style="width:{max(1, min(99, prob))}%"></span></div>
+  <div style="font-size:13px;color:#334155;line-height:1.45">{html.escape(_win_probability_story(team_name, parsed, prob, box_df))}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    scenario_rows = []
+    if margin < 0:
+        for target in [-15, -10, -5, 0]:
+            if target > margin:
+                scenario_rows.append({"Scenario": f"Cut deficit to {abs(target)}" if target else "Tie the game", "Model win %": f"{win_prob(target, period, is_home)}%", "Margin": target})
+    else:
+        for target in [10, 15, 20, 25, 30]:
+            if target > margin:
+                scenario_rows.append({"Scenario": f"Grow lead to {target}", "Model win %": f"{win_prob(target, period, is_home)}%", "Margin": target})
+    if scenario_rows:
+        render_fan_stat_table(pd.DataFrame(scenario_rows), team_name)
+
+
+def _render_top_performer_cards(team_name, opp_name, box_df):
+    fav_alias = TEAM_ALIASES.get(team_name, "")
+    opp_alias = TEAM_ALIASES.get(opp_name, "")
+    st.markdown('<div class="broadcast-grid">', unsafe_allow_html=True)
+    cols = st.columns(2)
+    for col, label, alias in ((cols[0], fan_nick(team_name), fav_alias), (cols[1], fan_nick(opp_name), opp_alias)):
+        with col:
+            rows = _top_box_rows(box_df, alias, "PTS", 3)
+            st.markdown(f"<div class='broadcast-card-title'>{html.escape(label)} top performers</div>", unsafe_allow_html=True)
+            if rows:
+                for idx, row in enumerate(rows, start=1):
+                    st.markdown(_player_tile_html(row, badge="Leading scorer" if idx == 1 else "Box score leader"), unsafe_allow_html=True)
+            else:
+                names = estimated_starters_from_api(team_name if alias == fav_alias else opp_name)[:3]
+                for nm in names:
+                    st.markdown(_estimated_player_tile_html(nm, "Projected key player"), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_lineup_board(team_name, opp_name, box_df):
+    fav_alias = TEAM_ALIASES.get(team_name, "")
+    opp_alias = TEAM_ALIASES.get(opp_name, "")
+    cols = st.columns(2)
+    for col, label, alias, tm in ((cols[0], fan_nick(team_name), fav_alias, team_name), (cols[1], fan_nick(opp_name), opp_alias, opp_name)):
+        with col:
+            st.markdown(f"<div class='broadcast-card-title'>{html.escape(label)} lineup</div>", unsafe_allow_html=True)
+            lineup = estimated_lineup(box_df if box_df is not None else pd.DataFrame(), alias, tm)
+            is_est = box_df is None or box_df.empty
+            if lineup is not None and not lineup.empty:
+                for _, row in lineup.head(5).iterrows():
+                    if is_est:
+                        st.markdown(_estimated_player_tile_html(str(row.get("Player", ""))), unsafe_allow_html=True)
+                    else:
+                        st.markdown(_player_tile_html(row, badge="Active rotation estimate"), unsafe_allow_html=True)
+            else:
+                st.caption("Lineup estimate unavailable.")
+
+
+def _render_styled_box_score(team_name, opp_name, box_df):
+    if box_df is None or box_df.empty:
+        st.caption("Box score has not published yet.")
+        return
+    leaders = []
+    for stat, label in [("PTS", "Scoring"), ("REB", "Rebounding"), ("AST", "Playmaking"), ("+/-", "Plus-minus")]:
+        if stat in box_df.columns:
+            tmp = box_df.copy()
+            tmp[stat] = pd.to_numeric(tmp[stat], errors="coerce").fillna(0)
+            r = tmp.sort_values(stat, ascending=False).iloc[0]
+            leaders.append({"Category": label, "Leader": r.get("Player", ""), "Team": r.get("Team", ""), "Value": safe_int(r.get(stat))})
+    if leaders:
+        render_fan_stat_table(pd.DataFrame(leaders), team_name)
+    show_cols = [c for c in ["Team", "Player", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "PF", "FGM", "FGA", "3PM", "3PA", "+/-"] if c in box_df.columns]
+    render_fan_stat_table(box_df[show_cols].sort_values(["Team", "PTS"], ascending=[True, False]), team_name)
 
 
 def _live_gc_detection_banner(det_ctx, has_merged_live, phase):
@@ -10037,34 +10289,49 @@ def render_live_game_center(team_name, profile):
     game_row = snap.get("game_row")
     parsed = _live_gc_parse_game_row(game_row, team_name)
     series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
-    _render_live_gc_matchup_header(parsed, series_line)
-    render_live_score_banner(
-        team_name,
-        parsed["away_tri"],
-        parsed["home_tri"],
-        parsed["away_score"],
-        parsed["home_score"],
-        parsed["status"],
-        parsed["phase"],
-    )
-    if parsed["phase"] == "live":
-        st.success("LIVE NOW")
-    elif parsed["phase"] == "pregame":
+    gid = parsed["gid"]
+    prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
+    box_df = pd.DataFrame()
+
+    _render_broadcast_header(team_name, parsed, snap, series_line, prob)
+    if parsed["phase"] == "pregame":
         if snap.get("game_status") == "starting soon":
-            st.warning(f"**GAME STARTING SOON** · starts in **{snap.get('countdown') or 'soon'}**")
+            st.warning(f"**Game starting soon** · starts in **{snap.get('countdown') or 'soon'}**")
         elif snap.get("detection_tier") == "likely_live_feed_gap":
             st.error("Game may be in progress, but the live feed is delayed.")
         else:
             st.info("Game scheduled today — live feed not detected yet.")
+    elif parsed["phase"] == "live":
+        st.success("Live scoreboard row detected.")
     elif parsed["phase"] == "postgame":
-        st.info("Final")
+        st.info("Final recap mode.")
 
-    gid = parsed["gid"]
-    prob = win_prob(parsed["margin"], parsed["period"], parsed["is_fav_home"])
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Win probability", f"{prob}%")
-    m2.metric("Status", parsed["status"] or parsed["phase"])
-    m3.metric("Game ID", gid or "unavailable")
+    if gid and not str(gid).startswith("fallback-"):
+        try:
+            box_game = get_live_boxscore(gid) or {}
+            box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+        except Exception:
+            box_df = pd.DataFrame()
+
+    st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        _render_probability_command(team_name, parsed, prob, box_df)
+    with c2:
+        st.markdown(
+            f"<div class='broadcast-card'><div class='broadcast-card-title'>Current Pressure Point</div>"
+            f"<div style='font-size:13px;color:#334155;line-height:1.5'>{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}</div>"
+            f"<div style='margin-top:10px;font-size:12px;color:#64748b'>Game ID: {html.escape(gid or 'unavailable')} · Status: {html.escape(parsed['status'] or parsed['phase'])}</div></div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    team_section_header("Top performers", "⭐")
+    _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
+
+    team_section_header("Lineups / on-court estimate", "📋")
+    st.caption("If NBA live on-court lineup data is unavailable, this shows the projected or highest-minute active group and labels it as estimated.")
+    _render_lineup_board(team_name, parsed["opp_name"], box_df)
 
     if parsed["phase"] == "pregame":
         team_section_header("Pregame command board", "⏳")
@@ -10088,27 +10355,28 @@ def render_live_game_center(team_name, profile):
             for nm in (TEAM_PROFILES.get(parsed["opp_name"], {}).get("starters") or [])[:5]:
                 st.write(f"• {nm}")
 
-    with st.expander("Box score and top performers", expanded=False):
+    with st.expander("Full styled box score", expanded=False):
         box_key = f"live_gc__box_{team_name}_{gid}"
-        if not st.session_state.get(box_key):
+        if box_df is not None and not box_df.empty:
+            _render_styled_box_score(team_name, parsed["opp_name"], box_df)
+        elif not st.session_state.get(box_key):
             if st.button("Load box score", key=f"{box_key}_btn"):
                 st.session_state[box_key] = True
                 st.rerun()
-            st.caption("Box score is loaded only on request so the live header stays instant.")
+            st.caption("Box score has not published yet or is deferred. Tap once to retry the live box score endpoint.")
         else:
-            box_df = pd.DataFrame()
+            retry_box_df = pd.DataFrame()
             try:
                 box_game = get_live_boxscore(gid) if gid else {}
-                box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+                retry_box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
             except Exception as exc:
                 st.caption(f"Box score is not ready yet: {exc!r}")
-            if box_df is not None and not box_df.empty:
-                _live_gc_top_performers(box_df, team_name, parsed["opp_name"])
-                render_fan_stat_table(box_df, team_name)
+            if retry_box_df is not None and not retry_box_df.empty:
+                _render_styled_box_score(team_name, parsed["opp_name"], retry_box_df)
             else:
                 st.caption("Box score has not published yet.")
 
-    with st.expander("Play-by-play and shot chart", expanded=False):
+    with st.expander("Professional shot chart and play-by-play", expanded=False):
         pbp_key = f"live_gc__pbp_{team_name}_{gid}"
         if not st.session_state.get(pbp_key):
             if st.button("Load play-by-play / shot chart", key=f"{pbp_key}_btn"):
@@ -10128,13 +10396,29 @@ def render_live_game_center(team_name, profile):
                         st.dataframe(tp, use_container_width=True, hide_index=True)
                     shots = shot_df_from_pbp(actions, parsed["fav_alias"])
                     if not shots.empty:
-                        st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
+                        players = ["All"] + sorted([x for x in shots["Player"].dropna().astype(str).unique().tolist() if x])
+                        qtrs = ["All"] + sorted([str(x) for x in shots["Period"].dropna().astype(str).unique().tolist() if str(x)])
+                        makes = st.selectbox("Shot result", ["All", "Made", "Missed"], key=f"shot_filter_made_{team_name}_{gid}")
+                        player_pick = st.selectbox("Player", players, key=f"shot_filter_player_{team_name}_{gid}")
+                        q_pick = st.selectbox("Quarter", qtrs, key=f"shot_filter_q_{team_name}_{gid}")
+                        filt = shots.copy()
+                        if player_pick != "All":
+                            filt = filt[filt["Player"].astype(str) == player_pick]
+                        if q_pick != "All":
+                            filt = filt[filt["Period"].astype(str) == q_pick]
+                        if makes == "Made":
+                            filt = filt[filt["Made"] == True]
+                        elif makes == "Missed":
+                            filt = filt[filt["Made"] == False]
+                        st.plotly_chart(draw_court(filt, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
+                        made_rate = int(round(100 * float(filt["Made"].mean()))) if not filt.empty else 0
+                        st.caption(f"Shot chart read: {len(filt)} tracked shot events in this filter, {made_rate}% makes. Locations are play-by-play derived when official x/y shot coordinates are unavailable.")
                 except Exception as exc:
                     st.caption(f"Highlight view is not ready yet: {exc!r}")
             else:
                 st.caption("Play-by-play has not published yet.")
 
-    with st.expander("Injuries", expanded=False):
+    with st.expander("Injury report and rotation impact", expanded=False):
         inj_key = f"live_gc__inj_{team_name}_{parsed['opp_name']}"
         if not st.session_state.get(inj_key):
             if st.button("Load injury report", key=f"{inj_key}_btn"):
@@ -10143,9 +10427,22 @@ def render_live_game_center(team_name, profile):
             st.caption("Injury detail is cached and loaded only when opened.")
         else:
             try:
-                render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name)
+                render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name, neutral_framing=True)
+                st.caption("Impact read: availability changes matter most in the first substitution window, foul-trouble coverage, and whether the closing lineup has enough creation.")
             except Exception as exc:
                 st.caption(f"Injury report is not ready yet: {exc!r}")
+
+    with st.expander("Foul trouble, momentum, and recap notes", expanded=False):
+        if box_df is not None and not box_df.empty:
+            _live_gc_foul_trouble(box_df, team_name, parsed["opp_name"])
+            for line in game_story(team_name, parsed["margin"], prob, box_df):
+                st.write(f"• {line}")
+        else:
+            st.caption("Foul trouble and performer-based momentum appear when the live box score publishes.")
+        if parsed["phase"] == "postgame":
+            mvp, why = mvp_for_game(team_name, parsed["opp_name"], 1, team_name if parsed["margin"] > 0 else parsed["opp_name"])
+            st.success(f"Game MVP candidate: **{mvp}** — {why}")
+            st.caption("Updated series score appears from the bracket feed once the final imports.")
 
 # ==========================================================
 # Franchise Playoff Legends / Team History Leaders
@@ -10583,15 +10880,26 @@ def render_team_history_leaders_page(team_name):
 # Sidebar
 # ==========================================================
 PAGES={
-    "🏀 Home Dashboard":"Home Dashboard",
-    "🏀 Live Game Center":"Live Game Center",
-    "🏀 Playoff Bracket":"Playoff Bracket",
-    "🏛️ Team History Leaders":"Team History Leaders",
+    "🏠 Home Dashboard":"Home Dashboard",
+    "🔴 Live Game Center":"Live Game Center",
+    "🏆 Playoff Bracket":"Playoff Bracket",
+    "📚 Team History Leaders":"Team History Leaders",
     "🧠 Matchup Intelligence":"Matchup Intelligence",
-    "🏀 Matchup Lineups":"Matchup Lineups",
-    "🏀 Player Playoff Tracker":"Player Playoff Tracker",
-    "🏀 Legacy Tracker":"Legacy Tracker",
-    "🏀 Previous Rounds":"Previous Rounds",
+    "📋 Matchup Lineups":"Matchup Lineups",
+    "📈 Player Playoff Tracker":"Player Playoff Tracker",
+    "👑 Legacy Tracker":"Legacy Tracker",
+    "📜 Previous Rounds":"Previous Rounds",
+}
+
+PAGE_LABEL_ALIASES = {
+    "🏀 Home Dashboard": "🏠 Home Dashboard",
+    "🏀 Live Game Center": "🔴 Live Game Center",
+    "🏀 Playoff Bracket": "🏆 Playoff Bracket",
+    "🏛️ Team History Leaders": "📚 Team History Leaders",
+    "🏀 Matchup Lineups": "📋 Matchup Lineups",
+    "🏀 Player Playoff Tracker": "📈 Player Playoff Tracker",
+    "🏀 Legacy Tracker": "👑 Legacy Tracker",
+    "🏀 Previous Rounds": "📜 Previous Rounds",
 }
 
 
@@ -10628,7 +10936,7 @@ SHOW_PERF_DEBUG = st.sidebar.toggle(
 profile=TEAM_PROFILES[favorite_team]
 inject_team_brand_css(favorite_team)
 labels=list(PAGES.keys())
-def_label=st.session_state.pop("page_override", "🏀 Home Dashboard")
+def_label=PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
 page_label=st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
 page=PAGES[page_label]
 _APP_PAGE_T0 = pytime.perf_counter()
