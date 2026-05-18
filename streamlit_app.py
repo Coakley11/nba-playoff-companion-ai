@@ -10278,6 +10278,194 @@ def _fetch_live_gc_snapshot(team_name):
     return snap, live_count, errors
 
 
+def _manual_live_lines(key):
+    raw = str(st.session_state.get(key, "") or "").strip()
+    return [x.strip() for x in raw.splitlines() if x.strip()]
+
+
+def _clock_minutes_remaining(clock_txt):
+    txt = str(clock_txt or "").strip()
+    if not txt:
+        return 12.0
+    try:
+        if ":" in txt:
+            m, s = txt.split(":", 1)
+            return max(0.0, min(12.0, float(m) + float(s) / 60.0))
+        return max(0.0, min(12.0, float(txt)))
+    except Exception:
+        return 12.0
+
+
+def _manual_win_prob(margin, period, clock_txt, is_home, status):
+    status_l = str(status or "").lower()
+    margin = safe_int(margin)
+    if status_l == "final":
+        if margin > 0:
+            return 99
+        if margin < 0:
+            return 1
+        return 50
+    period = max(1, min(4, safe_int(period, 1)))
+    elapsed = (period - 1) * 12 + (12 - _clock_minutes_remaining(clock_txt))
+    progress = max(0.0, min(1.0, elapsed / 48.0))
+    leverage = 1.1 + progress * 4.6
+    home_bonus = 2.0 if is_home else 0.0
+    if status_l == "halftime":
+        leverage = max(leverage, 2.0)
+    return int(max(1, min(99, round(50 + margin * leverage + home_bonus))))
+
+
+def _manual_live_override_snapshot(team_name):
+    if not st.session_state.get("manual_live_enabled", False):
+        return None
+    home = st.session_state.get("manual_live_home_team") or team_name
+    away = st.session_state.get("manual_live_away_team") or TEAM_PROFILES.get(team_name, {}).get("current_opponent") or team_name
+    if home == away:
+        away = TEAM_PROFILES.get(home, {}).get("current_opponent") or away
+    status = st.session_state.get("manual_live_status", "live")
+    quarter = safe_int(st.session_state.get("manual_live_quarter", 1), 1)
+    clock = str(st.session_state.get("manual_live_clock", "12:00") or "")
+    home_score = safe_int(st.session_state.get("manual_live_home_score", 0), 0)
+    away_score = safe_int(st.session_state.get("manual_live_away_score", 0), 0)
+    if str(status).lower() == "scheduled":
+        phase = "pregame"
+    elif str(status).lower() == "final":
+        phase = "postgame"
+    else:
+        phase = "live"
+    selected_in_game = team_name in (home, away)
+    fav_is_home = team_name == home or not selected_in_game
+    margin = (home_score - away_score) if fav_is_home else (away_score - home_score)
+    opp_name = away if fav_is_home else home
+    return {
+        "gid": "manual-live-override",
+        "home_name": home,
+        "away_name": away,
+        "home_tri": TEAM_ALIASES.get(home, ""),
+        "away_tri": TEAM_ALIASES.get(away, ""),
+        "home_score": home_score,
+        "away_score": away_score,
+        "period": quarter,
+        "clock": clock,
+        "status": str(status).title(),
+        "phase": phase,
+        "is_fav_home": fav_is_home,
+        "margin": margin,
+        "opp_name": opp_name,
+        "fav_alias": TEAM_ALIASES.get(team_name if selected_in_game else home, ""),
+        "selected_in_game": selected_in_game,
+        "series_line": st.session_state.get("manual_live_series_score", ""),
+        "top_performers": _manual_live_lines("manual_live_top_performers"),
+        "top_plays": _manual_live_lines("manual_live_top_plays"),
+        "injuries": _manual_live_lines("manual_live_injuries"),
+        "notes": str(st.session_state.get("manual_live_notes", "") or "").strip(),
+    }
+
+
+def _render_manual_probability_command(team_name, parsed, prob):
+    status = parsed.get("status", "live")
+    margin = safe_int(parsed.get("margin", 0), 0)
+    period = safe_int(parsed.get("period", 1), 1)
+    clock = parsed.get("clock", "")
+    is_home = bool(parsed.get("is_fav_home"))
+    st.markdown(
+        f"""
+<div class="broadcast-card">
+  <div class="broadcast-card-title">Manual Win Probability</div>
+  <div style="font-size:1.8rem;font-weight:950;color:#0f172a">{prob}%</div>
+  <div class="prob-bar"><span style="width:{max(1, min(99, prob))}%"></span></div>
+  <div style="font-size:13px;color:#334155;line-height:1.45">
+    Manual model uses score margin, quarter, time remaining, home/away, and game status. It is a fan-facing game-state model, not betting odds.
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    rows = []
+    if margin < 0:
+        for target in [-12, -8, -4, 0]:
+            if target > margin:
+                rows.append({
+                    "Scenario": "Tie the game" if target == 0 else f"Cut deficit to {abs(target)}",
+                    "Manual win %": f"{_manual_win_prob(target, period, clock, is_home, status)}%",
+                    "Margin": target,
+                })
+    else:
+        for target in [5, 10, 15, 20]:
+            if target > margin:
+                rows.append({
+                    "Scenario": f"Grow lead to {target}",
+                    "Manual win %": f"{_manual_win_prob(target, period, clock, is_home, status)}%",
+                    "Margin": target,
+                })
+    if rows:
+        render_fan_stat_table(pd.DataFrame(rows), team_name)
+
+
+def _render_manual_live_game_center(team_name, parsed):
+    st.success("Manual live mode active")
+    _render_live_gc_matchup_header(parsed, parsed.get("series_line") or None)
+    render_live_score_banner(
+        team_name,
+        parsed["away_tri"],
+        parsed["home_tri"],
+        parsed["away_score"],
+        parsed["home_score"],
+        parsed["status"],
+        parsed["phase"],
+    )
+    if not parsed.get("selected_in_game"):
+        st.info("Manual override is showing a league game that does not include the selected sidebar team.")
+    prob = _manual_win_prob(parsed["margin"], parsed["period"], parsed["clock"], parsed["is_fav_home"], parsed["status"])
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Manual win probability", f"{prob}%")
+    c2.metric("Quarter", f"Q{parsed['period']}")
+    c3.metric("Clock", parsed["clock"] or "—")
+    c4.metric("Status", parsed["status"])
+    _render_manual_probability_command(team_name, parsed, prob)
+
+    team_section_header("Manual game story", "🎙️")
+    margin = safe_int(parsed.get("margin", 0), 0)
+    nick = fan_nick(team_name if parsed.get("selected_in_game") else parsed.get("home_name"))
+    if str(parsed.get("status", "")).lower() == "final":
+        if margin > 0:
+            st.success(f"Final recap: {nick} close it out from the manually entered scoreboard. The story is score control, late-game execution, and who owned the final run.")
+        elif margin < 0:
+            st.warning(f"Final recap: {nick} come up short. The next read is where the comeback stalled: empty possessions, defensive glass, or late-shot creation.")
+        else:
+            st.info("Final status is set with a tied score. Update the score to complete the recap.")
+    elif margin < 0:
+        st.warning(f"{nick} need a comeback push: stack stops, cut the gap before the next timeout, and avoid live-ball turnovers.")
+    elif margin > 0:
+        st.success(f"{nick} have scoreboard control. The job now is protecting the glass, making free throws, and avoiding rushed possessions.")
+    else:
+        st.info("Tie game. The next two-minute stretch should decide pace, matchups, and crowd pressure.")
+
+    cols = st.columns(3)
+    with cols[0]:
+        st.markdown("#### Top performers")
+        if parsed["top_performers"]:
+            for line in parsed["top_performers"]:
+                st.markdown(f"<div class='live-gc-perf'>{html.escape(line)}</div>", unsafe_allow_html=True)
+        else:
+            st.caption("Add top performers in Emergency Score Control.")
+    with cols[1]:
+        st.markdown("#### Top plays")
+        if parsed["top_plays"]:
+            st.dataframe(pd.DataFrame({"Top play": parsed["top_plays"]}), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Add top plays in Emergency Score Control.")
+    with cols[2]:
+        st.markdown("#### Injury / availability")
+        if parsed["injuries"]:
+            for line in parsed["injuries"]:
+                st.warning(line)
+        else:
+            st.caption("Add injury notes if needed.")
+    if parsed.get("notes"):
+        st.info(parsed["notes"])
+
+
 def render_live_game_center(team_name, profile):
     """Professional, fail-safe Live Game Center with broadcast-first rendering."""
     ident = team_fan_identity(team_name)
