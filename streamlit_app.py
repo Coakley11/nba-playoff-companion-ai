@@ -440,9 +440,7 @@ def _is_home_eliminated(team_name):
     if not p:
         return False
     try:
-        use_demo, api_refresh = get_playoff_refresh_settings()
-        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
-        if pst.get("status") == "eliminated":
+        if get_team_playoff_status(team_name).get("status") == "eliminated":
             return True
     except Exception:
         pass
@@ -1362,6 +1360,16 @@ def get_merged_playoff_state(use_demo_backup=None, api_refresh=None):
     return get_playoff_state_cached(use_demo_backup, api_refresh)
 
 
+def first_round_series_for_team(team_name, stt=None):
+    """First-round series shell for ``team_name`` from unified playoff state."""
+    if stt is None:
+        stt = get_merged_playoff_state()
+    for _k, s in (stt.get("first") or {}).items():
+        if team_name in (s.get("a"), s.get("b")):
+            return _k, s
+    return None, None
+
+
 def tick_playoff_state_autorefresh(page_key, interval_ms=None):
     """Rerun the app on a timer so series scores and advancement stay current without code edits."""
     if not AUTOREFRESH_AVAILABLE:
@@ -1426,8 +1434,105 @@ def clean_and_recount_series(series):
         s["a_wins"] = sum(1 for g in cleaned if g.get("Winner") == a)
         s["b_wins"] = sum(1 for g in cleaned if g.get("Winner") == b)
         s["winner"] = a if s["a_wins"] >= 4 else b if s["b_wins"] >= 4 else None
-        s["source"] = "NBA API" if any(g.get("Source") == "NBA API" for g in cleaned) else ("Demo backup" if cleaned else "Waiting for API games")
+        if any(g.get("Source") == "NBA API" for g in cleaned):
+            s["source"] = "NBA API"
+        elif any(g.get("Source") == "Static fallback" for g in cleaned):
+            s["source"] = "Static fallback"
+        elif any(g.get("Source") == "Demo backup" for g in cleaned):
+            s["source"] = "Demo backup"
+        else:
+            s["source"] = "Waiting for API games" if not cleaned else "Bracket state"
     return series
+
+
+def _static_first_round_games_for_pair(team_a, team_b):
+    """Static first-round game rows (used when API has not attached games for a pair)."""
+    rows = FIRST_ROUND_GAME_SCORES.get(team_a) or FIRST_ROUND_GAME_SCORES.get(team_b) or []
+    out = []
+    for r in rows:
+        gn = r.get("Game", len(out) + 1)
+        if isinstance(gn, int):
+            gn = f"Game {gn}"
+        out.append({
+            "Game": str(gn),
+            "Date": str(r.get("Date", "")),
+            "Score": str(r.get("Score", "")),
+            "Winner": str(r.get("Winner", "")),
+            "Matchup": str(r.get("Matchup", "")),
+        })
+    return out
+
+
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+def build_first_round_series_cached(use_demo_backup=True, api_refresh=True):
+    """First-round series: NBA API game logs first, static scores/games when the feed is empty."""
+    dynamic = {}
+    for key, meta in FIRST_ROUND_SERIES.items():
+        dynamic[key] = {
+            "conf": meta["conf"],
+            "round": "First Round",
+            "a": meta["a"],
+            "b": meta["b"],
+            "a_wins": 0,
+            "b_wins": 0,
+            "winner": None,
+            "games": [],
+        }
+
+    for g in fetch_completed_games_recent(api_refresh=api_refresh):
+        key = series_key_for_pair(g.get("Home"), g.get("Away"), FIRST_ROUND_SERIES)
+        if not key:
+            continue
+        dynamic[key].setdefault("games", []).append({
+            "Game": "",
+            "Date": g.get("Date", ""),
+            "GameDate": g.get("GameDate", ""),
+            "Score": g.get("Score", ""),
+            "Winner": g.get("Winner", ""),
+            "GameID": g.get("GameID", ""),
+            "Source": "NBA API",
+        })
+
+    if use_demo_backup:
+        for key, shell in dynamic.items():
+            if shell.get("games"):
+                continue
+            static_games = _static_first_round_games_for_pair(shell["a"], shell["b"])
+            if static_games:
+                shell["games"] = [dict(g, Source="Static fallback") for g in static_games]
+
+    result = clean_and_recount_series(dynamic)
+
+    if use_demo_backup:
+        for key, shell in result.items():
+            static = FIRST_ROUND_SERIES.get(key, {})
+            sa = int(static.get("a_wins", 0) or 0)
+            sb = int(static.get("b_wins", 0) or 0)
+            static_winner = static.get("winner")
+            if max(sa, sb) != 4 or min(sa, sb) >= 4:
+                continue
+            if not _series_has_confirmed_winner(shell):
+                shell["a_wins"] = sa
+                shell["b_wins"] = sb
+                shell["winner"] = static_winner
+                if not shell.get("games"):
+                    shell["games"] = [
+                        dict(g, Source="Static fallback")
+                        for g in _static_first_round_games_for_pair(shell["a"], shell["b"])
+                    ]
+                shell["source"] = "Static fallback (series scores)"
+            elif static_winner and shell.get("winner") != static_winner:
+                shell["a_wins"] = sa
+                shell["b_wins"] = sb
+                shell["winner"] = static_winner
+                if not shell.get("games"):
+                    shell["games"] = [
+                        dict(g, Source="Static fallback")
+                        for g in _static_first_round_games_for_pair(shell["a"], shell["b"])
+                    ]
+                shell["source"] = "Static fallback (corrected winner)"
+
+    return result
 
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
@@ -1547,23 +1652,222 @@ def build_nba_finals_series():
     return build_nba_finals_series_cached(use_demo, api_refresh)
 
 
+def sibling_second_round_key(current_key, second_map):
+    """The other second-round series in the same conference (dynamic bracket wiring)."""
+    conf = second_map.get(current_key, {}).get("conf")
+    if not conf:
+        return None
+    others = [k for k, s in second_map.items() if k != current_key and s.get("conf") == conf]
+    return others[0] if len(others) == 1 else None
+
+
+def _next_round_context_from_state(team_name, stt):
+    """Next-round advancement context using an existing playoff state snapshot (no re-fetch)."""
+    for coll_name in ("cf", "finals"):
+        for _k, s_active in (stt.get(coll_name) or {}).items():
+            if team_name in (s_active.get("a"), s_active.get("b")):
+                return None
+
+    series_map = stt.get("second") or {}
+    current_key = None
+    current_series = None
+    for key, series in series_map.items():
+        if team_name in [series.get("a"), series.get("b")]:
+            current_key = key
+            current_series = series
+            break
+    if not current_series or not current_series.get("winner"):
+        return None
+    if current_series.get("winner") != team_name:
+        return {
+            "advanced": False,
+            "eliminated": True,
+            "round_label": "Eliminated",
+            "opponents": [],
+            "opponent_text": current_series.get("winner", "Opponent"),
+            "status_text": f"{team_name} was eliminated by {current_series.get('winner')}.",
+            "completed_series": current_series,
+        }
+    paired_key = sibling_second_round_key(current_key, series_map)
+    paired = series_map.get(paired_key) if paired_key else None
+    if not paired:
+        return None
+    conf = current_series.get("conf", "")
+    round_label = "Eastern Conference Finals" if conf == "East" else "Western Conference Finals"
+    if paired.get("winner"):
+        opponents = [paired["winner"]]
+        opponent_text = paired["winner"]
+        status_text = f"{team_name} vs {opponent_text} - {round_label}"
+    else:
+        opponents = [paired.get("a"), paired.get("b")]
+        opponent_text = f"{paired.get('a')}/{paired.get('b')} winner"
+        status_text = f"{team_name} await {paired.get('a')}/{paired.get('b')} winner"
+    opponents = [op for op in opponents if op in TEAM_PROFILES]
+    return {
+        "advanced": True,
+        "eliminated": False,
+        "round_label": round_label,
+        "opponents": opponents,
+        "opponent_text": opponent_text,
+        "status_text": status_text,
+        "completed_series": current_series,
+        "paired_series": paired,
+    }
+
+
+def _all_playoff_series_with_keys_from_state(stt):
+    rows = []
+    for coll_name in ("finals", "cf", "second", "first"):
+        for key, s in (stt.get(coll_name) or {}).items():
+            if s:
+                rows.append((coll_name, key, s))
+    return rows
+
+
+def _playoff_status_from_state(team_name, stt):
+    """Derive one team's playoff status from a unified state snapshot."""
+    profile = TEAM_PROFILES.get(team_name) or {}
+    series_rows = _all_playoff_series_with_keys_from_state(stt)
+    team_series = [(coll, key, s) for coll, key, s in series_rows if team_name in (s.get("a"), s.get("b"))]
+
+    def _status_row(**kwargs):
+        series = kwargs.get("series")
+        rec = kwargs.get("series_record")
+        if not rec and series and team_name in (series.get("a"), series.get("b")):
+            tw, ow, _ = _team_series_record(team_name, series)
+            kwargs["series_record"] = f"{tw}-{ow}"
+        src = kwargs.get("data_source", "")
+        if "NBA API" in str(src):
+            kwargs["source_kind"] = "API"
+        elif "Static" in str(src) or "static" in str(src).lower():
+            kwargs["source_kind"] = "static"
+        elif "Demo" in str(src) or "fallback" in str(src).lower():
+            kwargs["source_kind"] = "fallback"
+        elif src == "TEAM_PROFILES" or "TEAM_PROFILES" in str(src):
+            kwargs["source_kind"] = "static"
+        else:
+            kwargs["source_kind"] = "bracket"
+        return kwargs
+
+    if not team_series:
+        return _status_row(
+            team=team_name,
+            current_round=profile.get("round", "Playoffs"),
+            status="active" if profile.get("status") == "Active" else "eliminated",
+            current_opponent=profile.get("current_opponent") or profile.get("first_round_opponent") or "",
+            series_wins=0,
+            elimination_reason="" if profile.get("status") == "Active" else profile.get("first_round_result", ""),
+            data_source="TEAM_PROFILES",
+            series=None,
+        )
+
+    lost = None
+    for _coll, _key, s in team_series:
+        if _team_lost_confirmed_series(team_name, s):
+            if lost is None or _round_depth(s) > _round_depth(lost):
+                lost = s
+    if lost:
+        tw, ow, opp = _team_series_record(team_name, lost)
+        rd = str(lost.get("round") or "Playoffs")
+        return _status_row(
+            team=team_name,
+            current_round=rd,
+            status="eliminated",
+            current_opponent=opp,
+            series_wins=_count_series_wins_for_team(team_name, stt),
+            elimination_reason=f"Lost {rd} to {opp}, {tw}-{ow}; opponent reached 4 wins.",
+            data_source=lost.get("source", "Bracket state"),
+            series_record=f"{tw}-{ow}",
+            series=lost,
+        )
+
+    active = [
+        s for _coll, _key, s in team_series
+        if not _series_has_confirmed_winner(s) and _round_depth(s) == max(_round_depth(x[2]) for x in team_series)
+    ]
+    if active:
+        s = active[0]
+        tw, ow, opp = _team_series_record(team_name, s)
+        return _status_row(
+            team=team_name,
+            current_round=s.get("round", profile.get("round", "Playoffs")),
+            status="active",
+            current_opponent=opp,
+            series_wins=_count_series_wins_for_team(team_name, stt),
+            elimination_reason="",
+            data_source=s.get("source", "Bracket state"),
+            series_record=f"{tw}-{ow}",
+            series=s,
+        )
+
+    won = [s for _coll, _key, s in team_series if _series_has_confirmed_winner(s) and s.get("winner") == team_name]
+    last_won = max(won, key=_round_depth) if won else None
+    next_ctx = _next_round_context_from_state(team_name, stt)
+    if next_ctx and next_ctx.get("advanced"):
+        status = "awaiting opponent" if len(next_ctx.get("opponents") or []) != 1 else "advanced"
+        return _status_row(
+            team=team_name,
+            current_round=next_ctx.get("round_label", "Next Round"),
+            status=status,
+            current_opponent=next_ctx.get("opponent_text", "TBD"),
+            series_wins=_count_series_wins_for_team(team_name, stt),
+            elimination_reason="",
+            data_source=(next_ctx.get("completed_series") or {}).get("source", "Bracket advancement"),
+            series=next_ctx.get("completed_series"),
+        )
+    if last_won:
+        return _status_row(
+            team=team_name,
+            current_round=last_won.get("round", "Playoffs"),
+            status="advanced",
+            current_opponent="TBD",
+            series_wins=_count_series_wins_for_team(team_name, stt),
+            elimination_reason="",
+            data_source=last_won.get("source", "Bracket state"),
+            series=last_won,
+        )
+
+    return _status_row(
+        team=team_name,
+        current_round=profile.get("round", "Playoffs"),
+        status="active",
+        current_opponent=profile.get("current_opponent") or profile.get("first_round_opponent") or "",
+        series_wins=_count_series_wins_for_team(team_name, stt),
+        elimination_reason="",
+        data_source="TEAM_PROFILES fallback",
+        series=None,
+    )
+
+
+def _build_team_status_map(stt):
+    return {team: _playoff_status_from_state(team, stt) for team in TEAM_PROFILES}
+
+
+def get_team_playoff_status(team_name, stt=None):
+    """Read team status from the unified playoff state (preferred over ad-hoc profile fields)."""
+    if stt is None:
+        stt = get_merged_playoff_state()
+    cached = (stt.get("team_status") or {}).get(team_name)
+    if cached:
+        return cached
+    return _playoff_status_from_state(team_name, stt)
+
+
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = True):
-    """Single cached snapshot: first-round results, semis, conference finals, and NBA Finals shells.
-
-    ``use_demo_backup`` follows the sidebar toggle for strict API mode; the bracket page passes
-    ``True`` so bundled second-round rows still render when the NBA feed is empty.
-    """
+    """Single cached playoff engine: every round, team status, and series scores in one snapshot."""
+    first = build_first_round_series_cached(use_demo_backup, api_refresh)
     second = build_second_round_series_cached(use_demo_backup, api_refresh)
     cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
     nf = build_nba_finals_series_cached(use_demo_backup, api_refresh)
-    east_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "East"]
-    west_fr = [dict(s) for s in FIRST_ROUND_SERIES.values() if s.get("conf") == "West"]
+    east_fr = [dict(s) for s in first.values() if s.get("conf") == "East"]
+    west_fr = [dict(s) for s in first.values() if s.get("conf") == "West"]
     east_sr = [s for s in second.values() if s.get("conf") == "East"]
     west_sr = [s for s in second.values() if s.get("conf") == "West"]
     east_cf = {k: v for k, v in (cf or {}).items() if v.get("conf") == "East"}
     west_cf = {k: v for k, v in (cf or {}).items() if v.get("conf") == "West"}
-    return {
+    stt = {
+        "first": first,
         "second": second,
         "cf": cf or {},
         "finals": nf or {},
@@ -1573,7 +1877,11 @@ def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = T
         "west_sr": west_sr,
         "east_cf": east_cf if east_cf else None,
         "west_cf": west_cf if west_cf else None,
+        "use_demo_backup": use_demo_backup,
+        "api_refresh": api_refresh,
     }
+    stt["team_status"] = _build_team_status_map(stt)
+    return stt
 
 
 ROUND_DEPTH_FOR_EXIT = {
@@ -1615,30 +1923,15 @@ def _team_lost_confirmed_series(team_name, series):
     return opp_wins == 4 and team_wins < 4 and series.get("winner") != team_name
 
 
-def _iter_playoff_series_shells_merged():
-    """All playoff series shells: semis, CF, Finals (cached merge) plus static first round."""
-    use_demo, api_refresh = get_playoff_refresh_settings()
-    stt = get_playoff_state_cached(use_demo, api_refresh)
-    for s in (stt.get("second") or {}).values():
-        if s:
-            yield s
-    for s in (stt.get("cf") or {}).values():
-        if s:
-            yield s
-    for s in (stt.get("finals") or {}).values():
-        if s:
-            yield s
-    for s in FIRST_ROUND_SERIES.values():
-        yield {
-            "a": s["a"],
-            "b": s["b"],
-            "a_wins": int(s.get("a_wins", 0)),
-            "b_wins": int(s.get("b_wins", 0)),
-            "winner": s.get("winner"),
-            "round": "First Round",
-            "games": [],
-            "source": "Local first-round results",
-        }
+def _iter_playoff_series_shells_merged(stt=None):
+    """All playoff series shells from the unified cached playoff state."""
+    if stt is None:
+        use_demo, api_refresh = get_playoff_refresh_settings()
+        stt = get_playoff_state_cached(use_demo, api_refresh)
+    for coll in ("finals", "cf", "second", "first"):
+        for s in (stt.get(coll) or {}).values():
+            if s:
+                yield s
 
 
 def _last_elimination_series_for_team(team_name):
@@ -1670,16 +1963,16 @@ def _dynamic_playoff_eliminated(team_name):
         return False
 
 
-def _count_series_wins_for_team(team_name):
-    """How many completed playoff series ``team_name`` has won this postseason (merged bracket)."""
+def _count_series_wins_for_team(team_name, stt=None):
+    """How many completed playoff series ``team_name`` has won (requires confirmed 4-win series)."""
     if not team_name:
         return 0
     n = 0
     try:
-        for s in _iter_playoff_series_shells_merged():
+        for s in _iter_playoff_series_shells_merged(stt):
             if team_name not in (s.get("a"), s.get("b")):
                 continue
-            if s.get("winner") == team_name:
+            if _series_has_confirmed_winner(s) and s.get("winner") == team_name:
                 n += 1
     except Exception:
         return 0
@@ -5746,6 +6039,13 @@ def intel_games_opponent_and_record(team_name):
             return s, opp, games, tw, ow, f"{round_label} (series complete)", "eliminated"
         return s, opp, games, tw, ow, round_label, "current"
     if _is_home_eliminated(team_name):
+        fr = _build_local_series_shell(team_name)
+        if fr and fr.get("round") == "First Round":
+            opp = fr["b"] if team_name == fr["a"] else fr["a"]
+            games = list(fr.get("games") or [])
+            tw = int(fr.get("a_wins", 0)) if team_name == fr["a"] else int(fr.get("b_wins", 0))
+            ow = int(fr.get("b_wins", 0)) if team_name == fr["a"] else int(fr.get("a_wins", 0))
+            return fr, opp, games, tw, ow, "First round (series complete)", "eliminated"
         opp = prof.get("first_round_opponent")
         games = [dict(g) for g in FIRST_ROUND_GAME_SCORES.get(team_name, [])]
         tw = sum(1 for g in games if g.get("Winner") == team_name)
@@ -6104,8 +6404,7 @@ def render_matchup_header(team_name, first_round=False):
         opp=p["first_round_opponent"]
         round_label="Previous Rounds / First Round Review"
     else:
-        use_demo, api_refresh = get_playoff_refresh_settings()
-        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+        pst = get_team_playoff_status(team_name)
         hctx = resolve_home_matchup_context_fast(team_name)
         if pst.get("status") == "eliminated":
             opp = pst.get("current_opponent") or p.get("first_round_opponent")
@@ -6429,15 +6728,6 @@ def render_live_score_banner(favorite_team, away_tri, home_tri, away_score, home
 # ==========================================================
 # Next-round advancement helpers
 # ==========================================================
-def sibling_second_round_key(current_key, second_map):
-    """The other second-round series in the same conference (dynamic bracket wiring)."""
-    conf = second_map.get(current_key, {}).get("conf")
-    if not conf:
-        return None
-    others = [k for k, s in second_map.items() if k != current_key and s.get("conf") == conf]
-    return others[0] if len(others) == 1 else None
-
-
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def next_round_context_for_team(team_name):
     """Return next-round display context when the team's second-round series is complete
@@ -6446,58 +6736,8 @@ def next_round_context_for_team(team_name):
     Once conference finals (or finals) exist for this team, returns None — the home
     header uses ``series_for_team`` directly for that matchup.
     """
-    use_demo, api_refresh = get_playoff_refresh_settings()
-    stt = get_playoff_state_cached(use_demo, api_refresh)
-    for coll_name in ("cf", "finals"):
-        for _k, s_active in (stt.get(coll_name) or {}).items():
-            if team_name in (s_active.get("a"), s_active.get("b")):
-                return None
-
-    series_map = stt["second"]
-    current_key = None
-    current_series = None
-    for key, series in series_map.items():
-        if team_name in [series.get("a"), series.get("b")]:
-            current_key = key
-            current_series = series
-            break
-    if not current_series or not current_series.get("winner"):
-        return None
-    if current_series.get("winner") != team_name:
-        return {
-            "advanced": False,
-            "eliminated": True,
-            "round_label": "Eliminated",
-            "opponents": [],
-            "opponent_text": current_series.get("winner", "Opponent"),
-            "status_text": f"{team_name} was eliminated by {current_series.get('winner')}.",
-            "completed_series": current_series,
-        }
-    paired_key = sibling_second_round_key(current_key, series_map)
-    paired = series_map.get(paired_key) if paired_key else None
-    if not paired:
-        return None
-    conf = current_series.get("conf", "")
-    round_label = "Eastern Conference Finals" if conf == "East" else "Western Conference Finals"
-    if paired.get("winner"):
-        opponents = [paired["winner"]]
-        opponent_text = paired["winner"]
-        status_text = f"{team_name} vs {opponent_text} - {round_label}"
-    else:
-        opponents = [paired.get("a"), paired.get("b")]
-        opponent_text = f"{paired.get('a')}/{paired.get('b')} winner"
-        status_text = f"{team_name} await {paired.get('a')}/{paired.get('b')} winner"
-    opponents = [op for op in opponents if op in TEAM_PROFILES]
-    return {
-        "advanced": True,
-        "eliminated": False,
-        "round_label": round_label,
-        "opponents": opponents,
-        "opponent_text": opponent_text,
-        "status_text": status_text,
-        "completed_series": current_series,
-        "paired_series": paired,
-    }
+    stt = get_merged_playoff_state()
+    return _next_round_context_from_state(team_name, stt)
 
 
 def _round_depth(series):
@@ -6508,150 +6748,51 @@ def _round_depth(series):
     return depth
 
 
-def _all_playoff_series_with_keys(use_demo_backup=True, api_refresh=False):
-    stt = get_playoff_state_cached(use_demo_backup, api_refresh)
-    rows = []
-    for coll_name in ("finals", "cf", "second"):
-        for key, s in (stt.get(coll_name) or {}).items():
-            if s:
-                rows.append((coll_name, key, s))
-    for key, s in FIRST_ROUND_SERIES.items():
-        rows.append((
-            "first",
-            key,
-            {
-                "conf": s.get("conf"),
-                "round": "First Round",
-                "a": s.get("a"),
-                "b": s.get("b"),
-                "a_wins": int(s.get("a_wins", 0) or 0),
-                "b_wins": int(s.get("b_wins", 0) or 0),
-                "winner": s.get("winner"),
-                "games": [],
-                "source": "Local first-round results",
-            },
-        ))
-    return rows
+def _all_playoff_series_with_keys(use_demo_backup=None, api_refresh=None):
+    stt = get_merged_playoff_state(use_demo_backup, api_refresh)
+    return _all_playoff_series_with_keys_from_state(stt)
 
 
-def playoff_status_for_team(team_name, use_demo_backup=True, api_refresh=False):
-    """Single source of truth for active/advanced/awaiting/eliminated UI labels."""
-    profile = TEAM_PROFILES.get(team_name) or {}
-    series_rows = _all_playoff_series_with_keys(use_demo_backup, api_refresh)
-    team_series = [(coll, key, s) for coll, key, s in series_rows if team_name in (s.get("a"), s.get("b"))]
-    if not team_series:
-        return {
-            "team": team_name,
-            "current_round": profile.get("round", "Playoffs"),
-            "status": "active" if profile.get("status") == "Active" else "eliminated",
-            "current_opponent": profile.get("current_opponent") or profile.get("first_round_opponent") or "",
-            "series_wins": 0,
-            "elimination_reason": "" if profile.get("status") == "Active" else profile.get("first_round_result", ""),
-            "data_source": "TEAM_PROFILES",
-            "series": None,
-        }
-
-    lost = None
-    for _coll, _key, s in team_series:
-        if _team_lost_confirmed_series(team_name, s):
-            if lost is None or _round_depth(s) > _round_depth(lost):
-                lost = s
-    if lost:
-        tw, ow, opp = _team_series_record(team_name, lost)
-        rd = str(lost.get("round") or "Playoffs")
-        return {
-            "team": team_name,
-            "current_round": rd,
-            "status": "eliminated",
-            "current_opponent": opp,
-            "series_wins": _count_series_wins_for_team(team_name),
-            "elimination_reason": f"Lost {rd} to {opp}, {tw}-{ow}; opponent reached 4 wins.",
-            "data_source": lost.get("source", "Bracket state"),
-            "series": lost,
-        }
-
-    active = [
-        s for _coll, _key, s in team_series
-        if not _series_has_confirmed_winner(s) and _round_depth(s) == max(_round_depth(x[2]) for x in team_series)
-    ]
-    if active:
-        s = active[0]
-        tw, ow, opp = _team_series_record(team_name, s)
-        return {
-            "team": team_name,
-            "current_round": s.get("round", profile.get("round", "Playoffs")),
-            "status": "active",
-            "current_opponent": opp,
-            "series_wins": _count_series_wins_for_team(team_name),
-            "elimination_reason": "",
-            "data_source": s.get("source", "Bracket state"),
-            "series_record": f"{tw}-{ow}",
-            "series": s,
-        }
-
-    won = [s for _coll, _key, s in team_series if _series_has_confirmed_winner(s) and s.get("winner") == team_name]
-    last_won = max(won, key=_round_depth) if won else None
-    next_ctx = next_round_context_for_team(team_name)
-    if next_ctx and next_ctx.get("advanced"):
-        status = "awaiting opponent" if len(next_ctx.get("opponents") or []) != 1 else "advanced"
-        return {
-            "team": team_name,
-            "current_round": next_ctx.get("round_label", "Next Round"),
-            "status": status,
-            "current_opponent": next_ctx.get("opponent_text", "TBD"),
-            "series_wins": _count_series_wins_for_team(team_name),
-            "elimination_reason": "",
-            "data_source": (next_ctx.get("completed_series") or {}).get("source", "Bracket advancement"),
-            "series": next_ctx.get("completed_series"),
-        }
-    if last_won:
-        return {
-            "team": team_name,
-            "current_round": last_won.get("round", "Playoffs"),
-            "status": "advanced",
-            "current_opponent": "TBD",
-            "series_wins": _count_series_wins_for_team(team_name),
-            "elimination_reason": "",
-            "data_source": last_won.get("source", "Bracket state"),
-            "series": last_won,
-        }
-
-    return {
-        "team": team_name,
-        "current_round": profile.get("round", "Playoffs"),
-        "status": "active",
-        "current_opponent": profile.get("current_opponent") or profile.get("first_round_opponent") or "",
-        "series_wins": _count_series_wins_for_team(team_name),
-        "elimination_reason": "",
-        "data_source": "TEAM_PROFILES fallback",
-        "series": None,
-    }
+def playoff_status_for_team(team_name, use_demo_backup=None, api_refresh=None):
+    """Single source of truth for active / advanced / awaiting / eliminated UI labels."""
+    stt = get_merged_playoff_state(use_demo_backup, api_refresh)
+    return get_team_playoff_status(team_name, stt)
 
 
-def playoff_status_debug_dataframe(use_demo_backup=True, api_refresh=False):
+def playoff_status_debug_dataframe(use_demo_backup=None, api_refresh=None):
+    stt = get_merged_playoff_state(use_demo_backup, api_refresh)
     rows = []
     for team in sorted(TEAM_PROFILES):
-        st_row = playoff_status_for_team(team, use_demo_backup, api_refresh)
+        st_row = get_team_playoff_status(team, stt)
         rows.append({
             "Team": team,
             "Current round": st_row.get("current_round", ""),
             "Status": st_row.get("status", ""),
-            "Current opponent": st_row.get("current_opponent", ""),
+            "Opponent": st_row.get("current_opponent", ""),
+            "Series score": st_row.get("series_record", "—"),
             "Series wins": st_row.get("series_wins", 0),
-            "Series record": st_row.get("series_record", ""),
-            "Elimination reason": st_row.get("elimination_reason", ""),
-            "Data source": st_row.get("data_source", ""),
+            "Source": st_row.get("source_kind", ""),
+            "Detail": st_row.get("data_source", ""),
+            "Elimination": st_row.get("elimination_reason", ""),
         })
     return pd.DataFrame(rows)
 
 
-def render_playoff_status_debug_expander(location_key="playoff_status"):
-    with st.expander("Playoff status debug", expanded=False):
-        st.caption("Bracket-derived status table. Elimination requires a completed series where the opponent has exactly 4 wins and this team has fewer than 4.")
-        df = playoff_status_debug_dataframe(
-            *get_playoff_refresh_settings(),
+def render_playoff_state_debug_expander(location_key="playoff_state"):
+    """Optional debug panel: one row per team from the unified playoff engine."""
+    with st.expander("Playoff state debug", expanded=False):
+        use_demo, api_on = get_playoff_refresh_settings()
+        st.caption(
+            f"Unified bracket engine · API sync {'on' if api_on else 'off'} · "
+            f"fallback when empty {'on' if use_demo else 'off'} · "
+            "elimination only when opponent has exactly 4 wins."
         )
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            playoff_status_debug_dataframe(use_demo, api_on),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption("Source: API = live NBA.com logs · fallback = demo second-round backup · static = Round 1 archive.")
 
 
 def _build_local_series_shell(team_name):
@@ -6667,34 +6808,9 @@ def _build_local_series_shell(team_name):
         if team_name in (s.get("a"), s.get("b")):
             return dict(s)
 
-    for _key, s in FIRST_ROUND_SERIES.items():
-        if team_name not in (s.get("a"), s.get("b")):
-            continue
-        a, b = s["a"], s["b"]
-        games_raw = FIRST_ROUND_GAME_SCORES.get(team_name, [])
-        games = []
-        for idx, r in enumerate(games_raw, start=1):
-            gn = r.get("Game", idx)
-            if isinstance(gn, int):
-                gn = f"Game {gn}"
-            games.append({
-                "Game": str(gn),
-                "Date": str(r.get("Date", "")),
-                "Score": str(r.get("Score", "")),
-                "Winner": str(r.get("Winner", "")),
-                "Matchup": str(r.get("Matchup", "")),
-            })
-        return {
-            "conf": s.get("conf", ""),
-            "round": "First Round",
-            "a": a,
-            "b": b,
-            "a_wins": int(s.get("a_wins", 0)),
-            "b_wins": int(s.get("b_wins", 0)),
-            "winner": s.get("winner"),
-            "games": games,
-            "source": "Local FIRST_ROUND_SERIES",
-        }
+    for _key, s in (stt.get("first") or {}).items():
+        if team_name in (s.get("a"), s.get("b")):
+            return dict(s)
 
     return None
 
@@ -6702,8 +6818,7 @@ def _build_local_series_shell(team_name):
 def get_fast_series_snapshot(team_name):
     """Lightweight series snapshot from merged playoff state (cached API + fallback)."""
     profile = TEAM_PROFILES.get(team_name) or {}
-    use_demo, api_refresh = get_playoff_refresh_settings()
-    pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+    pst = get_team_playoff_status(team_name)
     out = {
         "team_name": team_name,
         "opponent": pst.get("current_opponent") or profile.get("current_opponent") or profile.get("first_round_opponent"),
@@ -6731,6 +6846,20 @@ def get_fast_series_snapshot(team_name):
 def resolve_home_matchup_context_fast(team_name):
     """Home hub context without ``series_for_team`` / bracket builders (instant)."""
     profile = TEAM_PROFILES[team_name]
+    pst = get_team_playoff_status(team_name)
+    if pst.get("status") == "eliminated":
+        opp = pst.get("current_opponent") or profile.get("first_round_opponent")
+        return {
+            "mode": "eliminated",
+            "series": pst.get("series"),
+            "round_label": pst.get("current_round") or "Eliminated",
+            "opponent": opp,
+            "opponent_display": opp or "Opponent",
+            "advanced": False,
+            "bracket_series": False,
+            "ctx": None,
+            "fast_snapshot": get_fast_series_snapshot(team_name),
+        }
     ctx = next_round_context_for_team(team_name)
     if ctx and ctx.get("eliminated"):
         return {
@@ -7939,8 +8068,7 @@ def render_playoff_command_center(team_name):
     snap_cols[0].metric("Playoff mood", mood)
     snap_cols[1].metric("Seed", profile.get("seed", "—"))
     s_disp = hctx.get("series") or current_series_obj
-    use_demo, api_refresh = get_playoff_refresh_settings()
-    pst_home = playoff_status_for_team(team_name, use_demo, api_refresh)
+    pst_home = get_team_playoff_status(team_name)
     snap_cols[2].metric(
         "Current chapter",
         pst_home.get("current_round")
@@ -8201,7 +8329,7 @@ def render_playoff_command_center(team_name):
         f"Updated {datetime.now().strftime('%b %d %I:%M %p')} · Playoff story refreshes as new results land."
     )
     sections.append("footer_caption")
-    render_playoff_status_debug_expander("home")
+    render_playoff_state_debug_expander("home")
     sections.append("playoff_status_debug")
 
     live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
@@ -8252,21 +8380,12 @@ def home_injury_opponents(team_name):
     return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
 
 def _first_round_synthetic_games(team_a, team_b):
-    """Static first-round game rows for bracket cards when API has not attached games."""
-    rows = FIRST_ROUND_GAME_SCORES.get(team_a) or FIRST_ROUND_GAME_SCORES.get(team_b) or []
-    out = []
-    for r in rows:
-        gn = r.get("Game", len(out) + 1)
-        if isinstance(gn, int):
-            gn = f"Game {gn}"
-        out.append({
-            "Game": str(gn),
-            "Date": str(r.get("Date", "")),
-            "Score": str(r.get("Score", "")),
-            "Winner": str(r.get("Winner", "")),
-            "Matchup": str(r.get("Matchup", "")),
-        })
-    return out
+    """First-round game rows from merged state, then static archive."""
+    stt = get_merged_playoff_state()
+    for s in (stt.get("first") or {}).values():
+        if {s.get("a"), s.get("b")} == {team_a, team_b} and s.get("games"):
+            return list(s["games"])
+    return _static_first_round_games_for_pair(team_a, team_b)
 
 
 def _bracket_series_for_display(s, round_display_name):
@@ -8811,7 +8930,7 @@ def render_bracket(favorite_team=None):
             use_container_width=True,
             hide_index=True,
         )
-    render_playoff_status_debug_expander("bracket")
+    render_playoff_state_debug_expander("bracket")
 
 
 def latest_game_note(team, series_obj=None):
@@ -10176,19 +10295,27 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
 
 def render_previous_rounds_history(team_name):
     profile = TEAM_PROFILES[team_name]
-    first_opp = profile["first_round_opponent"]
+    stt = get_merged_playoff_state()
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
     team_section_header("Round-by-round results", "📜")
-    first_games = []
-    for idx, row in enumerate(FIRST_ROUND_GAME_SCORES.get(team_name, []), start=1):
-        r = dict(row)
-        n = int(r.get("Game", idx)) if str(r.get("Game", idx)).isdigit() else idx
-        mvp, why = mvp_for_game(team_name, first_opp, n, r.get("Winner"))
-        r["Game"] = f"Game {n}"
-        r["Game MVP"] = mvp
-        r["MVP Note"] = why
-        first_games.append(r)
-    render_series_history_card(team_name, first_opp, first_games, "First Round", profile.get("first_round_result"))
+    fr_shell = None
+    for _k, s in (stt.get("first") or {}).items():
+        if team_name in (s.get("a"), s.get("b")):
+            fr_shell = s
+            break
+    if fr_shell:
+        first_opp = fr_shell["b"] if team_name == fr_shell["a"] else fr_shell["a"]
+        first_games = _series_games_for_history(team_name, fr_shell)
+        fr_note = (
+            f"{fr_shell.get('winner')} wins the series."
+            if _series_has_confirmed_winner(fr_shell)
+            else profile.get("first_round_result")
+        )
+        render_series_history_card(team_name, first_opp, first_games, "First Round", fr_note)
+    else:
+        first_opp = profile["first_round_opponent"]
+        first_games = _series_games_for_history(team_name, {"a": team_name, "b": first_opp, "games": _static_first_round_games_for_pair(team_name, first_opp)})
+        render_series_history_card(team_name, first_opp, first_games, "First Round", profile.get("first_round_result"))
 
     _, s2 = second_round_series_for_team(team_name)
     if s2 and s2.get("games"):
@@ -10215,8 +10342,7 @@ def render_previous_rounds_history(team_name):
 # ==========================================================
 def _local_live_gc_series_context(team_name, profile):
     """Layer 1 context from merged playoff state (cached API + fallback)."""
-    use_demo, api_refresh = get_playoff_refresh_settings()
-    pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+    pst = get_team_playoff_status(team_name)
     opp = pst.get("current_opponent") or profile.get("current_opponent") or ""
     round_name = pst.get("current_round") or profile.get("round") or "Playoffs"
     series = pst.get("series")
@@ -11204,9 +11330,7 @@ PAGE_LABEL_ALIASES = {
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
     try:
-        use_demo, api_refresh = get_playoff_refresh_settings()
-        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
-        if pst.get("status") == "eliminated":
+        if get_team_playoff_status(team_name).get("status") == "eliminated":
             return f"📋 {team_name} (offseason outlook)"
     except Exception:
         if _is_home_eliminated(team_name):
@@ -11235,8 +11359,10 @@ ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
 SHOW_PERF_DEBUG = st.sidebar.toggle(
     "Show performance debug",
     value=False,
-    help="Shows page timing and cache mode details after the page renders."
+    help="Shows page timing, playoff state debug table, and cache mode details."
 )
+if SHOW_PERF_DEBUG:
+    render_playoff_state_debug_expander("sidebar")
 profile=TEAM_PROFILES[favorite_team]
 inject_team_brand_css(favorite_team)
 labels=list(PAGES.keys())
