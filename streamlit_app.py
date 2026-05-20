@@ -439,6 +439,13 @@ def _is_home_eliminated(team_name):
     p = TEAM_PROFILES.get(team_name) or {}
     if not p:
         return False
+    try:
+        use_demo, api_refresh = get_playoff_refresh_settings()
+        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+        if pst.get("status") == "eliminated":
+            return True
+    except Exception:
+        pass
     if _dynamic_playoff_eliminated(team_name):
         return True
     if p.get("status") == "Eliminated":
@@ -1209,6 +1216,9 @@ FALLBACK_TOP_PLAYS = {
 # ==========================================================
 # API / automatic tracking helpers
 # ==========================================================
+PLAYOFF_STATE_CACHE_TTL_SEC = 90
+PLAYOFF_BRACKET_REFRESH_MS = 60000
+
 def safe_int(x, default=0):
     try: return int(x or default)
     except Exception: return default
@@ -1217,7 +1227,7 @@ def safe_float(x, default=0.0):
     try: return float(x or default)
     except Exception: return default
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False):
     """Opt-in completed game pull for the custom playoff bracket.
 
@@ -1226,9 +1236,8 @@ def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False
       2) leaguegamefinder for the full 2025-26 Playoffs, which is better when
          scoreboardv2 returns empty on Streamlit Cloud or misses older games.
 
-    Important: this does NOT run during normal fast page loads. It only updates a custom matchup
-    such as NYK-PHI if NBA.com/nba_api has actual completed games for that pair.
-    Demo backup scores can still appear only when the sidebar backup switch is on.
+    Runs when auto-sync is enabled (default). Merged playoff state uses this feed first;
+    bundled fallback scores apply only when the API returns no games for that series.
     """
     if not api_refresh or not NBA_STATS_AVAILABLE:
         return []
@@ -1337,6 +1346,29 @@ def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False
     return clean
 
 
+def get_playoff_refresh_settings():
+    """Sidebar-aware flags: NBA API first, bundled demo rows only when the feed is empty."""
+    use_demo = bool(globals().get("USE_DEMO_BACKUP", True))
+    api_refresh = bool(globals().get("ENABLE_BRACKET_API_REFRESH", True))
+    return use_demo, api_refresh
+
+
+def get_merged_playoff_state(use_demo_backup=None, api_refresh=None):
+    """Single entry point for bracket, Home, history, Legacy, and matchup headers."""
+    if use_demo_backup is None or api_refresh is None:
+        d_demo, d_api = get_playoff_refresh_settings()
+        use_demo_backup = d_demo if use_demo_backup is None else use_demo_backup
+        api_refresh = d_api if api_refresh is None else api_refresh
+    return get_playoff_state_cached(use_demo_backup, api_refresh)
+
+
+def tick_playoff_state_autorefresh(page_key, interval_ms=None):
+    """Rerun the app on a timer so series scores and advancement stay current without code edits."""
+    if not AUTOREFRESH_AVAILABLE:
+        return
+    st_autorefresh(interval=interval_ms or PLAYOFF_BRACKET_REFRESH_MS, key=f"playoff_autorefresh_{page_key}")
+
+
 def series_key_for_pair(t1, t2, templates=None):
     pair = {t1, t2}
     templates = templates or SECOND_ROUND_SERIES_TEMPLATE
@@ -1358,7 +1390,7 @@ def canonical_series_key(team_a, team_b):
 
 def second_round_series_for_team(team_name):
     """The second-round (semifinal) series shell containing this team, if any."""
-    second = get_playoff_state_cached(True)["second"]
+    second = get_merged_playoff_state()["second"]
     for key, s in second.items():
         if team_name in (s.get("a"), s.get("b")):
             return key, s
@@ -1397,7 +1429,7 @@ def clean_and_recount_series(series):
         s["source"] = "NBA API" if any(g.get("Source") == "NBA API" for g in cleaned) else ("Demo backup" if cleaned else "Waiting for API games")
     return series
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
     """Build second-round series automatically from NBA API data.
 
@@ -1430,14 +1462,11 @@ def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
     return clean_and_recount_series(dynamic)
 
 def build_second_round_series():
-    # The sidebar variable is created later; default is strict API mode.
-    return build_second_round_series_cached(
-        globals().get("USE_DEMO_BACKUP", False),
-        globals().get("ENABLE_BRACKET_API_REFRESH", False),
-    )
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    return build_second_round_series_cached(use_demo, api_refresh)
 
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def build_conference_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """East/West Conference Finals shells from second-round winners + API games.
 
@@ -1476,10 +1505,8 @@ def build_conference_finals_series_cached(use_demo_backup=False, api_refresh=Fal
 
 
 def build_conference_finals_series():
-    return build_conference_finals_series_cached(
-        globals().get("USE_DEMO_BACKUP", False),
-        globals().get("ENABLE_BRACKET_API_REFRESH", False),
-    )
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    return build_conference_finals_series_cached(use_demo, api_refresh)
 
 
 def _cf_champion_for_conference(cf_map, conf):
@@ -1489,7 +1516,7 @@ def _cf_champion_for_conference(cf_map, conf):
     return None
 
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def build_nba_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """NBA Finals shell once both conference champions exist; games from API only."""
     cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
@@ -1516,14 +1543,12 @@ def build_nba_finals_series_cached(use_demo_backup=False, api_refresh=False):
 
 
 def build_nba_finals_series():
-    return build_nba_finals_series_cached(
-        globals().get("USE_DEMO_BACKUP", False),
-        globals().get("ENABLE_BRACKET_API_REFRESH", False),
-    )
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    return build_nba_finals_series_cached(use_demo, api_refresh)
 
 
-@st.cache_data(ttl=900)
-def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = False):
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = True):
     """Single cached snapshot: first-round results, semis, conference finals, and NBA Finals shells.
 
     ``use_demo_backup`` follows the sidebar toggle for strict API mode; the bracket page passes
@@ -1592,7 +1617,8 @@ def _team_lost_confirmed_series(team_name, series):
 
 def _iter_playoff_series_shells_merged():
     """All playoff series shells: semis, CF, Finals (cached merge) plus static first round."""
-    stt = get_playoff_state_cached(True)
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    stt = get_playoff_state_cached(use_demo, api_refresh)
     for s in (stt.get("second") or {}).values():
         if s:
             yield s
@@ -1662,8 +1688,8 @@ def _count_series_wins_for_team(team_name):
 
 def infer_next_round_series(round_name, conf=None):
     """Return series dict(s) for Conference Finals or NBA Finals (from cached playoff state)."""
-    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
-    stt = get_playoff_state_cached(use_demo, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    stt = get_playoff_state_cached(use_demo, api_refresh)
     if round_name == "Conference Finals":
         cf = stt["cf"]
         if not cf:
@@ -1685,8 +1711,8 @@ def series_for_team(team_name):
     (waiting on the other semi), returns (None, None) so the dashboard can show advancement context
     instead of the finished semi game log as the 'current' series.
     """
-    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
-    stt = get_playoff_state_cached(use_demo, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    stt = get_playoff_state_cached(use_demo, api_refresh)
     nf = stt["finals"]
     cf = stt["cf"]
     second = stt["second"]
@@ -1712,8 +1738,8 @@ def series_for_team(team_name):
     return sk, ss
 
 
-@st.cache_data(ttl=900)
-def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = False):
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = True):
     """Central lightweight team context reused by pages without rewalking bracket state."""
     profile = TEAM_PROFILES.get(team_name, {})
     stt = get_playoff_state_cached(use_demo_backup, api_refresh)
@@ -1736,8 +1762,8 @@ def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_re
     }
 
 
-@st.cache_data(ttl=900)
-def get_series_snapshot_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = False):
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+def get_series_snapshot_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = True):
     """Central series snapshot for fast page headers and summaries."""
     ctx = get_team_context_cached(team_name, use_demo_backup, api_refresh)
     s = ctx.get("series")
@@ -6078,9 +6104,21 @@ def render_matchup_header(team_name, first_round=False):
         opp=p["first_round_opponent"]
         round_label="Previous Rounds / First Round Review"
     else:
+        use_demo, api_refresh = get_playoff_refresh_settings()
+        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
         hctx = resolve_home_matchup_context_fast(team_name)
-        opp = hctx.get("opponent") or hctx.get("opponent_display") or p.get("current_opponent") or p["first_round_opponent"]
-        round_label = hctx.get("round_label") or p["round"]
+        if pst.get("status") == "eliminated":
+            opp = pst.get("current_opponent") or p.get("first_round_opponent")
+            round_label = f"Eliminated · {pst.get('current_round', 'Playoffs')}"
+        else:
+            opp = (
+                pst.get("current_opponent")
+                or hctx.get("opponent")
+                or hctx.get("opponent_display")
+                or p.get("current_opponent")
+                or p["first_round_opponent"]
+            )
+            round_label = pst.get("current_round") or hctx.get("round_label") or p["round"]
     header=f"{p['conference']} {round_label}"
     oseed = TEAM_PROFILES.get(opp, {}).get("seed", "—")
     e = html.escape
@@ -6400,7 +6438,7 @@ def sibling_second_round_key(current_key, second_map):
     return others[0] if len(others) == 1 else None
 
 
-@st.cache_data(ttl=75)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def next_round_context_for_team(team_name):
     """Return next-round display context when the team's second-round series is complete
     but conference finals are not yet formed (waiting on the other conference semi).
@@ -6408,7 +6446,8 @@ def next_round_context_for_team(team_name):
     Once conference finals (or finals) exist for this team, returns None — the home
     header uses ``series_for_team`` directly for that matchup.
     """
-    stt = get_playoff_state_cached(True)
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    stt = get_playoff_state_cached(use_demo, api_refresh)
     for coll_name in ("cf", "finals"):
         for _k, s_active in (stt.get(coll_name) or {}).items():
             if team_name in (s_active.get("a"), s_active.get("b")):
@@ -6610,15 +6649,14 @@ def render_playoff_status_debug_expander(location_key="playoff_status"):
     with st.expander("Playoff status debug", expanded=False):
         st.caption("Bracket-derived status table. Elimination requires a completed series where the opponent has exactly 4 wins and this team has fewer than 4.")
         df = playoff_status_debug_dataframe(
-            bool(globals().get("USE_DEMO_BACKUP", True)),
-            bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)),
+            *get_playoff_refresh_settings(),
         )
         st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 def _build_local_series_shell(team_name):
     """Current playoff series view: newest formed bracket round first, then history."""
-    stt = get_playoff_state_cached(True)
+    stt = get_merged_playoff_state()
     for coll_name in ("finals", "cf"):
         for _k, s in (stt.get(coll_name) or {}).items():
             if team_name in (s.get("a"), s.get("b")):
@@ -6662,17 +6700,19 @@ def _build_local_series_shell(team_name):
 
 
 def get_fast_series_snapshot(team_name):
-    """Lightweight series snapshot: TEAM_PROFILES + local/bundled series packs only (no network)."""
+    """Lightweight series snapshot from merged playoff state (cached API + fallback)."""
     profile = TEAM_PROFILES.get(team_name) or {}
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    pst = playoff_status_for_team(team_name, use_demo, api_refresh)
     out = {
         "team_name": team_name,
-        "opponent": profile.get("current_opponent") or profile.get("first_round_opponent"),
+        "opponent": pst.get("current_opponent") or profile.get("current_opponent") or profile.get("first_round_opponent"),
         "series_score": None,
-        "round": profile.get("round", "Playoffs"),
+        "round": pst.get("current_round") or profile.get("round", "Playoffs"),
         "latest_game": None,
-        "source": "TEAM_PROFILES (local)",
+        "source": pst.get("data_source") or "Merged playoff state",
     }
-    s = _build_local_series_shell(team_name)
+    s = pst.get("series") or _build_local_series_shell(team_name)
     if not s:
         out["series_score"] = "—"
         return out
@@ -7895,12 +7935,18 @@ def render_playoff_command_center(team_name):
     snap_cols = st.columns(4)
     status_txt = (hctx.get("ctx") or {}).get("status_text") if hctx.get("advanced") else series_status_text(team_name, s_active)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
-    snap_cols[0].metric("Playoff mood", "Still dancing" if adv_like else profile.get("status", "—"))
+    mood = "Offseason outlook" if is_eliminated else ("Still dancing" if adv_like else "In the hunt")
+    snap_cols[0].metric("Playoff mood", mood)
     snap_cols[1].metric("Seed", profile.get("seed", "—"))
     s_disp = hctx.get("series") or current_series_obj
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    pst_home = playoff_status_for_team(team_name, use_demo, api_refresh)
     snap_cols[2].metric(
         "Current chapter",
-        (s_disp or {}).get("round") or hctx.get("round_label") or profile.get("round", "—"),
+        pst_home.get("current_round")
+        or (s_disp or {}).get("round")
+        or hctx.get("round_label")
+        or profile.get("round", "—"),
     )
     fb = pctx.get("fb")
     if fb and fb.get("game") and fb.get("phase") == "live":
@@ -8650,10 +8696,12 @@ def render_bracket(favorite_team=None):
             "YOUR TEAM",
         )
 
-    if AUTOREFRESH_AVAILABLE and bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)):
-        st_autorefresh(interval=30000, key="bracket_refresh")
-
-    stt = get_playoff_state_cached(True, bool(globals().get("ENABLE_BRACKET_API_REFRESH", False)))
+    use_demo, api_on = get_playoff_refresh_settings()
+    st.caption(
+        f"Bracket auto-updates every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s from NBA.com when sync is on "
+        f"({'API + fallback' if use_demo and api_on else 'fallback only' if use_demo else 'API only'})."
+    )
+    stt = get_merged_playoff_state()
     east_fr = stt["east_fr"]
     west_fr = stt["west_fr"]
     east_sr = stt["east_sr"]
@@ -8892,8 +8940,7 @@ def _live_team_full_name(team_tricode, team_obj):
 
 def _live_series_board(away_name, home_name):
     pair = {away_name, home_name}
-    use_demo = bool(globals().get("USE_DEMO_BACKUP", False))
-    stt = get_playoff_state_cached(use_demo)
+    stt = get_merged_playoff_state()
     candidates = []
     candidates.extend(stt["second"].values())
     candidates.extend((stt.get("cf") or {}).values())
@@ -10150,7 +10197,7 @@ def render_previous_rounds_history(team_name):
         sr_note = f"{s2['winner']} wins the series." if s2.get("winner") else None
         render_series_history_card(team_name, opp2, second_games, "Second Round", sr_note)
 
-    stt_paths = get_playoff_state_cached(True)
+    stt_paths = get_merged_playoff_state()
     for round_label, coll in (("Conference Finals", stt_paths["cf"]), ("NBA Finals", stt_paths["finals"])):
         for _k, s in (coll or {}).items():
             if team_name not in (s.get("a"), s.get("b")):
@@ -10167,24 +10214,14 @@ def render_previous_rounds_history(team_name):
 # Fail-safe Live Game Center override
 # ==========================================================
 def _local_live_gc_series_context(team_name, profile):
-    """Layer 1 context only: no NBA/ESPN/network calls."""
-    opp = profile.get("current_opponent") or ""
-    round_name = profile.get("round") or "Playoffs"
-    series = None
-    for key, s in SECOND_ROUND_SERIES_TEMPLATE.items():
-        if team_name in (s.get("a"), s.get("b")):
-            series = dict(s)
-            backup = SECOND_ROUND_DEMO_BACKUP.get(key, {}) if isinstance(SECOND_ROUND_DEMO_BACKUP, dict) else {}
-            games = backup.get("games", []) if isinstance(backup, dict) else []
-            if USE_DEMO_BACKUP and games:
-                series["a_wins"] = sum(1 for g in games if g.get("Winner") == series.get("a"))
-                series["b_wins"] = sum(1 for g in games if g.get("Winner") == series.get("b"))
-                series["source"] = "local demo backup"
-            else:
-                series["a_wins"] = int(series.get("a_wins", 0) or 0)
-                series["b_wins"] = int(series.get("b_wins", 0) or 0)
-                series["source"] = "local bracket shell"
-            break
+    """Layer 1 context from merged playoff state (cached API + fallback)."""
+    use_demo, api_refresh = get_playoff_refresh_settings()
+    pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+    opp = pst.get("current_opponent") or profile.get("current_opponent") or ""
+    round_name = pst.get("current_round") or profile.get("round") or "Playoffs"
+    series = pst.get("series")
+    if not series:
+        _k, series = series_for_team(team_name)
     if series:
         a, b = series.get("a"), series.get("b")
         opp = b if team_name == a else a
@@ -11144,11 +11181,11 @@ PAGES={
     "🏠 Home Dashboard":"Home Dashboard",
     "🔴 Live Game Center":"Live Game Center",
     "🏆 Playoff Bracket":"Playoff Bracket",
-    "📚 Team History Leaders":"Team History Leaders",
-    "🧠 Matchup Intelligence":"Matchup Intelligence",
     "📋 Matchup Lineups":"Matchup Lineups",
+    "🧠 Matchup Intelligence":"Matchup Intelligence",
     "📈 Player Playoff Tracker":"Player Playoff Tracker",
     "👑 Legacy Tracker":"Legacy Tracker",
+    "📚 Team History Leaders":"Team History Leaders",
     "📜 Previous Rounds":"Previous Rounds",
 }
 
@@ -11166,8 +11203,14 @@ PAGE_LABEL_ALIASES = {
 
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
-    if _is_home_eliminated(team_name):
-        return f"📋 {team_name} (offseason outlook)"
+    try:
+        use_demo, api_refresh = get_playoff_refresh_settings()
+        pst = playoff_status_for_team(team_name, use_demo, api_refresh)
+        if pst.get("status") == "eliminated":
+            return f"📋 {team_name} (offseason outlook)"
+    except Exception:
+        if _is_home_eliminated(team_name):
+            return f"📋 {team_name} (offseason outlook)"
     return team_name
 
 
@@ -11180,14 +11223,14 @@ favorite_team = st.sidebar.selectbox(
     format_func=_sidebar_team_label,
 )
 USE_DEMO_BACKUP = st.sidebar.toggle(
-    "Use local playoff cache",
+    "Use playoff fallback when API is empty",
     value=True,
-    help="Fast mode: render bundled playoff state immediately. Turn off only when you want a strict live-API bracket."
+    help="When NBA.com returns no completed games for a series, show bundled local scores so the bracket never looks blank."
 )
 ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
-    "Refresh bracket from NBA API (slower)",
-    value=False,
-    help="Optional live bracket sync. Keep off for the fastest page loads; live game center still has its own refresh."
+    "Auto-sync bracket from NBA API",
+    value=True,
+    help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits."
 )
 SHOW_PERF_DEBUG = st.sidebar.toggle(
     "Show performance debug",
@@ -11201,6 +11244,18 @@ def_label=PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Hom
 page_label=st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
 page=PAGES[page_label]
 _APP_PAGE_T0 = pytime.perf_counter()
+
+_PLAYOFF_AUTO_REFRESH_PAGES = {
+    "Home Dashboard",
+    "Playoff Bracket",
+    "Previous Rounds",
+    "Legacy Tracker",
+    "Matchup Lineups",
+    "Matchup Intelligence",
+    "Player Playoff Tracker",
+}
+if page in _PLAYOFF_AUTO_REFRESH_PAGES:
+    tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
 
 # ==========================================================
 # Pages
@@ -11243,9 +11298,10 @@ if globals().get("SHOW_PERF_DEBUG", False):
     with st.expander("Performance debug", expanded=False):
         st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
         st.caption(f"Page: {page} · Team: {favorite_team}")
-        st.caption(f"Local playoff cache: {'on' if USE_DEMO_BACKUP else 'off'}")
-        st.caption(f"Bracket NBA API refresh: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
+        st.caption(f"Playoff fallback when API empty: {'on' if USE_DEMO_BACKUP else 'off'}")
+        st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
+        st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
         st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
 st.divider()
-st.caption("Daniel Cohen — NBA Playoff Companion AI | automatic series tracking | previous rounds | live game center | shot chart")
+st.caption("Daniel Cohen — NBA Playoff Companion AI | live bracket sync | automatic series tracking | previous rounds | live game center")
