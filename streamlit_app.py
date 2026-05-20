@@ -116,6 +116,34 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .live-inj-strip { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,.25); font-size: 12px; color: #cbd5e1; }
 .badge-hot { color: #f97316; font-weight: 800; }
 .badge-cold { color: #38bdf8; font-weight: 800; }
+/* Unified fan platform: matchup ribbon, status, skeletons */
+.fan-matchup-ribbon {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 14px; border-radius: 14px; margin: 0 0 14px;
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 100%);
+  border: 1px solid var(--team-border, rgba(148,163,184,.35));
+  color: #f8fafc; font-size: 13px;
+}
+.fan-matchup-ribbon--elim { opacity: .92; border-color: rgba(148,163,184,.25); }
+.fan-matchup-ribbon--wait { border-style: dashed; }
+.fan-ribbon-badge {
+  font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--team-accent-soft, rgba(56,189,248,.2));
+  border: 1px solid var(--team-border); color: var(--team-accent,#38bdf8);
+}
+.fan-ribbon-score { font-size: 1.05rem; font-weight: 900; letter-spacing: -.02em; }
+.fan-ribbon-muted { color: #94a3b8; font-size: 12px; }
+.fan-skel-wrap { margin: 8px 0 14px; }
+.fan-skel-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.fan-skel-line {
+  height: 12px; border-radius: 8px; margin-bottom: 8px;
+  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 45%, #e2e8f0 90%);
+  background-size: 200% 100%; animation: fanSkelPulse 1.2s ease-in-out infinite;
+}
+.fan-skel-line:nth-child(2) { width: 88%; animation-delay: .15s; }
+.fan-skel-line:nth-child(3) { width: 72%; animation-delay: .3s; }
+@keyframes fanSkelPulse { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 /* Player Playoff Story Hub */
 .pp-wrap { max-width: 1280px; margin: 0 auto; }
 .pp-hero {
@@ -1851,6 +1879,60 @@ def get_team_playoff_status(team_name, stt=None):
     if cached:
         return cached
     return _playoff_status_from_state(team_name, stt)
+
+
+def _round_short_label(round_label):
+    rd = str(round_label or "")
+    if "NBA Finals" in rd:
+        return "NBA Finals"
+    if "Conference Finals" in rd or "Conf Finals" in rd:
+        return "Conf Finals"
+    if "Second Round" in rd or "Semifinal" in rd:
+        return "Round 2"
+    if "First Round" in rd:
+        return "Round 1"
+    if "Eliminated" in rd:
+        return "Eliminated"
+    return rd[:32] if rd else "Playoffs"
+
+
+def get_display_matchup(team_name, stt=None):
+    """Fan-facing matchup context — same round, opponent, score, and status on every page."""
+    if stt is None:
+        stt = get_merged_playoff_state()
+    pst = get_team_playoff_status(team_name, stt)
+    profile = TEAM_PROFILES.get(team_name) or {}
+    status = str(pst.get("status") or "active")
+    round_label = pst.get("current_round") or profile.get("round", "Playoffs")
+    opponent = pst.get("current_opponent") or profile.get("first_round_opponent") or ""
+    series_record = pst.get("series_record") or "—"
+    series = pst.get("series")
+    if (not series_record or series_record == "—") and series and team_name in (series.get("a"), series.get("b")):
+        tw, ow, _ = _team_series_record(team_name, series)
+        series_record = f"{tw}–{ow}"
+    status_badge = {
+        "eliminated": "OUT · offseason outlook",
+        "active": "IN THE HUNT",
+        "advanced": "ADVANCED",
+        "awaiting opponent": "AWAITING OPPONENT",
+    }.get(status, status.replace("_", " ").upper())
+    return {
+        "team": team_name,
+        "team_nick": fan_nick(team_name),
+        "opponent": opponent,
+        "opponent_nick": fan_nick(opponent) if opponent and opponent not in ("TBD", "") else "TBD",
+        "round": round_label,
+        "round_short": _round_short_label(round_label),
+        "status": status,
+        "status_badge": status_badge,
+        "eliminated": status == "eliminated",
+        "series_record": series_record,
+        "series_wins": int(pst.get("series_wins", 0) or 0),
+        "source": pst.get("data_source") or "",
+        "source_kind": pst.get("source_kind") or "",
+        "pst": pst,
+        "series": series,
+    }
 
 
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
@@ -4169,6 +4251,7 @@ def legacy_takeaways_eliminated(player, team_name, pts, reb, ast, stl, blk, fg, 
 def render_legacy_tracker_page(team_name):
     """Legacy Tracker: frozen postmortem for eliminated teams; live forecast + sliders for active teams."""
     render_matchup_header(team_name)
+    render_playoff_matchup_ribbon(team_name)
     nick = fan_nick(team_name)
     is_elim = _is_home_eliminated(team_name)
     team_tri = (TEAM_ALIASES.get(team_name) or "").upper()
@@ -5121,10 +5204,11 @@ def render_player_playoff_story_hub(team_name, profile):
     role_lower = str(prof.get("role", "")).lower()
     reg_avg = season_averages(player)
 
+    mx = get_display_matchup(team_name)
     seed = int(profile.get("seed") or 8)
-    rnd = profile.get("round") or "Playoffs"
-    status = profile.get("status") or "Active"
-    opp = profile.get("current_opponent")
+    rnd = mx.get("round") or "Playoffs"
+    status = "Eliminated" if mx["eliminated"] else "Active"
+    opp = mx.get("opponent")
 
     # --- Hero ---
     logo = TEAM_LOGOS.get(team_name, "")
@@ -6024,11 +6108,14 @@ MATCHUP_INTEL_PAIR_HOOKS = {
 
 def intel_games_opponent_and_record(team_name):
     """Resolve opponent, game rows, wins, and round label for analysis."""
+    mx = get_display_matchup(team_name)
     prof = TEAM_PROFILES[team_name]
-    _, s = series_for_team(team_name)
+    s = mx.get("series")
+    if not s:
+        _, s = series_for_team(team_name)
     games = []
-    opp = None
-    round_label = prof.get("round", "Playoffs")
+    opp = mx.get("opponent") or None
+    round_label = mx.get("round") or prof.get("round", "Playoffs")
     if s:
         opp = s["b"] if team_name == s["a"] else s["a"]
         games = list(s.get("games") or [])
@@ -6327,13 +6414,14 @@ def _inject_matchup_intel_css():
 def render_matchup_intelligence(team_name):
     _inject_matchup_intel_css()
     prof = TEAM_PROFILES.get(team_name) or {}
-    opp_hint = (resolve_home_matchup_context_fast(team_name).get("opponent_display") or prof.get("current_opponent") or "opponent TBD")
+    mx = get_display_matchup(team_name)
     render_fan_page_hero(
         team_name,
         "Matchup Intelligence",
-        f"Fast preview first: {fan_nick(team_name)} vs {opp_hint}. Load the full scouting board when you want the deeper read.",
+        f"Fast preview first: {mx['team_nick']} vs {mx['opponent_nick']}. Load the full scouting board when you want the deeper read.",
         "SCOUTING BOARD",
     )
+    render_playoff_matchup_ribbon(team_name)
     axes = team_dashboard_lens(team_name).get("identity_axes") or prof.get("strengths", [])
     cols = st.columns(3)
     for col, label in zip(cols, list(axes)[:3]):
@@ -6344,6 +6432,7 @@ def render_matchup_intelligence(team_name):
             )
     load_key = f"load_matchup_intel_{team_name}"
     if not st.session_state.get(load_key):
+        render_loading_skeleton(2, "Scouting board on deck")
         if st.button("Load full matchup intelligence", key=load_key + "_btn"):
             st.session_state[load_key] = True
             st.rerun()
@@ -6778,9 +6867,40 @@ def playoff_status_debug_dataframe(use_demo_backup=None, api_refresh=None):
     return pd.DataFrame(rows)
 
 
+def render_loading_skeleton(lines=3, label="Loading…"):
+    """Lightweight placeholder while heavy sections fetch."""
+    e = html.escape
+    body = "".join('<div class="fan-skel-line"></div>' for _ in range(max(1, int(lines))))
+    st.markdown(
+        f'<motion class="fan-skel-wrap"><div class="fan-skel-label">{e(label)}</div>{body}</div>'.replace("motion", "div"),
+        unsafe_allow_html=True,
+    )
+
+
+def render_playoff_matchup_ribbon(team_name, stt=None):
+    """Broadcast-style matchup strip — same labels on every fan page."""
+    mx = get_display_matchup(team_name, stt)
+    e = html.escape
+    variant = "elim" if mx["eliminated"] else ("wait" if mx["status"] in ("awaiting opponent", "advanced") else "live")
+    opp_txt = f"vs {e(mx['opponent_nick'])}" if mx.get("opponent_nick") and mx["opponent_nick"] != "TBD" else ""
+    score_txt = e(mx["series_record"]) if mx["series_record"] and mx["series_record"] != "—" else ""
+    score_block = f'<span class="fan-ribbon-score">{score_txt}</span>' if score_txt else ""
+    st.markdown(
+        f'<div class="fan-matchup-ribbon fan-matchup-ribbon--{variant}">'
+        f'<span class="fan-ribbon-badge">{e(mx["status_badge"])}</span>'
+        f'<span><b>{e(mx["round_short"])}</b> · {opp_txt}</span>'
+        f'{score_block}'
+        f'<span class="fan-ribbon-muted">{mx["series_wins"]} series won · bracket sync</span>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_playoff_state_debug_expander(location_key="playoff_state"):
-    """Optional debug panel: one row per team from the unified playoff engine."""
-    with st.expander("Playoff state debug", expanded=False):
+    """Developer-only playoff engine table (gated by Show performance debug)."""
+    if not globals().get("SHOW_PERF_DEBUG", False):
+        return
+    with st.expander("Playoff state debug (developer)", expanded=False):
         use_demo, api_on = get_playoff_refresh_settings()
         st.caption(
             f"Unified bracket engine · API sync {'on' if api_on else 'off'} · "
@@ -6792,7 +6912,7 @@ def render_playoff_state_debug_expander(location_key="playoff_state"):
             use_container_width=True,
             hide_index=True,
         )
-        st.caption("Source: API = live NBA.com logs · fallback = demo second-round backup · static = Round 1 archive.")
+        st.caption("Source: API = live NBA.com logs · fallback = demo backup · static = Round 1 archive.")
 
 
 def _build_local_series_shell(team_name):
@@ -7908,7 +8028,7 @@ def _home_dashboard_fast_context(team_name):
 def _home_dashboard_live_data_bundle(team_name):
     """Network-heavy context for Home — resolve matchup + series in parallel, then merge scoreboard."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-        fh = ex.submit(resolve_home_matchup_context, team_name)
+        fh = ex.submit(resolve_home_matchup_context_fast, team_name)
         fs = ex.submit(lambda: series_for_team(team_name))
         hctx = fh.result(timeout=3.5)
         _k, s_active = fs.result(timeout=3.5)
@@ -7917,11 +8037,13 @@ def _home_dashboard_live_data_bundle(team_name):
 
 
 def _home_dashboard_perf_footer(t0, sections, fast_mode, api_calls, skipped_note=""):
-    elapsed_ms = (pytime.perf_counter() - t0) * 1000
-    sec_txt = " → ".join(sections) if sections else "(none)"
     if skipped_note:
         st.markdown(skipped_note, unsafe_allow_html=True)
-    with st.expander("Page status", expanded=False):
+    if not globals().get("SHOW_PERF_DEBUG", False):
+        return
+    elapsed_ms = (pytime.perf_counter() - t0) * 1000
+    sec_txt = " → ".join(sections) if sections else "(none)"
+    with st.expander("Page status (developer)", expanded=False):
         st.caption(f"Loaded in {elapsed_ms:.0f} ms.")
         st.caption("Quick view is on." if fast_mode else "Live view is on.")
         st.caption(f"Feed checks this run: {html.escape(str(api_calls))}")
@@ -7952,6 +8074,8 @@ def render_playoff_command_center(team_name):
         html.escape(ident["stakes"]),
         badge="TONIGHT'S FEEL",
     )
+    render_playoff_matchup_ribbon(team_name)
+    sections.append("matchup_ribbon")
     if is_eliminated:
         st.success(
             f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
@@ -8330,7 +8454,7 @@ def render_playoff_command_center(team_name):
     )
     sections.append("footer_caption")
     render_playoff_state_debug_expander("home")
-    sections.append("playoff_status_debug")
+    sections.append("playoff_status_debug_optional")
 
     live_flag = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES))
     perf_fast = (not live_flag) or is_eliminated
@@ -8820,6 +8944,7 @@ def render_bracket(favorite_team=None):
         f"Bracket auto-updates every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s from NBA.com when sync is on "
         f"({'API + fallback' if use_demo and api_on else 'fallback only' if use_demo else 'API only'})."
     )
+    render_playoff_matchup_ribbon(favorite_team)
     stt = get_merged_playoff_state()
     east_fr = stt["east_fr"]
     west_fr = stt["west_fr"]
@@ -10297,6 +10422,7 @@ def render_previous_rounds_history(team_name):
     profile = TEAM_PROFILES[team_name]
     stt = get_merged_playoff_state()
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
+    render_playoff_matchup_ribbon(team_name)
     team_section_header("Round-by-round results", "📜")
     fr_shell = None
     for _k, s in (stt.get("first") or {}).items():
@@ -10395,8 +10521,10 @@ def _render_live_gc_layer1(team_name, profile):
 
 def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None):
     """Small debug block that never triggers API calls by itself."""
+    if not globals().get("SHOW_PERF_DEBUG", False):
+        return
     errors = errors or []
-    with st.expander("Feed diagnostics", expanded=False):
+    with st.expander("Feed diagnostics (developer)", expanded=False):
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Selected team", team_name)
         d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
@@ -10632,10 +10760,11 @@ def _render_manual_live_game_center(team_name, parsed):
 def render_live_game_center(team_name, profile):
     """Professional, fail-safe Live Game Center with broadcast-first rendering."""
     ident = team_fan_identity(team_name)
+    mx = get_display_matchup(team_name)
     render_fan_page_hero(
         team_name,
         "Live Game Center",
-        f"{ident['stakes']} The room opens first; live details arrive when you ask for them.",
+        f"{ident['stakes']} {mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — scoreboard first, then the full broadcast stack.",
         "GAME NIGHT",
     )
     if st.session_state.get("_live_gc_sel_team") != team_name:
@@ -10681,20 +10810,18 @@ def render_live_game_center(team_name, profile):
         else:
             st.caption("Broadcast shell loads first. Live score, injuries, box score, and highlights load without blocking the page.")
 
+        render_playoff_matchup_ribbon(team_name)
     if not st.session_state.get(layer_key):
-        st.markdown(
-            f"<div class='broadcast-card'><div class='broadcast-card-title'>Awaiting Scoreboard Row</div>"
-            f"<div style='font-size:13px;color:#334155;line-height:1.45'>"
-            f"{html.escape(fan_nick(team_name))} vs {html.escape(fan_nick(opp) if opp else 'opponent')} is ready to monitor. "
-            "Tap refresh when you want to pull live league feeds.</div></div>",
-            unsafe_allow_html=True,
-        )
+        _render_live_gc_layer1(team_name, profile)
+        render_loading_skeleton(2, "Pulling live scoreboard row…")
+        st.caption("Tap **Refresh Live Game Data** for win probability, top plays, and shot charts.")
         return
 
     snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
 
     if not snap or not snap.get("game_found"):
         msg = (snap or {}).get("detection_message") or "The league feed is quiet right now."
+        _render_live_gc_layer1(team_name, profile)
         if (snap or {}).get("detection_tier") == "scheduled_today":
             st.warning("Game scheduled today — live feed not detected yet.")
         elif (snap or {}).get("detection_tier") == "likely_live_feed_gap":
@@ -10712,6 +10839,7 @@ def render_live_game_center(team_name, profile):
     box_df = pd.DataFrame()
 
     _render_broadcast_header(team_name, parsed, snap, series_line, prob)
+    st.caption(f"Series board: **{series_line or mx['series_record']}** · bracket sync")
     if parsed["phase"] == "pregame":
         if snap.get("game_status") == "starting soon":
             st.warning(f"**Game starting soon** · starts in **{snap.get('countdown') or 'soon'}**")
@@ -11244,6 +11372,13 @@ def render_team_history_leaders_page(team_name):
     current_entries = [p for p in legends if _is_current_history_player(p["name"], current_names) or p.get("current_watch")]
     _inject_history_leaders_css()
     render_fan_page_hero(team_name, f"{fan_nick(team_name)} Franchise Playoff Legends", data.get("context", "Franchise history and current-player chase board."), "TEAM HISTORY LEADERS")
+    render_playoff_matchup_ribbon(team_name)
+    mx = get_display_matchup(team_name)
+    if not mx["eliminated"]:
+        st.caption(
+            f"Live bracket: **{mx['round_short']}** · **{mx['series_record']}** vs {mx['opponent_nick']} · "
+            f"**{mx['series_wins']}** series won — chase boards update as the run continues."
+        )
     st.markdown("<div class='hist-note'><b>Data note:</b> this page uses curated franchise-history fallback boards with estimates where full historical playoff leader feeds are not available. Estimated columns are labeled as estimates; live/current-player context comes from the selected team's roster helpers.</div>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
@@ -11399,8 +11534,6 @@ elif page == "Matchup Intelligence":
     render_matchup_intelligence(favorite_team)
 
 elif page == "Previous Rounds":
-    st.header(f"{profile['conference']} Previous Rounds")
-    render_matchup_header(favorite_team, first_round=True)
     render_previous_rounds_history(favorite_team)
 
 elif page == "Live Game Center":
