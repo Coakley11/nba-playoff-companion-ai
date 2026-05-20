@@ -144,6 +144,39 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .fan-skel-line:nth-child(2) { width: 88%; animation-delay: .15s; }
 .fan-skel-line:nth-child(3) { width: 72%; animation-delay: .3s; }
 @keyframes fanSkelPulse { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.fan-sec {
+  margin: 20px 0 0; padding: 10px 14px 8px;
+  border-left: 4px solid var(--team-primary, #38bdf8);
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, var(--team-accent-soft, rgba(56,189,248,.12)), transparent 72%);
+}
+.fan-sec--live { border-left-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,.18), transparent 70%); }
+.fan-sec--soon { border-left-color: #f59e0b; background: linear-gradient(90deg, rgba(245,158,11,.16), transparent 70%); }
+.fan-sec--elim { border-left-color: #94a3b8; opacity: .95; }
+.fan-sec--broadcast { border-left-color: var(--team-accent, #38bdf8); }
+.fan-sec-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fan-sec-icon { font-size: 1.1rem; line-height: 1; }
+.fan-sec-title { font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--team-accent, #64748b); }
+.fan-sec-cap { font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4; font-weight: 600; }
+.fan-sec-body {
+  border: 1px solid var(--team-border, rgba(148,163,184,.28));
+  border-top: none; border-radius: 0 0 16px 16px;
+  padding: 14px 16px; margin: 0 0 16px;
+  background: linear-gradient(180deg, #fff 0%, var(--team-card-tint, #f8fafc) 100%);
+  box-shadow: 0 2px 10px rgba(15,23,42,.06);
+}
+.fan-sec-body--empty { color: #64748b; font-size: 13px; line-height: 1.45; font-style: italic; }
+.home-live-strip--soon { animation: homeSoonPulse 2.6s ease-in-out infinite; }
+@keyframes homeSoonPulse {
+  0%, 100% { box-shadow: 0 12px 40px rgba(245,158,11,.2); }
+  50% { box-shadow: 0 14px 48px rgba(251,191,36,.38); }
+}
+.home-live-badge {
+  display: inline-block; font-size: 10px; font-weight: 950; letter-spacing: .14em;
+  padding: 4px 10px; border-radius: 999px; margin-bottom: 8px;
+  background: rgba(239,68,68,.35); border: 1px solid rgba(252,165,165,.65); color: #fecaca;
+}
+.home-live-strip--soon .home-live-badge { background: rgba(245,158,11,.3); border-color: rgba(253,224,71,.55); color: #fde68a; }
 /* Player Playoff Story Hub */
 .pp-wrap { max-width: 1280px; margin: 0 auto; }
 .pp-hero {
@@ -1022,7 +1055,8 @@ margin:0 0 18px 0;box-shadow:0 12px 40px rgba(0,0,0,0.35);display:flex;gap:14px;
     )
     st.caption(f"**{exit_line}** · Analysis is team-specific and tied to this postseason run.")
 
-    team_section_header("1 · Season reflection", "📋")
+    if render_fan_section("1 · Season reflection", "📋", caption="What worked and what ended the run.", tone="elim"):
+        render_fan_section_open()
     with st.container(border=True):
         st.markdown(f"**What went right**\n\n{ref['went_right']}")
         st.markdown(f"**What caused elimination**\n\n{ref['elimination_cause']}")
@@ -1244,6 +1278,8 @@ FALLBACK_TOP_PLAYS = {
 # ==========================================================
 PLAYOFF_STATE_CACHE_TTL_SEC = 90
 PLAYOFF_BRACKET_REFRESH_MS = 60000
+LIVE_GC_AUTO_LOAD_STATUSES = frozenset({"live", "starting soon", "final"})
+LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 
 def safe_int(x, default=0):
     try: return int(x or default)
@@ -5305,6 +5341,7 @@ def render_player_playoff_story_hub(team_name, profile):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 2 · Series ---
+
     team_section_header("2 · Series-by-series breakdown", "📊")
     st.caption("Series 1 is the **first** playoff matchup in this log (earliest games), then Series 2 for the next opponent, and so on.")
     chunks = _series_chunks_playoff_order(df, team_tri)
@@ -5346,6 +5383,7 @@ def render_player_playoff_story_hub(team_name, profile):
             st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 3 · Pressure & legacy ---
+
     team_section_header("3 · Pressure & legacy", "🎯")
     pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
     rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
@@ -5412,6 +5450,7 @@ def render_player_playoff_story_hub(team_name, profile):
         )
 
     # --- 4 · Historical comparisons ---
+
     team_section_header("4 · Historical comparison engine", "📚")
     for line in _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower):
         with st.container(border=True):
@@ -5420,6 +5459,7 @@ def render_player_playoff_story_hub(team_name, profile):
         st.caption(f"Prior playoff sample: **{prev_season}** ({prev_summary.get('GP', 0)} games) used only when the API returned a log.")
 
     # --- 5 · Clutch impact ---
+
     team_section_header("5 · Clutch impact", "⏱️")
     df_c = df.copy()
     df_c["_impact"] = df_c.apply(_game_impact_score, axis=1)
@@ -5447,12 +5487,14 @@ def render_player_playoff_story_hub(team_name, profile):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # --- 6 · Narratives ---
+
     team_section_header("6 · Narrative storylines", "📰")
     for s in _narrative_storylines(player, team_name, cur_summary, reg_avg, prev_summary, prof):
         with st.container(border=True):
             st.markdown(s)
 
     # --- 7 · Visuals ---
+
     team_section_header("7 · Progression & raw log", "📈")
     tcol1, tcol2 = st.columns((1, 1))
     with tcol1:
@@ -5537,6 +5579,7 @@ def create_boxscore_df(game_box):
             stt = p.get("statistics", {})
             rows.append({"Team":tri,"Player":p.get("name",""),"MIN":stt.get("minutes",""),"PTS":stt.get("points",0),"REB":stt.get("reboundsTotal",0),"AST":stt.get("assists",0),"STL":stt.get("steals",0),"BLK":stt.get("blocks",0),"TO":stt.get("turnovers",0),"PF":stt.get("foulsPersonal",0),"FGM":stt.get("fieldGoalsMade",0),"FGA":stt.get("fieldGoalsAttempted",0),"3PM":stt.get("threePointersMade",0),"3PA":stt.get("threePointersAttempted",0),"+/-":stt.get("plusMinusPoints",0)})
     return pd.DataFrame(rows)
+
 
 def min_to_float(v):
     try:
@@ -5895,7 +5938,8 @@ def render_matchup_lineups_page(team_name, profile):
         unsafe_allow_html=True,
     )
 
-    st.markdown("### Starting Lineup Matchups")
+    if render_fan_section("Starting lineup matchups", "📋", caption="Estimated playoff preview boards by position.", tone="default"):
+        render_fan_section_open()
     positions = ["PG", "SG", "SF", "PF", "C"]
     cards = []
     swing = None
@@ -6016,6 +6060,8 @@ def render_matchup_lineups_page(team_name, profile):
                 st.dataframe(rotation.drop(columns=[c for c in ["MIN_SORT"] if c in rotation.columns]).head(12), use_container_width=True, hide_index=True)
             else:
                 st.dataframe(pd.DataFrame({"Player": current_roster_names(opp, limit=12)}), use_container_width=True, hide_index=True)
+
+    render_fan_section_close()
 
 
 # ==========================================================
@@ -6477,11 +6523,14 @@ def render_matchup_intelligence(team_name):
         if num == "8":
             pv = max(5, min(100, int(meta.get("pressure", 50))))
             extra = f'<div class="mi-bar" title="Fan stress meter for {html.escape(fan_nick(team_name))} (higher = heavier)"><span style="width:{pv}%"></span></div>'
+        render_fan_section_header(title, icon, caption=f"Scouting slice {num}", tone="default")
+        render_fan_section_open()
         st.markdown(
             f"<div class='mi-card {cls}'><div class='mi-num'>SECTION {num}</div>"
             f"<div class='mi-title'>{safe_title}{mom_pill}</div><div class='mi-body'>{b}</div>{extra}</div>",
             unsafe_allow_html=True,
         )
+        render_fan_section_close()
 
 
 # ==========================================================
@@ -6530,10 +6579,51 @@ def team_logo_html(team, size=28):
     return f"<img src='{TEAM_LOGOS[team]}' width='{size}' style='vertical-align:middle;margin-right:8px;'>"
 
 
-def team_section_header(title, icon="🏀"):
-    """Colorful section divider using the active team palette."""
-    safe = html.escape(str(title))
-    st.markdown(f"<div class='team-sec'>{icon} {safe}</div>", unsafe_allow_html=True)
+def render_fan_section_header(title, icon="🏀", caption=None, tone="default"):
+    e = html.escape
+    cap = f"<div class='fan-sec-cap'>{e(caption)}</div>" if caption else ""
+    st.markdown(
+        f"<div class='fan-sec fan-sec--{e(tone)}'>"
+        f"<div class='fan-sec-row'><span class='fan-sec-icon'>{e(icon)}</span>"
+        f"<span class='fan-sec-title'>{e(title)}</span></div>{cap}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_fan_section(title, icon="🏀", caption=None, tone="default", *, loading=False, empty=None):
+    render_fan_section_header(title, icon, caption, tone)
+    if loading:
+        render_loading_skeleton(2, caption or "Loading…")
+        return False
+    if empty:
+        st.markdown(f'<div class="fan-sec-body fan-sec-body--empty">{html.escape(empty)}</div>', unsafe_allow_html=True)
+        return False
+    return True
+
+
+def render_fan_section_open():
+    st.markdown('<div class="fan-sec-body">', unsafe_allow_html=True)
+
+
+def render_fan_section_close():
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _team_live_game_watch(team_name):
+    try:
+        return get_current_or_upcoming_game(team_name)
+    except Exception:
+        return None
+
+
+def _live_gc_should_auto_load(snap):
+    if not snap or not snap.get("game_found"):
+        return False
+    return str(snap.get("game_status") or "") in LIVE_GC_AUTO_LOAD_STATUSES
+
+
+def team_section_header(title, icon="🏀", caption=None, tone="default"):
+    render_fan_section_header(title, icon, caption, tone)
 
 
 def player_fan_badges(summary, injury_status=None):
@@ -7868,12 +7958,15 @@ def render_home_live_hub_strip(team_name, fb_prefetched=None):
         aws = safe_int(away.get("score", 0))
         stt = (g.get("gameStatusText") or "")[:56]
         nick = fan_nick(team_name)
+        badge = ""
         if phase == "live":
             mod = "home-live-strip home-live-strip--live"
             title = "🔴 LIVE NOW · Game in progress"
+            badge = '<div class="home-live-badge">ON AIR · LIVE</div>'
         elif phase == "pregame" and soon:
             mod = "home-live-strip home-live-strip--soon"
             title = "⏳ GAME STARTING SOON"
+            badge = '<div class="home-live-badge">TIPOFF SOON</div>'
         elif phase == "postgame":
             mod = "home-live-strip home-live-strip--post"
             title = "📼 FINAL IN THE FEED"
@@ -7891,6 +7984,7 @@ def render_home_live_hub_strip(team_name, fb_prefetched=None):
         st.markdown(
             f"""
 <div class="{mod}">
+  {badge}
   <div class="home-live-strip-title">{title}</div>
   <div class="home-live-strip-score">{html.escape(score_line)}</div>
   <div class="home-live-strip-sub">{sub}</div>
@@ -7965,16 +8059,25 @@ def render_home_current_game_card(team_name):
         button_label = "Go to Live Game Center"
 
     series_line, _series_src = _live_series_board(away_name, home_name)
+    mx = get_display_matchup(team_name)
+    rnd = mx.get("round_short") or (game.get("seriesText") or "Playoffs")
+    if status == "live":
+        badge = '<div class="home-live-badge">ON AIR · LIVE</div>'
+    elif status == "starting soon":
+        badge = '<div class="home-live-badge">TIPOFF SOON</div>'
+    else:
+        badge = ""
     st.markdown(
         f"""
 <div class="{tone}">
+  {badge}
   <div class="home-live-strip-title">{html.escape(title)}</div>
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div style="text-align:center"><img src="{html.escape(TEAM_LOGOS.get(away_name, ''))}" width="58"/><div style="font-size:12px;font-weight:900">{html.escape(away_name)}</div></div>
     <div style="text-align:center;flex:1;min-width:220px">
       <div class="home-live-strip-score">{html.escape(score)}</div>
       <div class="home-live-strip-sub">{html.escape(subtitle)}</div>
-      <div class="home-live-strip-sub">Round: {html.escape(str((game.get('seriesText') or TEAM_PROFILES.get(team_name, {}).get('round') or 'Playoffs')))} · Series: {html.escape(series_line or '3-3 / updating')}</div>
+      <div class="home-live-strip-sub">Round: {html.escape(str(rnd))} · Series: {html.escape(series_line or mx.get('series_record') or 'updating')}</div>
       <div class="home-live-strip-sub">Source: {html.escape(str(snap.get('data_source') or 'scoreboard'))}</div>
     </div>
     <div style="text-align:center"><img src="{html.escape(TEAM_LOGOS.get(home_name, ''))}" width="58"/><div style="font-size:12px;font-weight:900">{html.escape(home_name)}</div></div>
@@ -8184,7 +8287,13 @@ def render_playoff_command_center(team_name):
     sections.append("emphasis_strip")
 
     sec1_title = "1 · How the run ended" if is_eliminated else "1 · Where the series stands"
-    st.markdown(f'<div class="cmd-sec">{html.escape(sec1_title)}</div>', unsafe_allow_html=True)
+    if render_fan_section(
+        sec1_title,
+        "📊",
+        caption="Playoff mood, seed, and the game log for this chapter.",
+        tone="elim" if is_eliminated else "default",
+    ):
+        render_fan_section_open()
     snap_cols = st.columns(4)
     status_txt = (hctx.get("ctx") or {}).get("status_text") if hctx.get("advanced") else series_status_text(team_name, s_active)
     adv_like = hctx.get("advanced") or hctx.get("bracket_series")
@@ -8231,8 +8340,15 @@ def render_playoff_command_center(team_name):
     elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
     sections.append("series_board")
+    render_fan_section_close()
 
-    st.markdown("<div class='cmd-sec'>2 · Tonight's runway</div>", unsafe_allow_html=True)
+    if render_fan_section(
+        "2 · Tonight's runway",
+        "🛫",
+        caption="Next tip, opponent, and live runway.",
+        tone="soon" if effective_live else "default",
+    ):
+        render_fan_section_open()
     if is_eliminated:
         with st.expander("Playoff schedule archive (no upcoming tip for this team)", expanded=False):
             with st.container(border=True):
@@ -8260,13 +8376,17 @@ def render_playoff_command_center(team_name):
                     )
                 )
     sections.append("runway")
+    render_fan_section_close()
 
-    st.markdown('<div class="cmd-sec">3 · What it feels like</div>', unsafe_allow_html=True)
-    render_team_outlook(team_name, compact_home=True, series_obj=current_series_obj)
-    sections.append("outlook_compact")
+    if render_fan_section("3 · What it feels like", "🎙️", caption="Short broadcast read on the series.", tone="default"):
+        render_fan_section_open()
+        render_team_outlook(team_name, compact_home=True, series_obj=current_series_obj)
+        sections.append("outlook_compact")
+        render_fan_section_close()
 
     sec4_title = "4 · Next-round lens" if hctx.get("advanced") else "4 · Series at a glance"
-    st.markdown(f'<div class="cmd-sec">{html.escape(sec4_title)}</div>', unsafe_allow_html=True)
+    if render_fan_section(sec4_title, "🔭", caption="Opponent, series score, and latest game.", tone="default"):
+        render_fan_section_open()
     fsnap = hctx.get("fast_snapshot") or get_fast_series_snapshot(team_name)
     if hctx.get("advanced"):
         opps = hctx.get("opponents") or []
@@ -8295,8 +8415,10 @@ def render_playoff_command_center(team_name):
                 f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
             )
     sections.append("fast_series_snapshot")
+    render_fan_section_close()
 
-    st.markdown("<div class='cmd-sec'>5 · Who's available</div>", unsafe_allow_html=True)
+    if render_fan_section("5 · Who's available", "🩹", caption="Injury snapshot when live mode is on.", tone="default"):
+        render_fan_section_open()
     if injury_live:
         df_inj, _ = get_injury_report(team_name)
         if df_inj is not None and not df_inj.empty:
@@ -8309,6 +8431,7 @@ def render_playoff_command_center(team_name):
             "Injuries stay tucked away in quick view. Tap **Go live** when you want the latest availability check."
         )
         sections.append("injury_snapshot_fast_placeholder")
+    render_fan_section_close()
 
     def sec_injuries():
         with st.container(border=True):
@@ -10001,11 +10124,14 @@ def _live_gc_whatif_panel(favorite_team, margin, period, is_home, base_prob):
 
 def _live_gc_section(title, icon, fn, *args, **kwargs):
     """Render a Live GC block; failures stay local."""
-    team_section_header(title, icon)
+    if not render_fan_section(title, icon, tone="broadcast"):
+        return
+    render_fan_section_open()
     try:
         fn(*args, **kwargs)
     except Exception as exc:
         st.caption(f"{title} could not load right now ({exc}).")
+    render_fan_section_close()
 
 
 def _live_center_debug_probe():
@@ -10423,7 +10549,8 @@ def render_previous_rounds_history(team_name):
     stt = get_merged_playoff_state()
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
     render_playoff_matchup_ribbon(team_name)
-    team_section_header("Round-by-round results", "📜")
+    if render_fan_section("Round-by-round results", "📜", caption="Every series you played this postseason."):
+        render_fan_section_open()
     fr_shell = None
     for _k, s in (stt.get("first") or {}).items():
         if team_name in (s.get("a"), s.get("b")):
@@ -10461,6 +10588,7 @@ def render_previous_rounds_history(team_name):
                 continue
             note = f"{s.get('winner')} wins the {round_label}." if s.get("winner") else None
             render_series_history_card(team_name, opp, games, round_label, note)
+    render_fan_section_close()
 
 
 # ==========================================================
@@ -10775,22 +10903,24 @@ def render_live_game_center(team_name, profile):
 
     opp, _round_name, _series_text, _source = _local_live_gc_series_context(team_name, profile)
     layer_key = f"live_gc__load_{team_name}"
-    quick_snap = None
-    try:
-        quick_snap = get_current_or_upcoming_game(team_name)
-        if quick_snap and quick_snap.get("game_found"):
-            st.session_state[layer_key] = True
-    except Exception:
-        quick_snap = None
-    if AUTOREFRESH_AVAILABLE and quick_snap and quick_snap.get("game_status") in ("starting soon", "live"):
+    adv_key = f"live_gc__advanced_{team_name}"
+    watch_snap = _team_live_game_watch(team_name)
+    auto_load = _live_gc_should_auto_load(watch_snap)
+    if auto_load:
+        st.session_state[layer_key] = True
+    if AUTOREFRESH_AVAILABLE and watch_snap and watch_snap.get("game_status") in ("starting soon", "live"):
         st_autorefresh(
-            interval=45000 if quick_snap.get("game_status") == "starting soon" else 30000,
+            interval=45000 if watch_snap.get("game_status") == "starting soon" else 30000,
             key=f"live_gc_auto_refresh_{team_name}",
         )
+
+    render_playoff_matchup_ribbon(team_name)
+
     col_a, col_b = st.columns([1, 3])
     with col_a:
         if st.button("Refresh Live Game Data", key=f"{layer_key}_btn", type="primary"):
             st.session_state[layer_key] = True
+            st.session_state[adv_key] = True
             for fn in (
                 get_live_games,
                 get_current_or_today_game,
@@ -10805,16 +10935,28 @@ def render_live_game_center(team_name, profile):
                     pass
             st.rerun()
     with col_b:
-        if quick_snap and quick_snap.get("game_found"):
-            st.caption(f"Detected **{quick_snap.get('away_team')} @ {quick_snap.get('home_team')}** · `{quick_snap.get('game_status')}` · source: {quick_snap.get('data_source')}")
+        if watch_snap and watch_snap.get("game_found"):
+            ws = str(watch_snap.get("game_status") or "")
+            if ws == "live":
+                st.caption("🔴 **Live feed connected** — scoreboard loads automatically.")
+            elif ws == "starting soon":
+                st.caption("⏱️ **Starting soon** — basic scoreboard syncs automatically.")
+            else:
+                st.caption(
+                    f"Detected **{watch_snap.get('away_team')} @ {watch_snap.get('home_team')}** · "
+                    f"`{ws}` · source: {watch_snap.get('data_source')}"
+                )
+        elif auto_load:
+            st.caption("Connecting to the live scoreboard feed…")
         else:
-            st.caption("Broadcast shell loads first. Live score, injuries, box score, and highlights load without blocking the page.")
+            st.caption("Tap refresh when you want the latest league scoreboard row.")
 
-        render_playoff_matchup_ribbon(team_name)
     if not st.session_state.get(layer_key):
         _render_live_gc_layer1(team_name, profile)
-        render_loading_skeleton(2, "Pulling live scoreboard row…")
-        st.caption("Tap **Refresh Live Game Data** for win probability, top plays, and shot charts.")
+        if auto_load:
+            render_loading_skeleton(2, "Connecting live scoreboard…")
+        else:
+            st.caption("Tap **Refresh Live Game Data** for live scores and game status.")
         return
 
     snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
@@ -10861,6 +11003,20 @@ def render_live_game_center(team_name, profile):
     if box_df is not None and not box_df.empty:
         prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"], box_df)
 
+    if not st.session_state.get(adv_key):
+        render_fan_section(
+            "Full broadcast stack",
+            "📡",
+            caption="Probabilities, top performers, shot charts, and injuries open on demand.",
+            tone="broadcast",
+        )
+        if st.button("Open probabilities, performers & charts", type="primary", key=f"{adv_key}_open"):
+            st.session_state[adv_key] = True
+            st.rerun()
+        st.caption("Live score and status stay on screen above.")
+        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
+        return
+
     st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1])
     with c1:
@@ -10876,34 +11032,45 @@ def render_live_game_center(team_name, profile):
         unsafe_allow_html=True,
     )
 
-    team_section_header("Top performers", "⭐")
-    _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
+    if render_fan_section("Top performers", "⭐", caption="Leaders from the live box score.", tone="broadcast"):
+        render_fan_section_open()
+        _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
+        render_fan_section_close()
 
-    team_section_header("Lineups / on-court estimate", "📋")
-    st.caption("If NBA live on-court lineup data is unavailable, this shows the projected or highest-minute active group and labels it as estimated.")
-    _render_lineup_board(team_name, parsed["opp_name"], box_df)
+    if render_fan_section(
+        "Lineups / on-court estimate",
+        "📋",
+        caption="Projected or highest-minute groups when official on-court data is unavailable.",
+        tone="broadcast",
+    ):
+        render_fan_section_open()
+        st.caption("If NBA live on-court lineup data is unavailable, this shows the projected or highest-minute active group and labels it as estimated.")
+        _render_lineup_board(team_name, parsed["opp_name"], box_df)
+        render_fan_section_close()
 
     if parsed["phase"] == "pregame":
-        team_section_header("Pregame command board", "⏳")
-        p1, p2, p3, p4 = st.columns(4)
-        p1.metric("Tipoff", snap.get("countdown") or "today")
-        p2.metric("Round", game_row.get("seriesText") or profile.get("round", "Playoffs"))
-        p3.metric("Series", series_line or "3-3 / updating")
-        p4.metric("Preview win %", f"{prob}%")
-        st.markdown("**Major storyline**")
-        st.write(
-            f"{fan_nick(team_name)} vs {fan_nick(parsed['opp_name'])}: live possessions will decide the series math, "
-            "but the app will not advance or eliminate anyone until the fourth win is final."
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**{fan_nick(team_name)} key players**")
-            for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:5]:
-                st.write(f"• {nm}")
-        with c2:
-            st.markdown(f"**{fan_nick(parsed['opp_name'])} key players**")
-            for nm in (TEAM_PROFILES.get(parsed["opp_name"], {}).get("starters") or [])[:5]:
-                st.write(f"• {nm}")
+        if render_fan_section("Pregame command board", "⏳", caption="Tipoff window and series preview.", tone="broadcast"):
+            render_fan_section_open()
+            p1, p2, p3, p4 = st.columns(4)
+            p1.metric("Tipoff", snap.get("countdown") or "today")
+            p2.metric("Round", game_row.get("seriesText") or profile.get("round", "Playoffs"))
+            p3.metric("Series", series_line or "3-3 / updating")
+            p4.metric("Preview win %", f"{prob}%")
+            st.markdown("**Major storyline**")
+            st.write(
+                f"{fan_nick(team_name)} vs {fan_nick(parsed['opp_name'])}: live possessions will decide the series math, "
+                "but the app will not advance or eliminate anyone until the fourth win is final."
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**{fan_nick(team_name)} key players**")
+                for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:5]:
+                    st.write(f"• {nm}")
+            with c2:
+                st.markdown(f"**{fan_nick(parsed['opp_name'])} key players**")
+                for nm in (TEAM_PROFILES.get(parsed["opp_name"], {}).get("starters") or [])[:5]:
+                    st.write(f"• {nm}")
+            render_fan_section_close()
 
     with st.expander("Full styled box score", expanded=False):
         box_key = f"live_gc__box_{team_name}_{gid}"
@@ -11386,22 +11553,29 @@ def render_team_history_leaders_page(team_name):
     c2.metric("Current players highlighted", len(current_entries))
     c3.metric("History mode", "Curated estimates")
 
-    st.markdown("<div class='hist-section'>1 - Franchise Legends Overview</div>", unsafe_allow_html=True)
+    if render_fan_section("Franchise legends overview", "🏆", caption="Top franchise playoff icons on the curated board.", tone="default"):
+        render_fan_section_open()
     st.markdown("<div class='hist-grid'>" + "".join(_history_card_html(team_name, p, current=(_is_current_history_player(p["name"], current_names) or p.get("current_watch"))) for p in legends[:10]) + "</div>", unsafe_allow_html=True)
+    render_fan_section_close()
 
-    st.markdown("<div class='hist-section'>2 - Franchise Playoff Leaders</div>", unsafe_allow_html=True)
+    if render_fan_section("Franchise playoff leaders", "📊", caption="Sortable leaderboard from curated history data.", tone="default"):
+        render_fan_section_open()
     df = _history_table_df(legends, current_names)
     sort_label = st.selectbox("Sort leaderboard by", ["Total playoff points", "Playoff points per game", "Rebounds", "Assists", "Steals", "Blocks", "Three-pointers", "40-point playoff games", "30-point playoff games", "Playoff games played", "Finals appearances", "Championships"], key=f"history_sort_{team_name}")
     show_df = df.sort_values(_history_sort_col(sort_label), ascending=False).reset_index(drop=True)
     render_fan_stat_table(show_df, team_name)
+    render_fan_section_close()
 
-    st.markdown("<div class='hist-section'>3 - Current Players Climbing the List</div>", unsafe_allow_html=True)
+    if render_fan_section("Current players climbing the list", "📈", caption="Roster names chasing franchise milestones.", tone="default"):
+        render_fan_section_open()
     if current_entries:
         st.markdown("<div class='hist-grid'>" + "".join(_history_card_html(team_name, p, current=True) for p in current_entries) + "</div>", unsafe_allow_html=True)
     else:
         st.info("No current roster player is on this curated top board yet. A deep run is how someone starts forcing their way onto it.")
+    render_fan_section_close()
 
-    st.markdown("<div class='hist-section'>4 - Chase / Projection Storylines</div>", unsafe_allow_html=True)
+    if render_fan_section("Chase / projection storylines", "🎯", caption="Milestone paths for active players.", tone="default"):
+        render_fan_section_open()
     if current_entries:
         for p in current_entries:
             st.markdown(f"**{p['name']} history watch**")
@@ -11411,8 +11585,10 @@ def render_team_history_leaders_page(team_name):
             st.markdown("<div class='hist-milestone-grid'>" + "".join(milestone_html) + "</div>", unsafe_allow_html=True)
     else:
         st.caption("Milestone cards appear when a current player is on the franchise board.")
+    render_fan_section_close()
 
-    st.markdown("<div class='hist-section'>5 - Player Comparison Cards</div>", unsafe_allow_html=True)
+    if render_fan_section("Player comparison cards", "⚖️", caption="Side-by-side legend vs current comparisons.", tone="default"):
+        render_fan_section_open()
     cards = []
     by_name = {p["name"]: p for p in legends}
     for cur in current_entries[:3]:
@@ -11423,8 +11599,10 @@ def render_team_history_leaders_page(team_name):
         st.markdown("<div class='hist-compare-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
     else:
         st.caption("Comparison cards appear when a current player is part of the curated history board.")
+    render_fan_section_close()
 
-    st.markdown("<div class='hist-section'>6 - Milestones Within Reach</div>", unsafe_allow_html=True)
+    if render_fan_section("Milestones within reach", "🏁", caption="What is still on the table this run.", tone="default"):
+        render_fan_section_open()
     if current_entries:
         rows = []
         for cur in current_entries:
@@ -11433,6 +11611,8 @@ def render_team_history_leaders_page(team_name):
         render_fan_stat_table(pd.DataFrame(rows), team_name)
     else:
         st.info("No current-player milestones yet for this team board.")
+    render_fan_section_close()
+
 
 
 # ==========================================================
@@ -11460,7 +11640,6 @@ PAGE_LABEL_ALIASES = {
     "🏀 Legacy Tracker": "👑 Legacy Tracker",
     "🏀 Previous Rounds": "📜 Previous Rounds",
 }
-
 
 def _sidebar_team_label(team_name):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
