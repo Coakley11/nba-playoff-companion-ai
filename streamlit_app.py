@@ -474,7 +474,7 @@ TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Philadelphia 76ers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
     "Philadelphia 76ers": {"seed":7,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"New York Knicks","first_round_opponent":"Boston Celtics","first_round_result":"Defeated Boston Celtics, 4-3","starters":["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],"subs":["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"],"strengths":["Embiid pressure","Maxey speed","Paul George wing scoring","free-throw pressure"],"concerns":["Embiid health","transition defense","bench depth"]},
     "Detroit Pistons": {"seed":1,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"],"strengths":["Cade Cunningham control","Duren rebounding","young athleticism","transition pressure"],"concerns":["late-game execution","playoff inexperience","half-court droughts"]},
-    "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["Darius Garland","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Garland playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
+    "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Harden playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
     "Oklahoma City Thunder": {"seed":1,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","Chet rim protection","spacing","pace"],"concerns":["Spurs length","physicality","late-game pressure"]},
     "Los Angeles Lakers": {"seed":4,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"],"strengths":["LeBron control","Anthony Davis defense","rim pressure","playoff experience"],"concerns":["transition defense","age","three-point consistency"]},
     "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
@@ -522,7 +522,7 @@ PLAYER_POSITION_OVERRIDES = {
     "Mitchell Robinson": "C",
     "Jordan Clarkson": "SG",
   # Cleveland Cavaliers
-    "Darius Garland": "PG",
+    "James Harden": "PG",
     "Donovan Mitchell": "SG",
     "Max Strus": "SF",
     "Evan Mobley": "PF",
@@ -591,6 +591,55 @@ PLAYER_POSITION_OVERRIDES = {
     "Alperen Sengun": "C",
     "Devin Booker": "SG",
     "Kevin Durant": "SF",
+}
+
+# Curated current playoff starting five + bench for this app's playoff universe.
+# Takes priority over stale TEAM_PROFILES / API roster rows when building matchup boards.
+CURRENT_PLAYOFF_LINEUPS = {
+    "New York Knicks": {
+        "PG": "Jalen Brunson", "SG": "Mikal Bridges", "SF": "OG Anunoby", "PF": "Josh Hart", "C": "Karl-Anthony Towns",
+        "bench": ["Miles McBride", "Mitchell Robinson", "Jordan Clarkson", "Landry Shamet"],
+    },
+    "Cleveland Cavaliers": {
+        "PG": "James Harden", "SG": "Donovan Mitchell", "SF": "Max Strus", "PF": "Evan Mobley", "C": "Jarrett Allen",
+        "bench": ["Caris LeVert", "Isaac Okoro", "Georges Niang", "Sam Merrill", "Dean Wade"],
+    },
+    "Detroit Pistons": {
+        "PG": "Cade Cunningham", "SG": "Jaden Ivey", "SF": "Ausar Thompson", "PF": "Tobias Harris", "C": "Jalen Duren",
+        "bench": ["Marcus Sasser", "Isaiah Stewart", "Simone Fontecchio", "Malik Beasley"],
+    },
+    "Philadelphia 76ers": {
+        "PG": "Tyrese Maxey", "SG": "VJ Edgecombe", "SF": "Kelly Oubre Jr.", "PF": "Paul George", "C": "Joel Embiid",
+        "bench": ["Quentin Grimes", "Andre Drummond", "Kyle Lowry", "Eric Gordon"],
+    },
+    "Oklahoma City Thunder": {
+        "PG": "Shai Gilgeous-Alexander", "SG": "Lu Dort", "SF": "Jalen Williams", "PF": "Chet Holmgren", "C": "Isaiah Hartenstein",
+        "bench": ["Cason Wallace", "Aaron Wiggins", "Isaiah Joe", "Jaylin Williams"],
+    },
+    "Los Angeles Lakers": {
+        "PG": "D'Angelo Russell", "SG": "Austin Reaves", "SF": "LeBron James", "PF": "Rui Hachimura", "C": "Anthony Davis",
+        "bench": ["Gabe Vincent", "Jarred Vanderbilt", "Max Christie", "Jaxson Hayes"],
+    },
+    "San Antonio Spurs": {
+        "PG": "Stephon Castle", "SG": "Devin Vassell", "SF": "Keldon Johnson", "PF": "Jeremy Sochan", "C": "Victor Wembanyama",
+        "bench": ["Tre Jones", "Julian Champagnie", "Zach Collins", "Malaki Branham"],
+    },
+    "Minnesota Timberwolves": {
+        "PG": "Mike Conley", "SG": "Anthony Edwards", "SF": "Jaden McDaniels", "PF": "Naz Reid", "C": "Rudy Gobert",
+        "bench": ["Nickeil Alexander-Walker", "Donte DiVincenzo", "Rob Dillingham", "Josh Minott"],
+    },
+}
+
+# Players removed from active playoff rotation in this app universe (still on API rosters).
+OUTDATED_PLAYOFF_PLAYERS = {
+    "Cleveland Cavaliers": ["Darius Garland"],
+    "New York Knicks": [],
+    "Detroit Pistons": [],
+    "Philadelphia 76ers": [],
+    "Oklahoma City Thunder": [],
+    "Los Angeles Lakers": [],
+    "San Antonio Spurs": [],
+    "Minnesota Timberwolves": [],
 }
 
 
@@ -678,42 +727,108 @@ def resolve_player_position_info(player_name, team_name):
     return {"role_label": "Forward", "slot_prefs": FLEX_ROLE_SLOTS["Forward"], "source": "default"}
 
 
+def _outdated_player_keys(team_name):
+    keys = set()
+    for name in OUTDATED_PLAYOFF_PLAYERS.get(team_name, []):
+        keys.add(_player_name_key(name))
+    return keys
+
+
+def _is_outdated_playoff_player(name, team_name):
+    return _player_name_key(name) in _outdated_player_keys(team_name)
+
+
 def _rotation_player_pool(team_name, limit=14):
-    """Active rotation candidates: profile starters first, then minutes leaders."""
+    """Active rotation: curated playoff board → playoff minutes → season minutes → roster API."""
     seen, pool = set(), []
-    prof = TEAM_PROFILES.get(team_name) or {}
-    for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+    outdated = _outdated_player_keys(team_name)
+    curated = CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}
+    for slot in LINEUP_SLOTS:
+        name = curated.get(slot)
+        if name and _player_name_key(name) not in outdated:
+            k = _player_name_key(name)
+            if k not in seen:
+                pool.append(name)
+                seen.add(k)
+    for name in curated.get("bench") or []:
+        if _player_name_key(name) in outdated:
+            continue
         k = _player_name_key(name)
         if k and k not in seen:
             pool.append(name)
             seen.add(k)
+    playoff_rot = fetch_playoff_rotation_by_minutes(team_name)
+    if playoff_rot is not None and not playoff_rot.empty and "Player" in playoff_rot.columns:
+        for name in playoff_rot["Player"].dropna().astype(str).tolist():
+            k = _player_name_key(name)
+            if k in outdated or k in seen:
+                continue
+            pool.append(name)
+            seen.add(k)
+            if len(pool) >= limit:
+                return pool[:limit]
     rot = fetch_team_rotation_by_minutes(team_name)
     if rot is not None and not rot.empty and "Player" in rot.columns:
         for name in rot["Player"].dropna().astype(str).tolist():
             k = _player_name_key(name)
-            if k and k not in seen:
-                pool.append(name)
-                seen.add(k)
+            if k in outdated or k in seen:
+                continue
+            pool.append(name)
+            seen.add(k)
             if len(pool) >= limit:
-                break
+                return pool[:limit]
+    prof = TEAM_PROFILES.get(team_name) or {}
+    for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+        k = _player_name_key(name)
+        if k in outdated or k in seen:
+            continue
+        pool.append(name)
+        seen.add(k)
     if len(pool) < 5:
         roster = fetch_current_roster(team_name)
         if roster is not None and not roster.empty and "Player" in roster.columns:
             for name in roster["Player"].dropna().astype(str).tolist():
                 k = _player_name_key(name)
-                if k and k not in seen:
-                    pool.append(name)
-                    seen.add(k)
-    return pool
+                if k in outdated or k in seen:
+                    continue
+                pool.append(name)
+                seen.add(k)
+    return pool[:limit] if limit else pool
 
 
 def _minutes_rank(team_name):
     ranks = {}
-    rot = fetch_team_rotation_by_minutes(team_name)
+    rot = fetch_playoff_rotation_by_minutes(team_name)
+    if rot is None or rot.empty:
+        rot = fetch_team_rotation_by_minutes(team_name)
     if rot is not None and not rot.empty and "Player" in rot.columns:
         for i, name in enumerate(rot["Player"].dropna().astype(str).tolist()):
             ranks[_player_name_key(name)] = i
     return ranks
+
+
+def get_lineup_resolution_info(team_name):
+    """Metadata for UI: how the current playoff lineup was resolved."""
+    curated = CURRENT_PLAYOFF_LINEUPS.get(team_name)
+    playoff_rot = fetch_playoff_rotation_by_minutes(team_name)
+    has_playoff = playoff_rot is not None and not playoff_rot.empty
+    if curated and all(curated.get(s) for s in LINEUP_SLOTS):
+        src = "curated playoff override"
+    elif has_playoff:
+        src = "recent playoff box scores / playoff minutes"
+    elif fetch_team_rotation_by_minutes(team_name) is not None and not fetch_team_rotation_by_minutes(team_name).empty:
+        src = "current roster API (season minutes)"
+    else:
+        src = "TEAM_PROFILES fallback"
+    rejected = list(OUTDATED_PLAYOFF_PLAYERS.get(team_name) or [])
+    active = _rotation_player_pool(team_name, limit=14)
+    return {
+        "source": src,
+        "updated": datetime.now().strftime("%Y-%m-%d %H:%M ET"),
+        "rejected": rejected,
+        "active_rotation": active,
+        "resolved_lineup": build_position_lineup(team_name),
+    }
 
 
 def build_position_lineup(team_name, candidate_names=None):
@@ -721,11 +836,29 @@ def build_position_lineup(team_name, candidate_names=None):
     Build a five-man lineup ordered PG → C using position logic (not minutes order).
     candidate_names: optional restrict pool (e.g. live box score top five).
     """
+    curated = CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}
+    if not candidate_names and all(curated.get(s) for s in LINEUP_SLOTS):
+        lineup = [curated[s] for s in LINEUP_SLOTS]
+        if not any(_is_outdated_playoff_player(p, team_name) for p in lineup):
+            return lineup
+
     pool = list(candidate_names) if candidate_names else _rotation_player_pool(team_name)
     if not pool:
-        return list((TEAM_PROFILES.get(team_name) or {}).get("starters") or [])[:5] + ["TBD"] * max(0, 5 - len((TEAM_PROFILES.get(team_name) or {}).get("starters") or []))
+        fb = [curated.get(s) or "TBD" for s in LINEUP_SLOTS]
+        if any(x != "TBD" for x in fb):
+            return fb
+        return list((TEAM_PROFILES.get(team_name) or {}).get("starters") or [])[:5] + ["TBD"] * max(
+            0, 5 - len((TEAM_PROFILES.get(team_name) or {}).get("starters") or [])
+        )
 
-    profile_starters = (TEAM_PROFILES.get(team_name) or {}).get("starters") or []
+    profile_starters = []
+    for s in LINEUP_SLOTS:
+        if curated.get(s) and not _is_outdated_playoff_player(curated[s], team_name):
+            profile_starters.append(curated[s])
+    if len(profile_starters) < 5:
+        for p in (TEAM_PROFILES.get(team_name) or {}).get("starters") or []:
+            if p not in profile_starters and not _is_outdated_playoff_player(p, team_name):
+                profile_starters.append(p)
     ranks = _minutes_rank(team_name)
     slots = {s: None for s in LINEUP_SLOTS}
     assigned = set()
@@ -799,11 +932,13 @@ def build_position_lineup(team_name, candidate_names=None):
 
 def lineup_position_debug_df(team_name, candidate_names=None):
     """Resolved PG–C board for debugging incorrect assignments."""
+    meta = get_lineup_resolution_info(team_name)
     pool = list(candidate_names) if candidate_names else _rotation_player_pool(team_name)
     lineup = build_position_lineup(team_name, candidate_names=candidate_names)
     slot_by_player = {_player_name_key(p): LINEUP_SLOTS[i] for i, p in enumerate(lineup) if p and p != "TBD"}
     rows = []
     for p in pool[:14]:
+        flag = "outdated" if _is_outdated_playoff_player(p, team_name) else ""
         info = resolve_player_position_info(p, team_name)
         rows.append({
             "Slot": slot_by_player.get(_player_name_key(p), "—"),
@@ -811,6 +946,16 @@ def lineup_position_debug_df(team_name, candidate_names=None):
             "Role": info["role_label"],
             "Pref slots": " → ".join(info["slot_prefs"]),
             "Source": info["source"],
+            "Status": flag,
+        })
+    for p in meta.get("rejected") or []:
+        rows.append({
+            "Slot": "—",
+            "Player": p,
+            "Role": "—",
+            "Pref slots": "—",
+            "Source": "rejected",
+            "Status": "outdated",
         })
     df = pd.DataFrame(rows)
     if df.empty:
@@ -1603,7 +1748,7 @@ FALLBACK_TOP_PLAYS = {
 # ==========================================================
 PLAYOFF_STATE_CACHE_TTL_SEC = 90
 PLAYOFF_BRACKET_REFRESH_MS = 60000
-LIVE_GC_AUTO_LOAD_STATUSES = frozenset({"live", "starting soon", "final"})
+LIVE_GC_AUTO_LOAD_STATUSES = frozenset({"live", "starting soon", "final", "scheduled"})
 LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 
 def safe_int(x, default=0):
@@ -3772,6 +3917,37 @@ def fetch_team_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
         return out.drop_duplicates(subset=["Player"]).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def fetch_playoff_rotation_by_minutes(team_name, season=CURRENT_NBA_SEASON):
+    """Playoff minutes leaders — best signal for who is actually playing now."""
+    if not NBA_STATS_AVAILABLE:
+        return pd.DataFrame()
+    tid = TEAM_IDS.get(team_name)
+    if not tid:
+        return pd.DataFrame()
+    try:
+        df = leaguedashplayerstats.LeagueDashPlayerStats(
+            season=season,
+            season_type_all_star="Playoffs",
+            team_id_nullable=tid,
+            per_mode_detailed="Totals",
+            timeout=5,
+        ).get_data_frames()[0]
+        if df.empty:
+            return pd.DataFrame()
+        cols = [c for c in ["PLAYER_NAME", "PLAYER_ID", "GP", "MIN", "PTS", "REB", "AST"] if c in df.columns]
+        out = df[cols].copy().rename(columns={"PLAYER_NAME": "Player", "PLAYER_ID": "PlayerID"})
+        if "MIN" in out.columns:
+            out["MIN_SORT"] = pd.to_numeric(out["MIN"], errors="coerce").fillna(0)
+            out = out.sort_values("MIN_SORT", ascending=False)
+        outdated = _outdated_player_keys(team_name)
+        out = out[~out["Player"].astype(str).map(lambda n: _player_name_key(n)).isin(outdated)]
+        return out.drop_duplicates(subset=["Player"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
 
 @st.cache_data(ttl=86400)
 def current_roster_names(team_name, limit=None):
@@ -6271,22 +6447,35 @@ def render_matchup_lineups_page(team_name, profile):
       </div>
     </div>
     <div class="ml-headline">{html.escape(headline)}</div>
-    <div class="ml-sub">{html.escape(status)} Lineups are mapped by basketball position (PG → C) using rotation minutes plus curated role data — a playoff preview board, not an official game sheet.</div>
+    <div class="ml-sub">{html.escape(status)} Lineups use current playoff rotation data where available, with curated overrides for this app's playoff universe.</div>
   </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    with st.expander("Debug: resolved lineup positions", expanded=False):
+    t_meta = get_lineup_resolution_info(team_name)
+    o_meta = get_lineup_resolution_info(opp)
+    st.caption(
+        f"Lineup source · **{team_name}**: {t_meta['source']} (updated {t_meta['updated']}) · "
+        f"**{opp}**: {o_meta['source']} (updated {o_meta['updated']})"
+    )
+
+    with st.expander("Debug: lineup resolution", expanded=False):
         c1, c2 = st.columns(2)
         with c1:
-            st.caption(f"{team_name} — slot assignment")
+            st.markdown(f"**{team_name}** — `{t_meta['source']}`")
+            st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, t_meta["resolved_lineup"])))
+            if t_meta["rejected"]:
+                st.write("Rejected/outdated:", ", ".join(t_meta["rejected"]))
             st.dataframe(lineup_position_debug_df(team_name), use_container_width=True, hide_index=True)
         with c2:
-            st.caption(f"{opp} — slot assignment")
+            st.markdown(f"**{opp}** — `{o_meta['source']}`")
+            st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, o_meta["resolved_lineup"])))
+            if o_meta["rejected"]:
+                st.write("Rejected/outdated:", ", ".join(o_meta["rejected"]))
             st.dataframe(lineup_position_debug_df(opp), use_container_width=True, hide_index=True)
-        st.caption("Slot = where the player lands on the matchup board. Role / Pref slots / Source explain how that assignment was chosen.")
+        st.caption("Active rotation = players eligible for matchup cards. Outdated names are excluded even if the API still lists them.")
 
     if render_fan_section("Starting lineup matchups", "📋", caption="Estimated playoff preview boards by position.", tone="default"):
         render_fan_section_open()
@@ -11171,6 +11360,274 @@ def _render_manual_probability_command(team_name, parsed, prob):
         render_fan_stat_table(pd.DataFrame(rows), team_name)
 
 
+def _manual_to_game_row(manual):
+    """Convert manual override dict into a scoreboard-shaped row for unified parsing."""
+    home = {
+        "teamTricode": manual.get("home_tri", ""),
+        "teamName": fan_nick(manual.get("home_name", "")),
+        "teamCity": " ".join(str(manual.get("home_name", "")).split()[:-1]),
+        "score": manual.get("home_score", 0),
+    }
+    away = {
+        "teamTricode": manual.get("away_tri", ""),
+        "teamName": fan_nick(manual.get("away_name", "")),
+        "teamCity": " ".join(str(manual.get("away_name", "")).split()[:-1]),
+        "score": manual.get("away_score", 0),
+    }
+    status = str(manual.get("status", "Live"))
+    phase = manual.get("phase", "live")
+    if phase == "pregame":
+        gstat, period, clock = 1, 0, ""
+    elif phase == "postgame":
+        gstat, period, clock = 3, 4, ""
+    else:
+        gstat, period, clock = 2, manual.get("period", 1), manual.get("clock", "")
+    return {
+        "gameId": manual.get("gid", "manual-live-override"),
+        "gameStatus": gstat,
+        "gameStatusText": status,
+        "period": period,
+        "gameClock": clock,
+        "_source": "manual override",
+        "homeTeam": home,
+        "awayTeam": away,
+    }
+
+
+def _bracket_stub_game_row(team_name, profile, opp, snap=None):
+    """Best-effort game row from schedule fallback or bracket opponent when APIs are quiet."""
+    for row in _fallback_schedule_games_for_team(team_name, days_each_side=2):
+        return row
+    if not opp:
+        opp = (profile or {}).get("current_opponent") or ""
+    if not opp:
+        return None
+    home, away = team_name, opp
+    return {
+        "gameId": f"fallback-{TEAM_ALIASES.get(home, 'hm')}-{TEAM_ALIASES.get(away, 'aw')}",
+        "gameStatus": 1,
+        "gameStatusText": (snap or {}).get("detection_message") or "Feed unavailable — bracket schedule shell",
+        "period": safe_int((snap or {}).get("period", 0), 0),
+        "gameClock": str((snap or {}).get("clock") or ""),
+        "_source": "unified playoff engine / schedule fallback",
+        "_fallback_schedule": True,
+        "homeTeam": {
+            "teamTricode": TEAM_ALIASES.get(home, ""),
+            "teamName": fan_nick(home),
+            "score": safe_int((snap or {}).get("home_score", 0), 0),
+        },
+        "awayTeam": {
+            "teamTricode": TEAM_ALIASES.get(away, ""),
+            "teamName": fan_nick(away),
+            "score": safe_int((snap or {}).get("away_score", 0), 0),
+        },
+    }
+
+
+def resolve_live_gc_state(team_name, profile):
+    """
+    Resolve Live Game Center state with explicit priority:
+    manual → NBA live scoreboard → schedule/stats fallback → bracket shell → static message.
+    """
+    errors = []
+    manual = _manual_live_override_snapshot(team_name)
+    if manual:
+        row = _manual_to_game_row(manual)
+        parsed = _live_gc_parse_game_row(row, team_name)
+        snap = {
+            "game_found": True,
+            "game_status": "live" if parsed["phase"] == "live" else ("final" if parsed["phase"] == "postgame" else "scheduled"),
+            "phase": parsed["phase"],
+            "game_row": row,
+            "data_source": "manual override",
+            "detection_tier": "manual",
+            "detection_message": "",
+            "countdown": "",
+            "starting_soon": False,
+        }
+        return {
+            "priority": "manual",
+            "source_label": "Manual override",
+            "snap": snap,
+            "parsed": parsed,
+            "game_row": row,
+            "manual": manual,
+            "live_count": None,
+            "errors": errors,
+            "message": "",
+        }
+
+    live_count = None
+    try:
+        games = get_live_games()
+        live_count = len(games) if isinstance(games, list) else 0
+    except Exception as exc:
+        live_count = 0
+        errors.append(f"live scoreboard: {exc!r}")
+
+    snap = None
+    try:
+        snap = get_current_or_today_game(team_name)
+    except Exception as exc:
+        errors.append(f"game detection: {exc!r}")
+        snap = {
+            "game_found": False,
+            "game_status": "unavailable",
+            "game_row": None,
+            "detection_message": "Live data failed to load.",
+            "detection_tier": "unknown",
+            "data_source": "none",
+        }
+
+    if snap:
+        errors.extend(snap.get("error_messages", []) if isinstance(snap.get("error_messages"), list) else [])
+
+    if snap and snap.get("game_found") and snap.get("game_row"):
+        parsed = _live_gc_parse_game_row(snap["game_row"], team_name)
+        src = str(snap.get("data_source") or "NBA API")
+        return {
+            "priority": "api",
+            "source_label": src,
+            "snap": snap,
+            "parsed": parsed,
+            "game_row": snap["game_row"],
+            "manual": None,
+            "live_count": live_count,
+            "errors": errors,
+            "message": snap.get("detection_message") or "",
+        }
+
+    opp, round_name, series_text, shell_src = _local_live_gc_series_context(team_name, profile)
+    stub = _bracket_stub_game_row(team_name, profile, opp, snap)
+    if stub:
+        parsed = _live_gc_parse_game_row(stub, team_name)
+        tier = (snap or {}).get("detection_tier") or "bracket_fallback"
+        msg = (snap or {}).get("detection_message") or "Live feed unavailable — showing bracket matchup shell."
+        return {
+            "priority": "fallback",
+            "source_label": f"Fallback · {shell_src}",
+            "snap": snap or {},
+            "parsed": parsed,
+            "game_row": stub,
+            "manual": None,
+            "live_count": live_count,
+            "errors": errors,
+            "message": msg,
+            "round_name": round_name,
+            "series_text": series_text,
+            "tier": tier,
+        }
+
+    return {
+        "priority": "static",
+        "source_label": "Static message",
+        "snap": snap or {},
+        "parsed": None,
+        "game_row": None,
+        "manual": None,
+        "live_count": live_count,
+        "errors": errors,
+        "message": (snap or {}).get("detection_message") or "No game row available. Use manual override or refresh.",
+        "round_name": round_name,
+        "series_text": series_text,
+    }
+
+
+def _live_status_chip(state):
+    """Human-readable game status for the always-on shell."""
+    if state.get("priority") == "manual":
+        ph = (state.get("parsed") or {}).get("phase", "live")
+        return "MANUAL · LIVE" if ph == "live" else ("MANUAL · FINAL" if ph == "postgame" else "MANUAL · SCHEDULED")
+    snap = state.get("snap") or {}
+    gs = str(snap.get("game_status") or "").lower()
+    if gs == "live":
+        return "LIVE NOW"
+    if gs == "final":
+        return "FINAL"
+    if gs == "starting soon":
+        return "STARTING SOON"
+    if gs == "scheduled":
+        return "SCHEDULED"
+    if state.get("priority") == "fallback":
+        return "FEED UNAVAILABLE"
+    return "UNAVAILABLE"
+
+
+def _render_live_gc_instant_shell(team_name, profile, state):
+    """Layer 1 — always renders immediately (no API required)."""
+    opp, round_name, series_text, shell_src = _local_live_gc_series_context(team_name, profile)
+    if state.get("series_text"):
+        series_text = state["series_text"]
+    if state.get("round_name"):
+        round_name = state["round_name"]
+    logo = TEAM_LOGOS.get(team_name, "")
+    opp_logo = TEAM_LOGOS.get(opp, "") if opp else ""
+    chip = _live_status_chip(state)
+    src = state.get("source_label") or shell_src
+    parsed = state.get("parsed")
+    score_line = series_text
+    if parsed:
+        score_line = f"{parsed['away_score']} — {parsed['home_score']}"
+    st.markdown(
+        f"""
+<div class="live-gc-board">
+  <div style="text-align:center">
+    <img src="{html.escape(logo)}" alt=""/>
+    <div style="font-size:12px;font-weight:900">{html.escape(team_name)}</div>
+  </div>
+  <div style="text-align:center;min-width:240px">
+    <div style="font-size:11px;color:#fbbf24;font-weight:950;letter-spacing:.12em">{html.escape(chip)}</div>
+    <div class="live-gc-score">{html.escape(score_line)}</div>
+    <div class="live-gc-clock">{html.escape(round_name)} · {html.escape(series_text)}</div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:4px">Data: {html.escape(src)}</div>
+  </div>
+  <div style="text-align:center">
+    <img src="{html.escape(opp_logo)}" alt=""/>
+    <div style="font-size:12px;font-weight:900">{html.escape(opp or 'Opponent')}</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Selected team", fan_nick(team_name))
+    c2.metric("Opponent", fan_nick(opp) if opp else "TBD")
+    c3.metric("Round", round_name)
+    c4.metric("Feed", src[:24])
+
+
+def _render_manual_live_override_panel(team_name, profile):
+    """Layer 3 — emergency manual score entry."""
+    with st.expander("Manual Live Score Override", expanded=False):
+        st.checkbox(
+            "Enable manual override (overrides all API feeds)",
+            key="manual_live_enabled",
+        )
+        if not st.session_state.get("manual_live_enabled"):
+            st.caption("Use when the league feed is down. The game card above will switch to your entered score.")
+            return
+        opp_default = TEAM_PROFILES.get(team_name, {}).get("current_opponent") or team_name
+        team_keys = sorted(TEAM_PROFILES.keys())
+        c1, c2 = st.columns(2)
+        with c1:
+            home_idx = team_keys.index(team_name) if team_name in team_keys else 0
+            st.selectbox("Home team", team_keys, index=home_idx, key="manual_live_home_team")
+        with c2:
+            away_idx = team_keys.index(opp_default) if opp_default in team_keys else 0
+            st.selectbox("Away team", team_keys, index=away_idx, key="manual_live_away_team")
+        c3, c4, c5, c6 = st.columns(4)
+        c3.number_input("Home score", 0, 200, 0, key="manual_live_home_score")
+        c4.number_input("Away score", 0, 200, 0, key="manual_live_away_score")
+        c5.number_input("Quarter", 1, 4, 1, key="manual_live_quarter")
+        c6.text_input("Time remaining", "8:42", key="manual_live_clock")
+        st.selectbox("Game status", ["live", "scheduled", "final", "halftime"], key="manual_live_status")
+        st.text_input("Series score (optional)", "2 - 1", key="manual_live_series_score")
+        st.text_area("Top performers (one per line)", key="manual_live_top_performers", height=80)
+        st.text_area("Top plays (one per line)", key="manual_live_top_plays", height=80)
+        st.text_area("Injury / availability notes (one per line)", key="manual_live_injuries", height=60)
+        st.text_input("Extra notes", key="manual_live_notes")
+
+
 def _render_manual_live_game_center(team_name, parsed):
     st.success("Manual live mode active")
     _render_live_gc_matchup_header(parsed, parsed.get("series_line") or None)
@@ -11236,13 +11693,13 @@ def _render_manual_live_game_center(team_name, parsed):
 
 
 def render_live_game_center(team_name, profile):
-    """Professional, fail-safe Live Game Center with broadcast-first rendering."""
+    """Reliability-first Live Game Center: instant shell, then score, then optional depth."""
     ident = team_fan_identity(team_name)
     mx = get_display_matchup(team_name)
     render_fan_page_hero(
         team_name,
         "Live Game Center",
-        f"{ident['stakes']} {mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — scoreboard first, then the full broadcast stack.",
+        f"{ident['stakes']} {mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — what is happening right now, then the full broadcast stack.",
         "GAME NIGHT",
     )
     if st.session_state.get("_live_gc_sel_team") != team_name:
@@ -11251,26 +11708,12 @@ def render_live_game_center(team_name, profile):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = team_name
 
-    opp, _round_name, _series_text, _source = _local_live_gc_series_context(team_name, profile)
-    layer_key = f"live_gc__load_{team_name}"
-    adv_key = f"live_gc__advanced_{team_name}"
-    watch_snap = _team_live_game_watch(team_name)
-    auto_load = _live_gc_should_auto_load(watch_snap)
-    if auto_load:
-        st.session_state[layer_key] = True
-    if AUTOREFRESH_AVAILABLE and watch_snap and watch_snap.get("game_status") in ("starting soon", "live"):
-        st_autorefresh(
-            interval=45000 if watch_snap.get("game_status") == "starting soon" else 30000,
-            key=f"live_gc_auto_refresh_{team_name}",
-        )
-
     render_playoff_matchup_ribbon(team_name)
+    _render_manual_live_override_panel(team_name, profile)
 
     col_a, col_b = st.columns([1, 3])
     with col_a:
-        if st.button("Refresh Live Game Data", key=f"{layer_key}_btn", type="primary"):
-            st.session_state[layer_key] = True
-            st.session_state[adv_key] = True
+        if st.button("Refresh Live Game Data", key=f"live_gc_refresh_{team_name}", type="primary"):
             for fn in (
                 get_live_games,
                 get_current_or_today_game,
@@ -11285,66 +11728,79 @@ def render_live_game_center(team_name, profile):
                     pass
             st.rerun()
     with col_b:
-        if watch_snap and watch_snap.get("game_found"):
-            ws = str(watch_snap.get("game_status") or "")
-            if ws == "live":
-                st.caption("🔴 **Live feed connected** — scoreboard loads automatically.")
-            elif ws == "starting soon":
-                st.caption("⏱️ **Starting soon** — basic scoreboard syncs automatically.")
-            else:
-                st.caption(
-                    f"Detected **{watch_snap.get('away_team')} @ {watch_snap.get('home_team')}** · "
-                    f"`{ws}` · source: {watch_snap.get('data_source')}"
-                )
-        elif auto_load:
-            st.caption("Connecting to the live scoreboard feed…")
-        else:
-            st.caption("Tap refresh when you want the latest league scoreboard row.")
+        st.caption("Scoreboard loads on every visit. Heavy stats open inside expanders below.")
 
-    if not st.session_state.get(layer_key):
-        _render_live_gc_layer1(team_name, profile)
-        if auto_load:
-            render_loading_skeleton(2, "Connecting live scoreboard…")
-        else:
-            st.caption("Tap **Refresh Live Game Data** for live scores and game status.")
+    opp_l, rnd_l, ser_l, src_l = _local_live_gc_series_context(team_name, profile)
+    score_slot = st.empty()
+    with score_slot.container():
+        _render_live_gc_instant_shell(
+            team_name,
+            profile,
+            {
+                "priority": "shell",
+                "source_label": f"connecting · {src_l}",
+                "parsed": None,
+                "round_name": rnd_l,
+                "series_text": ser_l,
+            },
+        )
+
+    state = resolve_live_gc_state(team_name, profile)
+    snap = state.get("snap") or {}
+    parsed = state.get("parsed")
+    opp = (parsed or {}).get("opp_name") or opp_l or TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+
+    with score_slot.container():
+        _render_live_gc_instant_shell(team_name, profile, state)
+
+    if state.get("priority") == "manual" and state.get("manual"):
+        _render_manual_live_game_center(team_name, state["manual"])
+        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
         return
 
-    snap, live_count, errors = _fetch_live_gc_snapshot(team_name)
-
-    if not snap or not snap.get("game_found"):
-        msg = (snap or {}).get("detection_message") or "The league feed is quiet right now."
-        _render_live_gc_layer1(team_name, profile)
-        if (snap or {}).get("detection_tier") == "scheduled_today":
-            st.warning("Game scheduled today — live feed not detected yet.")
-        elif (snap or {}).get("detection_tier") == "likely_live_feed_gap":
-            st.error("Game may be in progress, but the live feed is delayed.")
-        else:
-            st.warning(msg)
-        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
+    if not parsed:
+        st.warning(state.get("message") or "Live feed unavailable. Use manual override or refresh.")
+        _live_gc_render_fallback_content(team_name, profile, opp_name=opp, include_outlook=True)
+        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
         return
 
-    game_row = snap.get("game_row")
-    parsed = _live_gc_parse_game_row(game_row, team_name)
+    if state.get("message") and state.get("priority") == "fallback":
+        st.warning(state["message"])
+    elif snap.get("detection_tier") == "scheduled_today":
+        st.info("Game scheduled today — live feed not detected yet.")
+    elif snap.get("detection_tier") == "likely_live_feed_gap":
+        st.error("Game may be in progress, but the live feed is delayed.")
+
     series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
     gid = parsed["gid"]
     prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"])
+
+    if AUTOREFRESH_AVAILABLE and str(snap.get("game_status") or "") in ("starting soon", "live"):
+        st_autorefresh(
+            interval=45000 if snap.get("game_status") == "starting soon" else 30000,
+            key=f"live_gc_auto_refresh_{team_name}",
+        )
+
+    _render_live_gc_matchup_header(parsed, series_line)
+    render_live_score_banner(
+        team_name,
+        parsed["away_tri"],
+        parsed["home_tri"],
+        parsed["away_score"],
+        parsed["home_score"],
+        parsed["status"],
+        parsed["phase"],
+    )
+    st.caption(f"**Data source:** {state.get('source_label')} · Series: **{series_line or mx['series_record']}**")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Win probability", f"{prob}%")
+    m2.metric("Quarter", f"Q{parsed['period']}" if parsed.get("period") else "—")
+    m3.metric("Clock", parsed.get("clock") or snap.get("countdown") or "—")
+    m4.metric("Margin", f"{parsed['margin']:+d}")
+
     box_df = pd.DataFrame()
-
-    _render_broadcast_header(team_name, parsed, snap, series_line, prob)
-    st.caption(f"Series board: **{series_line or mx['series_record']}** · bracket sync")
-    if parsed["phase"] == "pregame":
-        if snap.get("game_status") == "starting soon":
-            st.warning(f"**Game starting soon** · starts in **{snap.get('countdown') or 'soon'}**")
-        elif snap.get("detection_tier") == "likely_live_feed_gap":
-            st.error("Game may be in progress, but the live feed is delayed.")
-        else:
-            st.info("Game scheduled today — live feed not detected yet.")
-    elif parsed["phase"] == "live":
-        st.success("Live scoreboard row detected.")
-    elif parsed["phase"] == "postgame":
-        st.info("Final recap mode.")
-
-    if gid and not str(gid).startswith("fallback-"):
+    if gid and not str(gid).startswith(("fallback-", "manual-")):
         try:
             box_game = get_live_boxscore(gid) or {}
             box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
@@ -11353,109 +11809,48 @@ def render_live_game_center(team_name, profile):
     if box_df is not None and not box_df.empty:
         prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"], box_df)
 
-    if not st.session_state.get(adv_key):
-        render_fan_section(
-            "Full broadcast stack",
-            "📡",
-            caption="Probabilities, top performers, shot charts, and injuries open on demand.",
-            tone="broadcast",
-        )
-        if st.button("Open probabilities, performers & charts", type="primary", key=f"{adv_key}_open"):
-            st.session_state[adv_key] = True
-            st.rerun()
-        st.caption("Live score and status stay on screen above.")
-        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
-        return
+    with st.expander("Win probability & matchup swing", expanded=False):
+        st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            _render_probability_command(team_name, parsed, prob, box_df)
+        with c2:
+            _render_live_matchup_swing(team_name, parsed["opp_name"], box_df, parsed)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        _render_probability_command(team_name, parsed, prob, box_df)
-    with c2:
-        _render_live_matchup_swing(team_name, parsed["opp_name"], box_df, parsed)
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.expander("Top performers", expanded=False):
+        if box_df is not None and not box_df.empty:
+            _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
+        else:
+            st.caption("Top performers load when the box score publishes (or use manual override).")
 
-    st.markdown(
-        f"<div class='broadcast-card dark'><div class='broadcast-card-title' style='color:#fbbf24'>Live Storyline</div>"
-        f"<div style='font-size:14px;line-height:1.55'>{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}</div>"
-        f"<div style='margin-top:8px;font-size:12px;color:#cbd5e1'>Game ID: {html.escape(gid or 'unavailable')} · Status: {html.escape(parsed['status'] or parsed['phase'])}</div></div>",
-        unsafe_allow_html=True,
-    )
-
-    if render_fan_section("Top performers", "⭐", caption="Leaders from the live box score.", tone="broadcast"):
-        render_fan_section_open()
-        _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
-        render_fan_section_close()
-
-    if render_fan_section(
-        "Lineups / on-court estimate",
-        "📋",
-        caption="Projected or highest-minute groups when official on-court data is unavailable.",
-        tone="broadcast",
-    ):
-        render_fan_section_open()
-        st.caption("If NBA live on-court lineup data is unavailable, this shows the projected or highest-minute active group and labels it as estimated.")
+    with st.expander("Lineups / on-court estimate", expanded=False):
+        st.caption("Estimated groups from current playoff rotation data when official on-court feeds are unavailable.")
         _render_lineup_board(team_name, parsed["opp_name"], box_df)
-        render_fan_section_close()
-
-    if parsed["phase"] == "pregame":
-        if render_fan_section("Pregame command board", "⏳", caption="Tipoff window and series preview.", tone="broadcast"):
-            render_fan_section_open()
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Tipoff", snap.get("countdown") or "today")
-            p2.metric("Round", game_row.get("seriesText") or profile.get("round", "Playoffs"))
-            p3.metric("Series", series_line or "3-3 / updating")
-            p4.metric("Preview win %", f"{prob}%")
-            st.markdown("**Major storyline**")
-            st.write(
-                f"{fan_nick(team_name)} vs {fan_nick(parsed['opp_name'])}: live possessions will decide the series math, "
-                "but the app will not advance or eliminate anyone until the fourth win is final."
-            )
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"**{fan_nick(team_name)} key players**")
-                for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:5]:
-                    st.write(f"• {nm}")
-            with c2:
-                st.markdown(f"**{fan_nick(parsed['opp_name'])} key players**")
-                for nm in (TEAM_PROFILES.get(parsed["opp_name"], {}).get("starters") or [])[:5]:
-                    st.write(f"• {nm}")
-            render_fan_section_close()
 
     with st.expander("Full styled box score", expanded=False):
-        box_key = f"live_gc__box_{team_name}_{gid}"
         if box_df is not None and not box_df.empty:
             _render_styled_box_score(team_name, parsed["opp_name"], box_df)
-        elif not st.session_state.get(box_key):
-            if st.button("Load box score", key=f"{box_key}_btn"):
-                st.session_state[box_key] = True
-                st.rerun()
-            st.caption("Box score has not published yet or is deferred. Tap once to retry the live box score endpoint.")
-        else:
-            retry_box_df = pd.DataFrame()
+        elif gid and not str(gid).startswith(("fallback-", "manual-")):
             try:
-                box_game = get_live_boxscore(gid) if gid else {}
-                retry_box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+                box_game = get_live_boxscore(gid) or {}
+                retry_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+                if retry_df is not None and not retry_df.empty:
+                    _render_styled_box_score(team_name, parsed["opp_name"], retry_df)
+                else:
+                    st.caption("Box score has not published yet.")
             except Exception as exc:
-                st.caption(f"Box score is not ready yet: {exc!r}")
-            if retry_box_df is not None and not retry_box_df.empty:
-                _render_styled_box_score(team_name, parsed["opp_name"], retry_box_df)
-            else:
-                st.caption("Box score has not published yet.")
-
-    with st.expander("Professional shot chart and play-by-play", expanded=False):
-        pbp_key = f"live_gc__pbp_{team_name}_{gid}"
-        if not st.session_state.get(pbp_key):
-            if st.button("Load play-by-play / shot chart", key=f"{pbp_key}_btn"):
-                st.session_state[pbp_key] = True
-                st.rerun()
-            st.caption("Play-by-play and shot chart are deferred because they are the heaviest live-game calls.")
+                st.caption(f"Box score unavailable: {exc!r}")
         else:
+            st.caption("Box score unavailable for schedule-shell games.")
+
+    with st.expander("Play-by-play, top plays & shot chart", expanded=False):
+        if gid and not str(gid).startswith(("fallback-", "manual-")):
             actions = []
             try:
-                actions = get_live_playbyplay(gid) if gid else []
+                actions = get_live_playbyplay(gid) or []
             except Exception as exc:
-                st.caption(f"Play-by-play is not ready yet: {exc!r}")
+                st.caption(f"Play-by-play unavailable: {exc!r}")
             if actions:
                 try:
                     tp = top_plays_from_game_id(gid, team_name, limit=8)
@@ -11463,55 +11858,32 @@ def render_live_game_center(team_name, profile):
                         st.dataframe(tp, use_container_width=True, hide_index=True)
                     shots = shot_df_from_pbp(actions, parsed["fav_alias"])
                     if not shots.empty:
-                        players = ["All"] + sorted([x for x in shots["Player"].dropna().astype(str).unique().tolist() if x])
-                        qtrs = ["All"] + sorted([str(x) for x in shots["Period"].dropna().astype(str).unique().tolist() if str(x)])
-                        makes = st.selectbox("Shot result", ["All", "Made", "Missed"], key=f"shot_filter_made_{team_name}_{gid}")
-                        player_pick = st.selectbox("Player", players, key=f"shot_filter_player_{team_name}_{gid}")
-                        q_pick = st.selectbox("Quarter", qtrs, key=f"shot_filter_q_{team_name}_{gid}")
-                        filt = shots.copy()
-                        if player_pick != "All":
-                            filt = filt[filt["Player"].astype(str) == player_pick]
-                        if q_pick != "All":
-                            filt = filt[filt["Period"].astype(str) == q_pick]
-                        if makes == "Made":
-                            filt = filt[filt["Made"] == True]
-                        elif makes == "Missed":
-                            filt = filt[filt["Made"] == False]
-                        st.plotly_chart(draw_court(filt, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
-                        made_rate = int(round(100 * float(filt["Made"].mean()))) if not filt.empty else 0
-                        st.caption(f"Shot chart read: {len(filt)} tracked shot events in this filter, {made_rate}% makes. Locations are play-by-play derived when official x/y shot coordinates are unavailable.")
+                        st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
                 except Exception as exc:
-                    st.caption(f"Highlight view is not ready yet: {exc!r}")
+                    st.caption(f"Shot chart unavailable: {exc!r}")
             else:
                 st.caption("Play-by-play has not published yet.")
-
-    with st.expander("Injury report and rotation impact", expanded=False):
-        inj_key = f"live_gc__inj_{team_name}_{parsed['opp_name']}"
-        if not st.session_state.get(inj_key):
-            if st.button("Load injury report", key=f"{inj_key}_btn"):
-                st.session_state[inj_key] = True
-                st.rerun()
-            st.caption("Injury detail is cached and loaded only when opened.")
         else:
-            try:
-                render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name, neutral_framing=True)
-                st.caption("Impact read: availability changes matter most in the first substitution window, foul-trouble coverage, and whether the closing lineup has enough creation.")
-            except Exception as exc:
-                st.caption(f"Injury report is not ready yet: {exc!r}")
+            st.caption("Play-by-play requires a live NBA game id.")
 
-    with st.expander("Foul trouble, momentum, and recap notes", expanded=False):
+    with st.expander("Injury report", expanded=False):
+        try:
+            render_injury_report(team_name, opponent_name=parsed["opp_name"], show_page_header=False, fan_perspective_team=team_name, neutral_framing=True)
+        except Exception as exc:
+            st.caption(f"Injury report unavailable: {exc!r}")
+
+    with st.expander("Game story & recap notes", expanded=False):
+        st.markdown(
+            f"<div class='broadcast-card dark'><div style='font-size:14px;line-height:1.55'>"
+            f"{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
         if box_df is not None and not box_df.empty:
-            _live_gc_foul_trouble(box_df, team_name, parsed["opp_name"])
             for line in game_story(team_name, parsed["margin"], prob, box_df):
                 st.write(f"• {line}")
-        else:
-            st.caption("Foul trouble and performer-based momentum appear when the live box score publishes.")
-        if parsed["phase"] == "postgame":
-            mvp, why = mvp_for_game(team_name, parsed["opp_name"], 1, team_name if parsed["margin"] > 0 else parsed["opp_name"])
-            st.success(f"Game MVP candidate: **{mvp}** — {why}")
-            st.caption("Updated series score appears from the bracket feed once the final imports.")
 
-    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=live_count, errors=errors)
+    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
 
 # ==========================================================
 # Franchise Playoff Legends / Team History Leaders
