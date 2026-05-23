@@ -494,6 +494,331 @@ ELIMINATED_INFO = [
 for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
     TEAM_PROFILES[name] = {"seed":seed,"conference":conf,"status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":opp,"first_round_result":result,"starters":starters,"subs":subs,"strengths":["main star creation","transition chances","playoff experience"],"concerns":["series ended in first round","needs depth/defense improvements","late-game consistency"]}
 
+# Standard five-man order for matchup cards and live boards.
+LINEUP_SLOTS = ("PG", "SG", "SF", "PF", "C")
+
+# Flexible labels map to slot preference (first = best fit).
+FLEX_ROLE_SLOTS = {
+    "PG": ("PG",),
+    "SG": ("SG",),
+    "SF": ("SF",),
+    "PF": ("PF",),
+    "C": ("C",),
+    "Guard": ("PG", "SG"),
+    "Wing": ("SG", "SF"),
+    "Forward": ("SF", "PF"),
+    "Big": ("PF", "C"),
+}
+
+# Curated overrides for playoff rotations — checked before profile index and NBA API position.
+PLAYER_POSITION_OVERRIDES = {
+    # New York Knicks
+    "Jalen Brunson": "PG",
+    "Mikal Bridges": "SF",
+    "OG Anunoby": "SF",
+    "Josh Hart": "PF",
+    "Karl-Anthony Towns": "C",
+    "Miles McBride": "SG",
+    "Mitchell Robinson": "C",
+    "Jordan Clarkson": "SG",
+  # Cleveland Cavaliers
+    "Darius Garland": "PG",
+    "Donovan Mitchell": "SG",
+    "Max Strus": "SF",
+    "Evan Mobley": "PF",
+    "Jarrett Allen": "C",
+    "Caris LeVert": "SG",
+    "Isaac Okoro": "SF",
+    "Georges Niang": "PF",
+    "Dean Wade": "PF",
+    # Detroit Pistons
+    "Cade Cunningham": "PG",
+    "Jaden Ivey": "SG",
+    "Ausar Thompson": "SF",
+    "Tobias Harris": "PF",
+    "Jalen Duren": "C",
+    "Isaiah Stewart": "C",
+    # Philadelphia 76ers
+    "Tyrese Maxey": "PG",
+    "VJ Edgecombe": "SG",
+    "Kelly Oubre Jr.": "SF",
+    "Paul George": "SF",
+    "Joel Embiid": "C",
+    "Andre Drummond": "C",
+    "Quentin Grimes": "SG",
+    # Oklahoma City Thunder
+    "Shai Gilgeous-Alexander": "PG",
+    "Lu Dort": "SG",
+    "Jalen Williams": "SF",
+    "Chet Holmgren": "PF",
+    "Isaiah Hartenstein": "C",
+    "Cason Wallace": "SG",
+    "Aaron Wiggins": "SF",
+    # Los Angeles Lakers
+    "D'Angelo Russell": "PG",
+    "Austin Reaves": "SG",
+    "LeBron James": "SF",
+    "Rui Hachimura": "PF",
+    "Anthony Davis": "C",
+    "Gabe Vincent": "PG",
+    "Jarred Vanderbilt": "PF",
+    # San Antonio Spurs
+    "Stephon Castle": "PG",
+    "Devin Vassell": "SG",
+    "Keldon Johnson": "SF",
+    "Jeremy Sochan": "PF",
+    "Victor Wembanyama": "C",
+    "Tre Jones": "PG",
+    "Zach Collins": "C",
+    # Minnesota Timberwolves
+    "Mike Conley": "PG",
+    "Anthony Edwards": "SG",
+    "Jaden McDaniels": "SF",
+    "Naz Reid": "PF",
+    "Rudy Gobert": "C",
+    "Nickeil Alexander-Walker": "SG",
+    "Donte DiVincenzo": "SG",
+    # Eliminated / other playoff teams (still used in previews)
+    "Trae Young": "PG",
+    "Jalen Johnson": "PF",
+    "Paolo Banchero": "PF",
+    "Jayson Tatum": "SF",
+    "Jaylen Brown": "SG",
+    "Kristaps Porzingis": "C",
+    "Jamal Murray": "PG",
+    "Nikola Jokic": "C",
+    "Fred VanVleet": "PG",
+    "Alperen Sengun": "C",
+    "Devin Booker": "SG",
+    "Kevin Durant": "SF",
+}
+
+
+def _player_name_key(name):
+    return re.sub(r"\s+", " ", str(name or "").strip()).lower()
+
+
+def _profile_slot_for_player(player_name, team_name):
+    """Team-specific starter index from TEAM_PROFILES (PG=0 … C=4)."""
+    starters = (TEAM_PROFILES.get(team_name) or {}).get("starters") or []
+    key = _player_name_key(player_name)
+    for i, p in enumerate(starters):
+        if _player_name_key(p) == key and i < len(LINEUP_SLOTS):
+            return LINEUP_SLOTS[i]
+    return None
+
+
+def _api_position_to_slots(pos_str):
+    """Map NBA.com roster position text to ordered slot candidates."""
+    if not pos_str or (isinstance(pos_str, float) and pd.isna(pos_str)):
+        return FLEX_ROLE_SLOTS["Forward"]
+    s = str(pos_str).upper().strip()
+    if s in ("G", "GUARD"):
+        return FLEX_ROLE_SLOTS["Guard"]
+    if s in ("F", "FORWARD"):
+        return FLEX_ROLE_SLOTS["Forward"]
+    if s in ("C", "CENTER"):
+        return FLEX_ROLE_SLOTS["C"]
+    if "CENTER" in s and "FORWARD" in s:
+        return ("PF", "C") if s.index("F") < s.index("C") else ("C", "PF")
+    if "GUARD" in s and "FORWARD" in s:
+        return ("SG", "SF") if s.index("G") < s.index("F") else ("SF", "SG")
+    if "G-F" in s or "G/F" in s or (s.startswith("G") and "F" in s):
+        return ("SG", "SF")
+    if "F-G" in s or "F/G" in s:
+        return ("SF", "SG")
+    if "F-C" in s or "F/C" in s or (s.startswith("F") and "C" in s):
+        return ("PF", "C")
+    if "C-F" in s or "C/F" in s:
+        return ("C", "PF")
+    return FLEX_ROLE_SLOTS["Forward"]
+
+
+@st.cache_data(ttl=86400)
+def _roster_position_lookup(team_name):
+    """Player name (lower) -> raw NBA.com position string."""
+    roster = fetch_current_roster(team_name)
+    out = {}
+    if roster is None or roster.empty or "Player" not in roster.columns:
+        return out
+    for _, row in roster.iterrows():
+        out[_player_name_key(row["Player"])] = row.get("Position", "")
+    return out
+
+
+def resolve_player_position_info(player_name, team_name):
+    """
+    Resolve a player's basketball role for lineup assignment.
+    Returns dict: role_label, slot_prefs (tuple), source.
+    """
+    key = _player_name_key(player_name)
+    if not key:
+        return {"role_label": "Forward", "slot_prefs": FLEX_ROLE_SLOTS["Forward"], "source": "default"}
+
+    override = PLAYER_POSITION_OVERRIDES.get(player_name)
+    if override is None:
+        for k, v in PLAYER_POSITION_OVERRIDES.items():
+            if _player_name_key(k) == key:
+                override = v
+                break
+    if override:
+        slots = FLEX_ROLE_SLOTS.get(override, (override,) if override in LINEUP_SLOTS else FLEX_ROLE_SLOTS["Forward"])
+        return {"role_label": override, "slot_prefs": slots, "source": "override"}
+
+    prof_slot = _profile_slot_for_player(player_name, team_name)
+    if prof_slot:
+        return {"role_label": prof_slot, "slot_prefs": (prof_slot,), "source": "profile"}
+
+    api_pos = _roster_position_lookup(team_name).get(key, "")
+    if api_pos:
+        slots = _api_position_to_slots(api_pos)
+        label = api_pos if isinstance(api_pos, str) else "API"
+        return {"role_label": label, "slot_prefs": slots, "source": "api"}
+
+    return {"role_label": "Forward", "slot_prefs": FLEX_ROLE_SLOTS["Forward"], "source": "default"}
+
+
+def _rotation_player_pool(team_name, limit=14):
+    """Active rotation candidates: profile starters first, then minutes leaders."""
+    seen, pool = set(), []
+    prof = TEAM_PROFILES.get(team_name) or {}
+    for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+        k = _player_name_key(name)
+        if k and k not in seen:
+            pool.append(name)
+            seen.add(k)
+    rot = fetch_team_rotation_by_minutes(team_name)
+    if rot is not None and not rot.empty and "Player" in rot.columns:
+        for name in rot["Player"].dropna().astype(str).tolist():
+            k = _player_name_key(name)
+            if k and k not in seen:
+                pool.append(name)
+                seen.add(k)
+            if len(pool) >= limit:
+                break
+    if len(pool) < 5:
+        roster = fetch_current_roster(team_name)
+        if roster is not None and not roster.empty and "Player" in roster.columns:
+            for name in roster["Player"].dropna().astype(str).tolist():
+                k = _player_name_key(name)
+                if k and k not in seen:
+                    pool.append(name)
+                    seen.add(k)
+    return pool
+
+
+def _minutes_rank(team_name):
+    ranks = {}
+    rot = fetch_team_rotation_by_minutes(team_name)
+    if rot is not None and not rot.empty and "Player" in rot.columns:
+        for i, name in enumerate(rot["Player"].dropna().astype(str).tolist()):
+            ranks[_player_name_key(name)] = i
+    return ranks
+
+
+def build_position_lineup(team_name, candidate_names=None):
+    """
+    Build a five-man lineup ordered PG → C using position logic (not minutes order).
+    candidate_names: optional restrict pool (e.g. live box score top five).
+    """
+    pool = list(candidate_names) if candidate_names else _rotation_player_pool(team_name)
+    if not pool:
+        return list((TEAM_PROFILES.get(team_name) or {}).get("starters") or [])[:5] + ["TBD"] * max(0, 5 - len((TEAM_PROFILES.get(team_name) or {}).get("starters") or []))
+
+    profile_starters = (TEAM_PROFILES.get(team_name) or {}).get("starters") or []
+    ranks = _minutes_rank(team_name)
+    slots = {s: None for s in LINEUP_SLOTS}
+    assigned = set()
+    assignment_meta = {}
+
+    # Phase 1: place profile starters on resolved position slots (not blind list index).
+    pool_keys = {_player_name_key(x) for x in pool}
+    for p in profile_starters:
+        pk = _player_name_key(p)
+        if pk not in pool_keys or pk in assigned:
+            continue
+        info = resolve_player_position_info(p, team_name)
+        placed = False
+        for slot in info["slot_prefs"]:
+            if slots[slot] is None:
+                slots[slot] = p
+                assigned.add(pk)
+                assignment_meta[slot] = {"player": p, "source": info["source"]}
+                placed = True
+                break
+        if not placed:
+            for slot in LINEUP_SLOTS:
+                if slots[slot] is None:
+                    slots[slot] = p
+                    assigned.add(pk)
+                    assignment_meta[slot] = {"player": p, "source": "profile_fallback"}
+                    break
+
+    # Phase 2: fill remaining slots by best position fit + minutes.
+    for slot in LINEUP_SLOTS:
+        if slots[slot]:
+            continue
+        best_name, best_score = None, -1.0
+        for p in pool:
+            pk = _player_name_key(p)
+            if pk in assigned:
+                continue
+            info = resolve_player_position_info(p, team_name)
+            prefs = info["slot_prefs"]
+            if slot in prefs:
+                score = 200.0 - prefs.index(slot) * 40.0
+            elif slot == "PG" and info["role_label"] in ("Guard", "G"):
+                score = 120.0
+            elif slot == "SG" and info["role_label"] in ("Guard", "G", "Wing"):
+                score = 100.0
+            elif slot == "SF" and info["role_label"] in ("Wing", "Forward", "F"):
+                score = 100.0
+            elif slot == "PF" and info["role_label"] in ("Forward", "Big", "F"):
+                score = 100.0
+            elif slot == "C" and info["role_label"] in ("C", "Center", "Big"):
+                score = 120.0
+            else:
+                score = 20.0
+            score -= ranks.get(pk, 50) * 0.5
+            if info["source"] == "override":
+                score += 8.0
+            if score > best_score:
+                best_score = score
+                best_name = p
+        if best_name:
+            slots[slot] = best_name
+            assigned.add(_player_name_key(best_name))
+            assignment_meta[slot] = {
+                "player": best_name,
+                "source": resolve_player_position_info(best_name, team_name)["source"],
+            }
+
+    lineup = [slots[s] or "TBD" for s in LINEUP_SLOTS]
+    return lineup
+
+
+def lineup_position_debug_df(team_name, candidate_names=None):
+    """Resolved PG–C board for debugging incorrect assignments."""
+    pool = list(candidate_names) if candidate_names else _rotation_player_pool(team_name)
+    lineup = build_position_lineup(team_name, candidate_names=candidate_names)
+    slot_by_player = {_player_name_key(p): LINEUP_SLOTS[i] for i, p in enumerate(lineup) if p and p != "TBD"}
+    rows = []
+    for p in pool[:14]:
+        info = resolve_player_position_info(p, team_name)
+        rows.append({
+            "Slot": slot_by_player.get(_player_name_key(p), "—"),
+            "Player": p,
+            "Role": info["role_label"],
+            "Pref slots": " → ".join(info["slot_prefs"]),
+            "Source": info["source"],
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    slot_order = {s: i for i, s in enumerate(LINEUP_SLOTS)}
+    df["_ord"] = df["Slot"].map(lambda x: slot_order.get(x, 99))
+    return df.sort_values(["_ord", "Player"]).drop(columns=["_ord"]).reset_index(drop=True)
+
 
 def _is_home_eliminated(team_name):
     """True when Home Dashboard should show offseason / future outlook (not live playoff chase mode)."""
@@ -3464,13 +3789,18 @@ def current_roster_names(team_name, limit=None):
 
 @st.cache_data(ttl=86400)
 def estimated_starters_from_api(team_name):
-    """Best available estimate: top 5 by current-season minutes, otherwise fallback profile starters."""
-    return current_roster_names(team_name, limit=5)
+    """Five-man lineup ordered PG → C using position overrides, profile slots, and NBA roster data."""
+    return build_position_lineup(team_name)
 
 @st.cache_data(ttl=86400)
 def estimated_bench_from_api(team_name, start=5, end=12):
-    names = current_roster_names(team_name, limit=end)
-    return names[start:end] if len(names) > start else TEAM_PROFILES[team_name].get("subs", [])
+    starters = {_player_name_key(p) for p in estimated_starters_from_api(team_name)}
+    bench = [n for n in _rotation_player_pool(team_name, limit=18) if _player_name_key(n) not in starters]
+    for s in TEAM_PROFILES.get(team_name, {}).get("subs", []):
+        if _player_name_key(s) not in starters and s not in bench:
+            bench.append(s)
+    want = max(0, end - start)
+    return bench[:want] if want else TEAM_PROFILES.get(team_name, {}).get("subs", [])
 
 
 @st.cache_data(ttl=86400)
@@ -5594,7 +5924,17 @@ def estimated_lineup(box_df, alias, team_name):
         names = estimated_starters_from_api(team_name)
         return pd.DataFrame([{"Team":alias,"Player":p,"MIN":"0:00","PTS":0,"REB":0,"AST":0,"STL":0,"BLK":0,"PF":0,"FGM":0,"FGA":0} for p in names])
     df["MIN_FLOAT"] = df["MIN"].apply(min_to_float)
-    return df.sort_values("MIN_FLOAT", ascending=False).head(5)
+    top = df.sort_values("MIN_FLOAT", ascending=False).head(5)
+    on_court = top["Player"].dropna().astype(str).tolist()
+    ordered = build_position_lineup(team_name, candidate_names=on_court)
+    by_name = {row["Player"]: row for _, row in top.iterrows()}
+    rows = []
+    for p in ordered:
+        if p in by_name:
+            rows.append(by_name[p].to_dict())
+        elif p != "TBD":
+            rows.append({"Team": alias, "Player": p, "MIN": "0:00", "PTS": 0, "REB": 0, "AST": 0, "STL": 0, "BLK": 0, "PF": 0, "FGM": 0, "FGA": 0})
+    return pd.DataFrame(rows) if rows else top
 
 def player_temp(r):
     fga = safe_float(r.get("FGA")); fgm = safe_float(r.get("FGM")); pts = safe_float(r.get("PTS"))
@@ -5716,7 +6056,7 @@ def game_story(team_name, margin, prob, box_df):
 def matchup_advantages(team, opp):
     t_starters = estimated_starters_from_api(team)
     o_starters = estimated_starters_from_api(opp)
-    positions=["PG","SG","SF","PF","C"]
+    positions = list(LINEUP_SLOTS)
     rows=[]
     for i,pos in enumerate(positions):
         tp=t_starters[i] if i < len(t_starters) else "TBD"
@@ -5909,8 +6249,8 @@ def render_matchup_lineups_page(team_name, profile):
     status = (hctx.get("ctx") or {}).get("status_text") or series_status_text(team_name, series_obj)
     t_starters = estimated_starters_from_api(team_name)
     o_starters = estimated_starters_from_api(opp)
-    lead_t = t_starters[0] if t_starters else fan_nick(team_name)
-    lead_o = o_starters[0] if o_starters else fan_nick(opp)
+    lead_t = t_starters[0] if t_starters and t_starters[0] != "TBD" else fan_nick(team_name)
+    lead_o = o_starters[0] if o_starters and o_starters[0] != "TBD" else fan_nick(opp)
     headline = f"{lead_t} vs {lead_o} sets the first pressure point"
     if len(t_starters) > 1 and len(o_starters) > 1:
         headline = f"{lead_t} vs {lead_o} controls the pace, but the wing and big battles decide the margins"
@@ -5931,16 +6271,26 @@ def render_matchup_lineups_page(team_name, profile):
       </div>
     </div>
     <div class="ml-headline">{html.escape(headline)}</div>
-    <div class="ml-sub">{html.escape(status)} Lineups are estimated from current rotation data, so treat this like a playoff preview board rather than a final official starting five.</div>
+    <div class="ml-sub">{html.escape(status)} Lineups are mapped by basketball position (PG → C) using rotation minutes plus curated role data — a playoff preview board, not an official game sheet.</div>
   </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
+    with st.expander("Debug: resolved lineup positions", expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.caption(f"{team_name} — slot assignment")
+            st.dataframe(lineup_position_debug_df(team_name), use_container_width=True, hide_index=True)
+        with c2:
+            st.caption(f"{opp} — slot assignment")
+            st.dataframe(lineup_position_debug_df(opp), use_container_width=True, hide_index=True)
+        st.caption("Slot = where the player lands on the matchup board. Role / Pref slots / Source explain how that assignment was chosen.")
+
     if render_fan_section("Starting lineup matchups", "📋", caption="Estimated playoff preview boards by position.", tone="default"):
         render_fan_section_open()
-    positions = ["PG", "SG", "SF", "PF", "C"]
+    positions = list(LINEUP_SLOTS)
     cards = []
     swing = None
     swing_gap = -1
@@ -9277,7 +9627,7 @@ def render_game_countdown(team):
 def render_lineup_cards(team, box_df):
     alias=TEAM_ALIASES[team]
     lineup=estimated_lineup(box_df, alias, team)
-    positions=["PG","SG","SF","PF","C"]
+    positions=list(LINEUP_SLOTS)
     st.markdown(f"### {team} live lineup / estimated current high-usage lineup")
     cols=st.columns(5)
     for i, (_, r) in enumerate(lineup.iterrows()):
