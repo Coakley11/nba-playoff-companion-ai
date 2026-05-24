@@ -3246,6 +3246,54 @@ def _live_gc_trace_clear():
         st.session_state["live_gc_trace"] = []
 
 
+def _live_gc_log_error(errors, tag, exc):
+    """Record technical failures for the debug panel only."""
+    if exc is None:
+        return
+    msg = exc if isinstance(exc, str) else repr(exc)
+    if _live_gc_debug_enabled():
+        errors.append(f"{tag}: {msg}")
+
+
+def _live_gc_fan_msg(key, **fmt):
+    """Fan-facing status text — never expose raw API exceptions."""
+    templates = {
+        "feed_delayed": "Live feed is delayed.",
+        "feed_delayed_stats": "Live feed is delayed — showing league stats score until the live board syncs.",
+        "feed_delayed_partial": "Live feed is delayed — score may take a moment to update.",
+        "last_known": "Using last known score — live feed is delayed. Tap Refresh to try again.",
+        "no_game": (
+            "No live game in the feed right now. Try **Refresh** closer to tipoff, "
+            "or use **Emergency score entry** below."
+        ),
+        "detail_unavailable": "Detailed stats are temporarily unavailable.",
+    }
+    text = templates.get(key, "Live feed is delayed.")
+    if fmt:
+        try:
+            return text.format(**fmt)
+        except Exception:
+            return text
+    return text
+
+
+def _format_live_gc_age(dt):
+    """Short relative time for last-known score labeling."""
+    if not dt:
+        return ""
+    try:
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+        sec = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()
+        if sec < 45:
+            return "just now"
+        if sec < 3600:
+            return f"{max(1, int(sec // 60))} min ago"
+        return f"{max(1, int(sec // 3600))} hr ago"
+    except Exception:
+        return ""
+
+
 def _cache_data_fingerprint(fn):
     """Best-effort Streamlit cache stats for debug panel."""
     try:
@@ -3319,7 +3367,7 @@ def _scoreboard_stats_today_et():
     return _scoreboard_v2_games_for_date(_nba_et_date_today())
 
 
-LIVE_GC_LAST_KNOWN_TTL_SEC = 7200
+LIVE_GC_LAST_KNOWN_TTL_SEC = 10800  # 3 hours — covers a full game if the feed drops mid-game
 
 
 def _live_gc_last_known_key(team_name):
@@ -3518,7 +3566,7 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
         return {
             "layer": 1,
             "priority": "manual",
-            "source_label": "Manual override",
+            "source_label": "Emergency score entry",
             "feed_banner": "",
             "parsed": parsed,
             "game_row": row,
@@ -3536,7 +3584,7 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
     cdn_ms = (pytime.perf_counter() - t0) * 1000.0
     live_count = len(cdn_games) if isinstance(cdn_games, list) else 0
     if cdn_err:
-        errors.append(f"cdn: {cdn_err}")
+        _live_gc_log_error(errors, "cdn", cdn_err)
     _live_gc_trace("layer1.cdn", ms=round(cdn_ms, 1), count=live_count, error=cdn_err)
 
     game_row = _pick_best_team_game_from_pool(cdn_games, team_name)
@@ -3557,7 +3605,7 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
             if stats_row:
                 stats_live_signal = _coarse_live_signal_v2(stats_row) or _live_broadcast_phase(stats_row) == "live"
         except Exception as exc:
-            errors.append(f"stats_today: {exc!r}")
+            _live_gc_log_error(errors, "stats_today", exc)
         _live_gc_trace(
             "layer1.stats_today",
             ms=round((pytime.perf_counter() - t1) * 1000.0, 1),
@@ -3572,9 +3620,9 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
         game_row = stats_row
         source_label = "NBA stats scoreboard (today)"
         if cdn_err or not cdn_games:
-            feed_banner = "Live feed partially delayed — showing stats scoreboard until CDN syncs."
+            feed_banner = _live_gc_fan_msg("feed_delayed_stats")
         elif stats_live_signal:
-            feed_banner = "Live feed partially delayed — CDN has not caught up yet."
+            feed_banner = _live_gc_fan_msg("feed_delayed_partial")
 
     last_known = _live_gc_load_last_known(team_name)
 
@@ -3606,11 +3654,20 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
 
     if last_known and isinstance(last_known.get("parsed"), dict):
         parsed = dict(last_known["parsed"])
-        feed_banner = feed_banner or "Live feeds unavailable — showing last known score (tap Refresh)."
+        saved_at = last_known.get("saved_at")
+        try:
+            lk_dt = (
+                datetime.fromisoformat(str(saved_at).replace("Z", "+00:00"))
+                if saved_at
+                else datetime.now(timezone.utc)
+            )
+        except Exception:
+            lk_dt = datetime.now(timezone.utc)
+        feed_banner = feed_banner or _live_gc_fan_msg("last_known")
         return {
             "layer": 1,
             "priority": "stale",
-            "source_label": f"Last known · {last_known.get('source_label', 'NBA')}",
+            "source_label": "Using last known score",
             "feed_banner": feed_banner,
             "parsed": parsed,
             "game_row": last_known.get("game_row"),
@@ -3618,16 +3675,15 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
             "manual": None,
             "live_count": live_count,
             "errors": errors,
-            "updated_at": datetime.fromisoformat(str(last_known.get("saved_at", "")).replace("Z", "+00:00"))
-            if last_known.get("saved_at")
-            else datetime.now(timezone.utc),
+            "updated_at": lk_dt,
+            "last_known_at": lk_dt,
             "top_scorer": None,
             "cdn_ok": False,
         }
 
     if stats_row and stats_live_signal and not _is_live_gc_shell_row(stats_row):
         parsed = _live_gc_parse_game_row(stats_row, team_name)
-        feed_banner = "Live feed partially delayed — scores from stats board; CDN still syncing."
+        feed_banner = _live_gc_fan_msg("feed_delayed_stats")
         _live_gc_save_last_known(team_name, parsed, stats_row, source_label)
         return {
             "layer": 1,
@@ -3646,15 +3702,16 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
         }
 
     opp, round_name, series_text = _live_gc_profile_context(team_name, profile)
-    det_msg = ""
     if cdn_err and not stats_row:
-        det_msg = "Live CDN scoreboard unavailable. Check connection or use Refresh."
+        det_msg = _live_gc_fan_msg("feed_delayed")
     elif not cdn_games and not stats_row:
-        det_msg = f"No {fan_nick(team_name)} game on today's CDN or stats board."
+        det_msg = _live_gc_fan_msg("no_game")
+    else:
+        det_msg = _live_gc_fan_msg("feed_delayed")
     return {
         "layer": 1,
         "priority": "static",
-        "source_label": "No live row",
+        "source_label": "Live feed unavailable",
         "feed_banner": det_msg,
         "parsed": None,
         "game_row": None,
@@ -11732,6 +11789,11 @@ def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, l
     state = state or {}
     snap = state.get("snap") or {}
     with st.expander("Live Game Center diagnostics (developer)", expanded=False):
+        st.markdown(
+            "**Real-game checklist (verify in browser during a live game):** "
+            "score at top · quarter/clock · source · last updated · no fake 0–0 · "
+            "page stays responsive on auto-refresh · Layer 2/3 only after buttons."
+        )
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Selected team", team_name)
         d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
@@ -11779,10 +11841,12 @@ def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, l
                     }
                 )
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        if errors:
-            st.warning("Feed notes: " + " | ".join(str(x) for x in errors[:6]))
+        l3e = section_ms.get("layer3_errors") or []
+        all_err = list(errors) + list(l3e)
+        if all_err:
+            st.warning("Technical feed notes (debug only): " + " | ".join(str(x) for x in all_err[:8]))
         else:
-            st.caption("No feed errors recorded for this render.")
+            st.caption("No technical feed errors recorded for this render.")
         if NBA_LIVE_AVAILABLE:
             st.caption("Live feeds: `nba_api.live` scoreboard / boxscore / playbyplay (CDN).")
         if NBA_STATS_AVAILABLE:
@@ -12060,7 +12124,7 @@ def _resolve_live_gc_state_legacy(team_name, profile):
         }
         return {
             "priority": "manual",
-            "source_label": "Manual override",
+            "source_label": "Emergency score entry",
             "snap": snap,
             "parsed": parsed,
             "game_row": row,
@@ -12219,10 +12283,13 @@ def _render_live_gc_layer1(team_name, profile, state):
         team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"]
     )
     banner = str(state.get("feed_banner") or "").strip()
-    if banner:
-        if state.get("priority") == "stale":
-            st.warning(banner)
-        elif "partially delayed" in banner.lower():
+    priority = state.get("priority")
+    if priority == "stale":
+        age = _format_live_gc_age(state.get("last_known_at") or state.get("updated_at"))
+        age_txt = f" (score from {age})" if age else ""
+        st.warning(f"{_live_gc_fan_msg('last_known')}{age_txt}")
+    elif banner:
+        if "delayed" in banner.lower() or "last known" in banner.lower():
             st.warning(banner)
         else:
             st.info(banner)
@@ -12240,7 +12307,15 @@ def _render_live_gc_layer1(team_name, profile, state):
 
     ts = _format_live_gc_updated_at(state.get("updated_at"))
     src = state.get("source_label") or "NBA CDN"
-    st.caption(f"**Source:** {src} · **Last updated:** {ts} · Series: **{series_line}**")
+    if priority == "stale":
+        age = _format_live_gc_age(state.get("last_known_at") or state.get("updated_at"))
+        st.caption(
+            f"**Source:** {src} · **Last known score:** {ts}"
+            + (f" ({age})" if age else "")
+            + f" · Series: **{series_line}**"
+        )
+    else:
+        st.caption(f"**Source:** {src} · **Last updated:** {ts} · Series: **{series_line}**")
 
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Win probability", f"{prob}%")
@@ -12305,15 +12380,27 @@ def _render_live_gc_instant_shell(team_name, profile, state):
     c4.metric("Feed", src[:24])
 
 
-def _render_manual_live_override_panel(team_name, profile):
-    """Layer 3 — emergency manual score entry."""
-    with st.expander("Manual Live Score Override", expanded=False):
+def _render_manual_live_override_panel(team_name, profile, emphasize=False):
+    """Emergency manual score — used when CDN/stats feeds fail during a game."""
+    with st.expander("Emergency score entry", expanded=bool(emphasize)):
+        st.caption(
+            "Turn this on if the live feed is down but you still need a scoreboard during the game. "
+            "It replaces the API score at the top until you turn it off."
+        )
         st.checkbox(
-            "Enable manual override (overrides all API feeds)",
+            "Use emergency score (overrides live feed)",
             key="manual_live_enabled",
         )
         if not st.session_state.get("manual_live_enabled"):
-            st.caption("Use when the league feed is down. The game card above will switch to your entered score.")
+            lk = _live_gc_load_last_known(team_name)
+            if lk and isinstance(lk.get("parsed"), dict):
+                p = lk["parsed"]
+                age = _format_live_gc_age(lk.get("saved_at"))
+                st.info(
+                    f"Last known from feed: **{p.get('away_score', 0)}–{p.get('home_score', 0)}**"
+                    + (f" ({age})" if age else "")
+                    + " — enable above to type a newer score manually."
+                )
             return
         opp_default = TEAM_PROFILES.get(team_name, {}).get("current_opponent") or team_name
         team_keys = sorted(TEAM_PROFILES.keys())
@@ -12459,7 +12546,8 @@ def render_live_game_center(team_name, profile):
         "GAME NIGHT",
     )
     render_playoff_matchup_ribbon(team_name)
-    _render_manual_live_override_panel(team_name, profile)
+    feed_stressed = state.get("priority") in ("static", "stale") or not parsed
+    _render_manual_live_override_panel(team_name, profile, emphasize=(state.get("priority") == "static"))
 
     col_a, col_b = st.columns([1, 3])
     with col_a:
@@ -12480,7 +12568,10 @@ def render_live_game_center(team_name, profile):
                     pass
             st.rerun()
     with col_b:
-        st.caption("Layer 1 = CDN live score (fast). Layer 2/3 load on demand — never blocks the scoreboard.")
+        if feed_stressed:
+            st.caption("Live feed is struggling — score above is last known or manual. Tap Refresh to retry the league feed.")
+        else:
+            st.caption("Layer 1 = live score only (fast). Analysis and detailed stats load only when you ask.")
 
     if state.get("priority") == "manual" and state.get("manual"):
         section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
@@ -12492,7 +12583,7 @@ def render_live_game_center(team_name, profile):
         return
 
     if not parsed:
-        st.warning(state.get("feed_banner") or "Live feed unavailable. Use manual override or refresh.")
+        st.warning(state.get("feed_banner") or _live_gc_fan_msg("feed_delayed"))
         _live_gc_render_fallback_content(
             team_name, profile, opp_name=opp, include_outlook=False, show_injuries=False
         )
@@ -12554,14 +12645,14 @@ def render_live_game_center(team_name, profile):
                 st.session_state[depth_loaded_key] = False
                 st.rerun()
         with c_l3b:
-            st.caption("Layer 3 loads once per opt-in so live auto-refresh stays fast. Tap refresh to pull new box/PBP.")
+            st.caption("Detailed stats load once so the live score can keep refreshing. Tap refresh to update box score and play-by-play.")
         if not st.session_state.get(depth_loaded_key):
             t0 = pytime.perf_counter()
             _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob, section_ms)
             section_ms["layer3"] = (pytime.perf_counter() - t0) * 1000.0
             st.session_state[depth_loaded_key] = True
         else:
-            st.info("Detailed stats are loaded. Use **Refresh detailed stats** to update box score and play-by-play.")
+            st.info("Detailed stats are loaded. Use **Refresh detailed stats** to update.")
 
     section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
     _render_live_gc_debug(
@@ -12633,6 +12724,7 @@ def _render_live_gc_layer2_sections(team_name, profile, parsed, state, prob, sec
 def _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob, section_ms):
     """Layer 3 — heavy analytics (opt-in): box score, PBP, Plotly, injuries."""
     st.markdown("### Detailed stats")
+    l3_errors = section_ms.setdefault("layer3_errors", [])
     box_df = pd.DataFrame()
     if gid:
         t0 = pytime.perf_counter()
@@ -12647,7 +12739,7 @@ def _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob,
         if box_df is not None and not box_df.empty:
             _render_styled_box_score(team_name, parsed["opp_name"], box_df)
         else:
-            st.caption("Box score has not published yet.")
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
 
     with st.expander("Top performers (box score)", expanded=False):
         if box_df is not None and not box_df.empty:
@@ -12662,7 +12754,8 @@ def _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob,
             actions = _live_gc_fetch_playbyplay(gid)
             section_ms["playbyplay"] = (pytime.perf_counter() - t0) * 1000.0
         except Exception as exc:
-            st.caption(f"Play-by-play unavailable: {exc!r}")
+            _live_gc_log_error(l3_errors, "playbyplay", exc)
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
         if actions:
             try:
                 tp = _top_plays_from_actions(actions, team_name, limit=8)
@@ -12672,7 +12765,8 @@ def _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob,
                 if not shots.empty:
                     st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
             except Exception as exc:
-                st.caption(f"Shot chart unavailable: {exc!r}")
+                _live_gc_log_error(l3_errors, "shot_chart", exc)
+                st.caption(_live_gc_fan_msg("detail_unavailable"))
         else:
             st.caption("Play-by-play has not published yet.")
 
@@ -12686,7 +12780,8 @@ def _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob,
                 neutral_framing=True,
             )
         except Exception as exc:
-            st.caption(f"Injury report unavailable: {exc!r}")
+            _live_gc_log_error(l3_errors, "injuries", exc)
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
 
     with st.expander("Game story (box-score detail)", expanded=False):
         if box_df is not None and not box_df.empty:
