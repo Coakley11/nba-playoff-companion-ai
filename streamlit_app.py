@@ -3227,6 +3227,34 @@ def _pseudo_games_from_scoreboard_v2(game_date):
     return out
 
 
+def _live_gc_debug_enabled():
+    return bool(globals().get("SHOW_PERF_DEBUG", False))
+
+
+def _live_gc_trace(event, **fields):
+    """Append Live Game Center diagnostics (session-only; shown when Show performance debug is on)."""
+    if not _live_gc_debug_enabled():
+        return
+    log = st.session_state.setdefault("live_gc_trace", [])
+    log.append({"t": pytime.perf_counter(), "event": str(event), **fields})
+    if len(log) > 250:
+        st.session_state["live_gc_trace"] = log[-250:]
+
+
+def _live_gc_trace_clear():
+    if _live_gc_debug_enabled():
+        st.session_state["live_gc_trace"] = []
+
+
+def _cache_data_fingerprint(fn):
+    """Best-effort Streamlit cache stats for debug panel."""
+    try:
+        info = fn.cache_info()
+        return {"hits": info.hits, "misses": info.misses, "size": info.curr_size, "max": info.max_size}
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=22)
 def get_live_games():
     """Today's live CDN scoreboard (NBA 'today' in ET). Cached ~20s to balance freshness vs load."""
@@ -3249,6 +3277,24 @@ def get_live_games():
         return rows
 
 
+def _get_live_games_traced():
+    """CDN scoreboard with cache-hit detection + timing (debug only)."""
+    before = _cache_data_fingerprint(get_live_games)
+    t0 = pytime.perf_counter()
+    games = get_live_games()
+    ms = (pytime.perf_counter() - t0) * 1000.0
+    after = _cache_data_fingerprint(get_live_games)
+    cache_hit = bool(before and after and after.get("hits", 0) > before.get("hits", 0))
+    _live_gc_trace(
+        "cdn_scoreboard.ScoreBoard",
+        ms=round(ms, 1),
+        cache_hit=cache_hit,
+        count=len(games) if isinstance(games, list) else 0,
+        status="empty" if not games else "ok",
+    )
+    return games
+
+
 @st.cache_data(ttl=28)
 def _scoreboard_v2_games_for_date(game_date):
     """Stats scoreboard for one calendar date → pseudo-live dicts (ScoreboardV3 first, then fixed V2)."""
@@ -3264,15 +3310,29 @@ def _gather_team_scoreboard_games(team_name):
     """Merge CDN live board + scoreboardv2 (yesterday→tomorrow ET); match by tricode, triCode, teamId, or loose name tokens."""
     if not team_name or (not TEAM_ALIASES.get(team_name) and not TEAM_IDS.get(team_name)):
         return []
+    t0 = pytime.perf_counter()
     profile = TEAM_PROFILES.get(team_name) or {}
     opponent = profile.get("current_opponent")
     by_gid = {}
-    for g in get_live_games():
+    for g in _get_live_games_traced() if _live_gc_debug_enabled() else get_live_games():
         gid = str(g.get("gameId") or "")
         if gid:
             by_gid[gid] = dict(g)
     for d in _nba_calendar_dates_window(1):
-        for g in _scoreboard_v2_games_for_date(d):
+        before = _cache_data_fingerprint(_scoreboard_v2_games_for_date) if _live_gc_debug_enabled() else None
+        dt0 = pytime.perf_counter()
+        day_games = _scoreboard_v2_games_for_date(d)
+        if _live_gc_debug_enabled():
+            after = _cache_data_fingerprint(_scoreboard_v2_games_for_date)
+            cache_hit = bool(before and after and after.get("hits", 0) > before.get("hits", 0))
+            _live_gc_trace(
+                "stats_scoreboard.date",
+                date=d.isoformat(),
+                ms=round((pytime.perf_counter() - dt0) * 1000.0, 1),
+                cache_hit=cache_hit,
+                count=len(day_games),
+            )
+        for g in day_games:
             gid = str(g.get("gameId") or "")
             if not gid:
                 continue
@@ -3288,6 +3348,18 @@ def _gather_team_scoreboard_games(team_name):
         elif _game_involves_team_loose(g2, team_name) or (opponent and _game_involves_team_loose(g2, opponent)):
             loose.append(g2)
     fallback = _fallback_schedule_games_for_team(team_name)
+    result = strict or loose or fallback
+    if _live_gc_debug_enabled():
+        _live_gc_trace(
+            "gather_team_scoreboard",
+            team=team_name,
+            ms=round((pytime.perf_counter() - t0) * 1000.0, 1),
+            strict=len(strict),
+            loose=len(loose),
+            fallback=len(fallback),
+            merged_games=len(by_gid),
+            returned=len(result),
+        )
     if strict:
         return strict
     if loose:
@@ -3718,11 +3790,10 @@ def get_current_or_today_game_uncached(team_name):
             opp = TEAM_PROFILES.get(team_name, {}).get("current_opponent")
             pool = []
             merged = {}
-            for d in _nba_calendar_dates_window(1):
-                for g in _scoreboard_v2_games_for_date(d):
-                    gid = str((g or {}).get("gameId") or "")
-                    if gid:
-                        merged[gid] = normalize_scoreboard_game(dict(g))
+            for g in _merged_stats_games_et_window():
+                gid = str((g or {}).get("gameId") or "")
+                if gid:
+                    merged[gid] = normalize_scoreboard_game(dict(g))
             for g in merged.values():
                 if _game_involves_team_loose(g, team_name) or (opp and _game_involves_team_loose(g, opp)):
                     pool.append(g)
@@ -6186,6 +6257,28 @@ def explain_play(desc, team):
     if "steal" in d: return "It created a turnover and a chance to run."
     if "block" in d: return "It protected the rim and stopped a quality look."
     return "It was one of the highest-impact plays available in the play-by-play feed."
+
+def _top_plays_from_actions(actions, team_name, limit=5):
+    alias = TEAM_ALIASES[team_name]
+    rows = []
+    for a in actions or []:
+        if (a.get("teamTricode") or "") != alias:
+            continue
+        desc = a.get("description", "") or ""
+        if not is_top_play(desc):
+            continue
+        rows.append(
+            {
+                "Period": a.get("period", ""),
+                "Clock": a.get("clock", ""),
+                "Top Play": desc,
+                "Why it mattered": explain_play(desc, team_name),
+            }
+        )
+    if rows:
+        return pd.DataFrame(rows[-limit:])
+    return pd.DataFrame()
+
 
 def top_plays_from_game_id(game_id, team_name, limit=5):
     alias=TEAM_ALIASES[team_name]
@@ -11186,28 +11279,115 @@ def _render_live_gc_layer1(team_name, profile):
     return opp, round_name, series_text, source
 
 
-def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None):
-    """Small debug block that never triggers API calls by itself."""
+def _live_gc_fetch_boxscore(game_id):
+    """Box score fetch with optional timing trace (deferred — not on scoreboard critical path)."""
+    if not game_id:
+        return {}
+    before = _cache_data_fingerprint(get_live_boxscore) if _live_gc_debug_enabled() else None
+    t0 = pytime.perf_counter()
+    data = get_live_boxscore(game_id) or {}
+    if _live_gc_debug_enabled():
+        after = _cache_data_fingerprint(get_live_boxscore)
+        cache_hit = bool(before and after and after.get("hits", 0) > before.get("hits", 0))
+        _live_gc_trace(
+            "live_boxscore",
+            game_id=str(game_id),
+            ms=round((pytime.perf_counter() - t0) * 1000.0, 1),
+            cache_hit=cache_hit,
+            status="empty" if not data else "ok",
+        )
+    return data
+
+
+def _live_gc_fetch_playbyplay(game_id):
+    if not game_id:
+        return []
+    before = _cache_data_fingerprint(get_live_playbyplay) if _live_gc_debug_enabled() else None
+    t0 = pytime.perf_counter()
+    actions = get_live_playbyplay(game_id) or []
+    if _live_gc_debug_enabled():
+        after = _cache_data_fingerprint(get_live_playbyplay)
+        cache_hit = bool(before and after and after.get("hits", 0) > before.get("hits", 0))
+        _live_gc_trace(
+            "live_playbyplay",
+            game_id=str(game_id),
+            ms=round((pytime.perf_counter() - t0) * 1000.0, 1),
+            cache_hit=cache_hit,
+            count=len(actions),
+        )
+    return actions
+
+
+def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None, state=None, section_ms=None):
+    """Live Game Center diagnostics — no extra API calls; reads session trace + cache stats."""
     if not globals().get("SHOW_PERF_DEBUG", False):
         return
     errors = errors or []
-    with st.expander("Feed diagnostics (developer)", expanded=False):
+    section_ms = section_ms or {}
+    state = state or {}
+    snap = state.get("snap") or {}
+    with st.expander("Live Game Center diagnostics (developer)", expanded=False):
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Selected team", team_name)
         d2.metric("Alias", TEAM_ALIASES.get(team_name, "—"))
         d3.metric("Opponent", opp or "TBD")
-        d4.metric("Game hub loaded", "yes" if layer1_loaded else "no")
-        e1, e2, e3 = st.columns(3)
-        e1.metric("Live check", "tried" if live_attempted else "not yet")
-        e2.metric(
-            "League board",
-            "not requested" if live_count is None else ("yes" if live_count > 0 else "no"),
-        )
-        e3.metric("Games found", "not requested" if live_count is None else str(live_count))
+        d4.metric("Resolve priority", state.get("priority") or "—")
+        e1, e2, e3, e4 = st.columns(4)
+        e1.metric("CDN games", "—" if live_count is None else str(live_count))
+        e2.metric("Detection tier", snap.get("detection_tier") or "—")
+        e3.metric("Data source", str(snap.get("data_source") or state.get("source_label") or "—")[:20])
+        e4.metric("Game status", snap.get("game_status") or "—")
+        if section_ms:
+            st.caption(
+                "Section timing (this render): "
+                + " · ".join(f"{k}={v:.0f}ms" for k, v in sorted(section_ms.items(), key=lambda x: -x[1]))
+            )
+        cache_rows = []
+        for fn, label in (
+            (get_live_games, "CDN scoreboard"),
+            (_scoreboard_v2_games_for_date, "Stats scoreboard (per date)"),
+            (get_current_or_today_game, "Featured game snapshot"),
+            (get_live_boxscore, "Live box score"),
+            (get_live_playbyplay, "Play-by-play"),
+        ):
+            fp = _cache_data_fingerprint(fn)
+            if fp:
+                cache_rows.append({"feed": label, **fp})
+        if cache_rows:
+            st.markdown("**Cache (Streamlit `@st.cache_data`)**")
+            st.dataframe(pd.DataFrame(cache_rows), use_container_width=True, hide_index=True)
+        trace = st.session_state.get("live_gc_trace") or []
+        if trace:
+            st.markdown("**Request trace (this session, latest render)**")
+            t0 = trace[0].get("t", 0)
+            rows = []
+            for ev in trace[-40:]:
+                rows.append(
+                    {
+                        "Δms": round((ev.get("t", 0) - t0) * 1000.0, 1),
+                        "event": ev.get("event"),
+                        "ms": ev.get("ms"),
+                        "status": ev.get("status"),
+                        "cache_hit": ev.get("cache_hit"),
+                        "count": ev.get("count"),
+                        "error": (str(ev.get("error"))[:80] if ev.get("error") else ""),
+                    }
+                )
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         if errors:
-            st.warning("Feed notes: " + " | ".join(str(x) for x in errors[:4]))
+            st.warning("Feed notes: " + " | ".join(str(x) for x in errors[:6]))
         else:
-            st.caption("No feed issues recorded for this page render.")
+            st.caption("No feed errors recorded for this render.")
+        if NBA_LIVE_AVAILABLE:
+            st.caption("Live feeds: `nba_api.live` scoreboard / boxscore / playbyplay (CDN).")
+        if NBA_STATS_AVAILABLE:
+            st.caption("Stats feeds: `ScoreboardV3` then `ScoreboardV2` for yesterday→tomorrow ET.")
+        st.caption(
+            "Bracket label **Waiting for API games** is from playoff series reconciliation — not the live scoreboard."
+        )
+        if st.button("Clear Live GC trace", key="live_gc_clear_trace"):
+            st.session_state["live_gc_trace"] = []
+            st.rerun()
 
 
 def _fetch_live_gc_snapshot(team_name):
@@ -11424,11 +11604,34 @@ def _bracket_stub_game_row(team_name, profile, opp, snap=None):
     }
 
 
+def _get_current_or_today_game_traced(team_name):
+    before = _cache_data_fingerprint(get_current_or_today_game)
+    t0 = pytime.perf_counter()
+    snap = get_current_or_today_game(team_name)
+    ms = (pytime.perf_counter() - t0) * 1000.0
+    after = _cache_data_fingerprint(get_current_or_today_game)
+    cache_hit = bool(before and after and after.get("hits", 0) > before.get("hits", 0))
+    _live_gc_trace(
+        "get_current_or_today_game",
+        ms=round(ms, 1),
+        cache_hit=cache_hit,
+        game_found=bool((snap or {}).get("game_found")),
+        game_status=(snap or {}).get("game_status"),
+        data_source=(snap or {}).get("data_source"),
+        detection_tier=(snap or {}).get("detection_tier"),
+        game_id=(snap or {}).get("game_id"),
+        home_score=(snap or {}).get("home_score"),
+        away_score=(snap or {}).get("away_score"),
+    )
+    return snap
+
+
 def resolve_live_gc_state(team_name, profile):
     """
     Resolve Live Game Center state with explicit priority:
     manual → NBA live scoreboard → schedule/stats fallback → bracket shell → static message.
     """
+    t_resolve = pytime.perf_counter()
     errors = []
     manual = _manual_live_override_snapshot(team_name)
     if manual:
@@ -11459,7 +11662,7 @@ def resolve_live_gc_state(team_name, profile):
 
     live_count = None
     try:
-        games = get_live_games()
+        games = _get_live_games_traced() if _live_gc_debug_enabled() else get_live_games()
         live_count = len(games) if isinstance(games, list) else 0
     except Exception as exc:
         live_count = 0
@@ -11467,7 +11670,7 @@ def resolve_live_gc_state(team_name, profile):
 
     snap = None
     try:
-        snap = get_current_or_today_game(team_name)
+        snap = _get_current_or_today_game_traced(team_name) if _live_gc_debug_enabled() else get_current_or_today_game(team_name)
     except Exception as exc:
         errors.append(f"game detection: {exc!r}")
         snap = {
@@ -11485,7 +11688,7 @@ def resolve_live_gc_state(team_name, profile):
     if snap and snap.get("game_found") and snap.get("game_row"):
         parsed = _live_gc_parse_game_row(snap["game_row"], team_name)
         src = str(snap.get("data_source") or "NBA API")
-        return {
+        out = {
             "priority": "api",
             "source_label": src,
             "snap": snap,
@@ -11496,6 +11699,15 @@ def resolve_live_gc_state(team_name, profile):
             "errors": errors,
             "message": snap.get("detection_message") or "",
         }
+        if _live_gc_debug_enabled():
+            _live_gc_trace(
+                "resolve_live_gc_state",
+                ms=round((pytime.perf_counter() - t_resolve) * 1000.0, 1),
+                priority="api",
+                phase=parsed.get("phase"),
+                scores=f"{parsed.get('away_score')}-{parsed.get('home_score')}",
+            )
+        return out
 
     opp, round_name, series_text, shell_src = _local_live_gc_series_context(team_name, profile)
     stub = _bracket_stub_game_row(team_name, profile, opp, snap)
@@ -11503,7 +11715,7 @@ def resolve_live_gc_state(team_name, profile):
         parsed = _live_gc_parse_game_row(stub, team_name)
         tier = (snap or {}).get("detection_tier") or "bracket_fallback"
         msg = (snap or {}).get("detection_message") or "Live feed unavailable — showing bracket matchup shell."
-        return {
+        out = {
             "priority": "fallback",
             "source_label": f"Fallback · {shell_src}",
             "snap": snap or {},
@@ -11517,8 +11729,17 @@ def resolve_live_gc_state(team_name, profile):
             "series_text": series_text,
             "tier": tier,
         }
+        if _live_gc_debug_enabled():
+            _live_gc_trace(
+                "resolve_live_gc_state",
+                ms=round((pytime.perf_counter() - t_resolve) * 1000.0, 1),
+                priority="fallback",
+                shell_src=shell_src,
+                tier=tier,
+            )
+        return out
 
-    return {
+    out = {
         "priority": "static",
         "source_label": "Static message",
         "snap": snap or {},
@@ -11531,6 +11752,14 @@ def resolve_live_gc_state(team_name, profile):
         "round_name": round_name,
         "series_text": series_text,
     }
+    if _live_gc_debug_enabled():
+        _live_gc_trace(
+            "resolve_live_gc_state",
+            ms=round((pytime.perf_counter() - t_resolve) * 1000.0, 1),
+            priority="static",
+            detection_tier=(snap or {}).get("detection_tier"),
+        )
+    return out
 
 
 def _live_status_chip(state):
@@ -11694,6 +11923,9 @@ def _render_manual_live_game_center(team_name, parsed):
 
 def render_live_game_center(team_name, profile):
     """Reliability-first Live Game Center: instant shell, then score, then optional depth."""
+    _live_gc_trace_clear()
+    t_page = pytime.perf_counter()
+    section_ms = {}
     ident = team_fan_identity(team_name)
     mx = get_display_matchup(team_name)
     render_fan_page_hero(
@@ -11704,7 +11936,7 @@ def render_live_game_center(team_name, profile):
     )
     if st.session_state.get("_live_gc_sel_team") != team_name:
         for k in list(st.session_state.keys()):
-            if isinstance(k, str) and k.startswith("live_gc__"):
+            if isinstance(k, str) and (k.startswith("live_gc__") or k.startswith("live_gc_depth_")):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = team_name
 
@@ -11745,7 +11977,9 @@ def render_live_game_center(team_name, profile):
             },
         )
 
+    t0 = pytime.perf_counter()
     state = resolve_live_gc_state(team_name, profile)
+    section_ms["resolve_state"] = (pytime.perf_counter() - t0) * 1000.0
     snap = state.get("snap") or {}
     parsed = state.get("parsed")
     opp = (parsed or {}).get("opp_name") or opp_l or TEAM_PROFILES.get(team_name, {}).get("current_opponent")
@@ -11755,13 +11989,23 @@ def render_live_game_center(team_name, profile):
 
     if state.get("priority") == "manual" and state.get("manual"):
         _render_manual_live_game_center(team_name, state["manual"])
-        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
+        section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
+        _render_live_gc_debug(
+            team_name, opp, layer1_loaded=True, live_attempted=True,
+            live_count=state.get("live_count"), errors=state.get("errors"),
+            state=state, section_ms=section_ms,
+        )
         return
 
     if not parsed:
         st.warning(state.get("message") or "Live feed unavailable. Use manual override or refresh.")
         _live_gc_render_fallback_content(team_name, profile, opp_name=opp, include_outlook=True)
-        _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
+        section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
+        _render_live_gc_debug(
+            team_name, opp, layer1_loaded=True, live_attempted=True,
+            live_count=state.get("live_count"), errors=state.get("errors"),
+            state=state, section_ms=section_ms,
+        )
         return
 
     if state.get("message") and state.get("priority") == "fallback":
@@ -11771,7 +12015,9 @@ def render_live_game_center(team_name, profile):
     elif snap.get("detection_tier") == "likely_live_feed_gap":
         st.error("Game may be in progress, but the live feed is delayed.")
 
+    t0 = pytime.perf_counter()
     series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
+    section_ms["series_board"] = (pytime.perf_counter() - t0) * 1000.0
     gid = parsed["gid"]
     prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"])
 
@@ -11799,16 +12045,35 @@ def render_live_game_center(team_name, profile):
     m3.metric("Clock", parsed.get("clock") or snap.get("countdown") or "—")
     m4.metric("Margin", f"{parsed['margin']:+d}")
 
+    # Heavy feeds (box score, PBP, injuries) load only on demand — Streamlit runs expander bodies every rerun.
     box_df = pd.DataFrame()
-    if gid and not str(gid).startswith(("fallback-", "manual-")):
-        try:
-            box_game = get_live_boxscore(gid) or {}
-            box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
-        except Exception:
-            box_df = pd.DataFrame()
-    if box_df is not None and not box_df.empty:
-        prob = live_win_probability(team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"], box_df)
+    can_depth = bool(gid and not str(gid).startswith(("fallback-", "manual-")))
+    depth_key = f"live_gc_depth_{gid}" if can_depth else ""
+    load_depth = (not can_depth) or st.session_state.get(depth_key)
+    if can_depth and not st.session_state.get(depth_key):
+        st.caption(
+            "Detailed stats (box score, play-by-play, shot chart, injuries) are **not** loaded automatically "
+            "during live play — use the button below so scores refresh faster."
+        )
+        if st.button("Load detailed stats", key=f"btn_{depth_key}", type="secondary"):
+            st.session_state[depth_key] = True
+            st.rerun()
 
+    if load_depth:
+        _render_live_gc_depth_sections(
+            team_name, profile, parsed, snap, gid, prob, box_df, section_ms
+        )
+
+    section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
+    _render_live_gc_debug(
+        team_name, opp, layer1_loaded=True, live_attempted=True,
+        live_count=state.get("live_count"), errors=state.get("errors"),
+        state=state, section_ms=section_ms,
+    )
+
+
+def _render_live_gc_depth_sections(team_name, profile, parsed, snap, gid, prob, box_df, section_ms):
+    """Optional depth widgets — only entered after user opts in (or non-API game ids)."""
     with st.expander("Win probability & matchup swing", expanded=False):
         st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
@@ -11819,6 +12084,14 @@ def render_live_game_center(team_name, profile):
         st.markdown("</div>", unsafe_allow_html=True)
 
     with st.expander("Top performers", expanded=False):
+        if gid and not str(gid).startswith(("fallback-", "manual-")):
+            t0 = pytime.perf_counter()
+            try:
+                box_game = _live_gc_fetch_boxscore(gid)
+                box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+            except Exception:
+                box_df = pd.DataFrame()
+            section_ms["boxscore_top_perf"] = (pytime.perf_counter() - t0) * 1000.0
         if box_df is not None and not box_df.empty:
             _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
         else:
@@ -11826,6 +12099,13 @@ def render_live_game_center(team_name, profile):
 
     with st.expander("Lineups / on-court estimate", expanded=False):
         st.caption("Estimated groups from current playoff rotation data when official on-court feeds are unavailable.")
+        if box_df is None or box_df.empty:
+            if gid and not str(gid).startswith(("fallback-", "manual-")):
+                try:
+                    box_game = _live_gc_fetch_boxscore(gid)
+                    box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+                except Exception:
+                    box_df = pd.DataFrame()
         _render_lineup_board(team_name, parsed["opp_name"], box_df)
 
     with st.expander("Full styled box score", expanded=False):
@@ -11833,7 +12113,7 @@ def render_live_game_center(team_name, profile):
             _render_styled_box_score(team_name, parsed["opp_name"], box_df)
         elif gid and not str(gid).startswith(("fallback-", "manual-")):
             try:
-                box_game = get_live_boxscore(gid) or {}
+                box_game = _live_gc_fetch_boxscore(gid)
                 retry_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
                 if retry_df is not None and not retry_df.empty:
                     _render_styled_box_score(team_name, parsed["opp_name"], retry_df)
@@ -11848,12 +12128,14 @@ def render_live_game_center(team_name, profile):
         if gid and not str(gid).startswith(("fallback-", "manual-")):
             actions = []
             try:
-                actions = get_live_playbyplay(gid) or []
+                t0 = pytime.perf_counter()
+                actions = _live_gc_fetch_playbyplay(gid)
+                section_ms["playbyplay"] = (pytime.perf_counter() - t0) * 1000.0
             except Exception as exc:
                 st.caption(f"Play-by-play unavailable: {exc!r}")
             if actions:
                 try:
-                    tp = top_plays_from_game_id(gid, team_name, limit=8)
+                    tp = _top_plays_from_actions(actions, team_name, limit=8)
                     if tp is not None and not tp.empty:
                         st.dataframe(tp, use_container_width=True, hide_index=True)
                     shots = shot_df_from_pbp(actions, parsed["fav_alias"])
@@ -11882,8 +12164,6 @@ def render_live_game_center(team_name, profile):
         if box_df is not None and not box_df.empty:
             for line in game_story(team_name, parsed["margin"], prob, box_df):
                 st.write(f"• {line}")
-
-    _render_live_gc_debug(team_name, opp, layer1_loaded=True, live_attempted=True, live_count=state.get("live_count"), errors=state.get("errors"))
 
 # ==========================================================
 # Franchise Playoff Legends / Team History Leaders
