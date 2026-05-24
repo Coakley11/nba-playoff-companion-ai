@@ -1751,6 +1751,14 @@ PLAYOFF_BRACKET_REFRESH_MS = 60000
 LIVE_GC_AUTO_LOAD_STATUSES = frozenset({"live", "starting soon", "final", "scheduled"})
 LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 
+# TEMPORARY: ultra-light Live Game Center — only Layer 1 scoreboard until reliability is proven.
+# Set False to restore full Layer 2/3 (analysis, box score, PBP, Plotly, etc.).
+LIVE_GC_SAFE_MODE = True
+
+
+def _live_gc_safe_mode_active():
+    return bool(LIVE_GC_SAFE_MODE)
+
 def safe_int(x, default=0):
     try: return int(x or default)
     except Exception: return default
@@ -12488,8 +12496,159 @@ def _render_manual_live_game_center(team_name, parsed):
         st.info(parsed["notes"])
 
 
+def _render_safe_emergency_entry(team_name, profile):
+    """Minimal emergency score form — no extra API calls."""
+    with st.expander("Emergency score entry", expanded=True):
+        st.caption("Live feed unavailable. Enter the score manually; it replaces the board above until you turn this off.")
+        st.checkbox("Use emergency score", key="manual_live_enabled")
+        if not st.session_state.get("manual_live_enabled"):
+            return
+        opp_default = profile.get("current_opponent") or team_name
+        team_keys = sorted(TEAM_PROFILES.keys())
+        c1, c2 = st.columns(2)
+        with c1:
+            st.selectbox("Home", team_keys, index=team_keys.index(team_name) if team_name in team_keys else 0, key="manual_live_home_team")
+        with c2:
+            st.selectbox("Away", team_keys, index=team_keys.index(opp_default) if opp_default in team_keys else 0, key="manual_live_away_team")
+        c3, c4, c5, c6 = st.columns(4)
+        c3.number_input("Home pts", 0, 200, 0, key="manual_live_home_score")
+        c4.number_input("Away pts", 0, 200, 0, key="manual_live_away_score")
+        c5.number_input("Quarter", 1, 4, 1, key="manual_live_quarter")
+        c6.text_input("Clock", "8:42", key="manual_live_clock")
+        st.selectbox("Status", ["live", "scheduled", "final", "halftime"], key="manual_live_status")
+        if st.button("Apply emergency score", key="safe_manual_apply", type="primary"):
+            st.rerun()
+
+
+def _render_live_gc_safe_board(team_name, profile, state, parsed):
+    """Safe mode UI — scoreboard essentials only (no Plotly, box, PBP, or heavy widgets)."""
+    e = html.escape
+    priority = state.get("priority")
+    banner = str(state.get("feed_banner") or "").strip()
+    if priority == "stale":
+        age = _format_live_gc_age(state.get("last_known_at") or state.get("updated_at"))
+        st.warning(f"{_live_gc_fan_msg('last_known')}" + (f" (score from {age})" if age else ""))
+    elif banner:
+        st.warning(banner) if "delayed" in banner.lower() or "last known" in banner.lower() else st.info(banner)
+
+    opp_l, rnd_l, ser_l = _live_gc_profile_context(team_name, profile)
+    away_logo = e(TEAM_LOGOS.get(parsed["away_name"], ""))
+    home_logo = e(TEAM_LOGOS.get(parsed["home_name"], ""))
+    chip = _live_status_chip(state)
+    if parsed.get("period") and parsed.get("clock"):
+        clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
+    elif parsed.get("period"):
+        clock_txt = f"Q{parsed['period']}"
+    else:
+        clock_txt = str(parsed.get("status") or "—")
+
+    st.markdown(
+        f"<div class='live-gc-board'>"
+        f"<div style='text-align:center'><img src='{away_logo}' alt=''/><div style='font-size:12px;font-weight:800'>{e(parsed['away_name'])}</div></div>"
+        f"<div style='text-align:center;min-width:220px'>"
+        f"<div style='font-size:11px;color:#fbbf24;font-weight:950'>{e(chip)}</div>"
+        f"<div class='live-gc-score'>{parsed['away_score']} — {parsed['home_score']}</div>"
+        f"<div class='live-gc-clock'>{e(clock_txt)}</div>"
+        f"<div style='font-size:11px;color:#94a3b8;margin-top:6px'>Series · {e(ser_l)} · {e(rnd_l)}</div>"
+        f"</div>"
+        f"<div style='text-align:center'><img src='{home_logo}' alt=''/><div style='font-size:12px;font-weight:800'>{e(parsed['home_name'])}</div></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    ts = _format_live_gc_updated_at(state.get("updated_at"))
+    src = e(state.get("source_label") or "NBA CDN")
+    if priority == "stale":
+        age = _format_live_gc_age(state.get("last_known_at") or state.get("updated_at"))
+        st.caption(f"**Source:** {src} · **Last known score:** {ts}" + (f" ({age})" if age else ""))
+    else:
+        st.caption(f"**Source:** {src} · **Last updated:** {ts}")
+
+    prob = live_win_probability(
+        team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"]
+    )
+    c1, c2, c3 = st.columns([1, 2, 2])
+    c1.metric("Win probability", f"{prob}%")
+    c2.markdown(
+        f'<div class="prob-bar" style="margin-top:12px"><span style="width:{max(1, min(99, prob))}%"></span></div>',
+        unsafe_allow_html=True,
+    )
+    c3.metric("Margin", f"{parsed['margin']:+d}")
+
+    story = _live_headline_natural(
+        team_name,
+        parsed.get("phase", "pregame"),
+        parsed.get("margin", 0),
+        prob,
+        parsed.get("period", 0),
+        parsed.get("status", ""),
+        fan_nick(parsed.get("opp_name", "")),
+    )
+    st.markdown(
+        f"<div style='font-size:14px;line-height:1.5;margin-top:10px;color:#334155'>{e(story)}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_live_game_center_safe(team_name, profile):
+    """TEMPORARY safe mode — Layer 1 only; zero heavy feature execution."""
+    _live_gc_trace_clear()
+    t_page = pytime.perf_counter()
+    section_ms = {}
+
+    st.markdown(
+        "<div style='padding:8px 12px;border-radius:8px;background:#1e293b;color:#f8fafc;"
+        "font-size:13px;font-weight:700;margin-bottom:10px'>"
+        "SAFE MODE — live scoreboard only (analysis, box score, PBP, and charts disabled temporarily)"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if st.button("Refresh scoreboard", key=f"live_gc_safe_refresh_{team_name}", type="primary"):
+        for fn in (fetch_cdn_scoreboard_only, _scoreboard_stats_today_et):
+            try:
+                fn.clear()
+            except Exception:
+                pass
+        st.rerun()
+
+    t0 = pytime.perf_counter()
+    state = _resolve_live_gc_layer1_fast(team_name, profile)
+    section_ms["layer1_resolve"] = (pytime.perf_counter() - t0) * 1000.0
+
+    parsed = None
+    if state.get("priority") == "manual" and state.get("manual"):
+        row = _manual_to_game_row(state["manual"])
+        parsed = _live_gc_parse_game_row(row, team_name)
+    elif state.get("parsed"):
+        parsed = state["parsed"]
+
+    if parsed:
+        _render_live_gc_safe_board(team_name, profile, state, parsed)
+    else:
+        st.warning(state.get("feed_banner") or _live_gc_fan_msg("no_game"))
+        _render_safe_emergency_entry(team_name, profile)
+
+    section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
+    if _live_gc_debug_enabled():
+        _render_live_gc_debug(
+            team_name,
+            profile.get("current_opponent"),
+            layer1_loaded=True,
+            live_attempted=True,
+            live_count=state.get("live_count"),
+            errors=state.get("errors"),
+            state=state,
+            section_ms=section_ms,
+        )
+        st.caption(f"**Safe mode render:** {section_ms['total']:.0f} ms (Layer 1 resolve: {section_ms.get('layer1_resolve', 0):.0f} ms)")
+
+
 def render_live_game_center(team_name, profile):
     """CDN-first Live Game Center: Layer 1 (fast) → Layer 2 (analysis) → Layer 3 (heavy, opt-in)."""
+    if _live_gc_safe_mode_active():
+        return render_live_game_center_safe(team_name, profile)
+
     _live_gc_trace_clear()
     t_page = pytime.perf_counter()
     section_ms = {}
