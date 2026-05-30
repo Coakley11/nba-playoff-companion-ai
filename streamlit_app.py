@@ -471,14 +471,10 @@ TEAM_LOGOS = {team: f"https://cdn.nba.com/logos/nba/{tid}/primary/L/logo.svg" fo
 CURRENT_NBA_SEASON = "2025-26"
 
 TEAM_PROFILES = {
-    "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Philadelphia 76ers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
-    "Philadelphia 76ers": {"seed":7,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"New York Knicks","first_round_opponent":"Boston Celtics","first_round_result":"Defeated Boston Celtics, 4-3","starters":["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],"subs":["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"],"strengths":["Embiid pressure","Maxey speed","Paul George wing scoring","free-throw pressure"],"concerns":["Embiid health","transition defense","bench depth"]},
-    "Detroit Pistons": {"seed":1,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Orlando Magic","first_round_result":"Defeated Orlando Magic, 4-3","starters":["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],"subs":["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"],"strengths":["Cade Cunningham control","Duren rebounding","young athleticism","transition pressure"],"concerns":["late-game execution","playoff inexperience","half-court droughts"]},
-    "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Second Round","current_opponent":"Detroit Pistons","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Harden playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
+    "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"Conference Finals","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
+    "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Conference Finals","current_opponent":"New York Knicks","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Harden playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
     "Oklahoma City Thunder": {"seed":1,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","Chet rim protection","spacing","pace"],"concerns":["Spurs length","physicality","late-game pressure"]},
-    "Los Angeles Lakers": {"seed":4,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Houston Rockets","first_round_result":"Defeated Houston Rockets, 4-2","starters":["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],"subs":["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"],"strengths":["LeBron control","Anthony Davis defense","rim pressure","playoff experience"],"concerns":["transition defense","age","three-point consistency"]},
     "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
-    "Minnesota Timberwolves": {"seed":6,"conference":"Western Conference","status":"Active","round":"Second Round","current_opponent":"San Antonio Spurs","first_round_opponent":"Denver Nuggets","first_round_result":"Defeated Denver Nuggets, 4-2","starters":["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],"subs":["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"],"strengths":["Edwards scoring","Gobert/McDaniels defense","Naz Reid spacing","physicality"],"concerns":["late-game offense","spacing","foul trouble"]},
 }
 # Eliminated teams
 ELIMINATED_INFO = [
@@ -486,10 +482,14 @@ ELIMINATED_INFO = [
     ("Boston Celtics",2,"Eastern Conference","Philadelphia 76ers","Lost to Philadelphia 76ers, 4-3",["Jrue Holiday","Derrick White","Jaylen Brown","Jayson Tatum","Kristaps Porzingis"],["Payton Pritchard","Sam Hauser","Al Horford","Luke Kornet","Neemias Queta"]),
     ("Orlando Magic",8,"Eastern Conference","Detroit Pistons","Lost to Detroit Pistons, 4-3",["Jalen Suggs","Kentavious Caldwell-Pope","Franz Wagner","Paolo Banchero","Wendell Carter Jr."],["Cole Anthony","Jonathan Isaac","Anthony Black","Moritz Wagner","Gary Harris"]),
     ("Toronto Raptors",5,"Eastern Conference","Cleveland Cavaliers","Lost to Cleveland Cavaliers, 4-3",["Immanuel Quickley","RJ Barrett","Gradey Dick","Scottie Barnes","Jakob Poeltl"],["Bruce Brown","Kelly Olynyk","Ochai Agbaji","Chris Boucher","Davion Mitchell"]),
+    ("Philadelphia 76ers",7,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-0",["Tyrese Maxey","VJ Edgecombe","Kelly Oubre Jr.","Paul George","Joel Embiid"],["Quentin Grimes","Andre Drummond","Kyle Lowry","Eric Gordon","Caleb Martin"]),
+    ("Detroit Pistons",1,"Eastern Conference","Cleveland Cavaliers","Lost to Cleveland Cavaliers, 4-3",["Cade Cunningham","Jaden Ivey","Ausar Thompson","Tobias Harris","Jalen Duren"],["Marcus Sasser","Isaiah Stewart","Simone Fontecchio","Malik Beasley","Ron Holland"]),
     ("Phoenix Suns",8,"Western Conference","Oklahoma City Thunder","Lost to Oklahoma City Thunder, 4-0",["Devin Booker","Bradley Beal","Grayson Allen","Kevin Durant","Jusuf Nurkic"],["Royce O'Neale","Eric Gordon","Bol Bol","Drew Eubanks","Josh Okogie"]),
     ("Portland Trail Blazers",7,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-1",["Scoot Henderson","Anfernee Simons","Shaedon Sharpe","Jerami Grant","Deandre Ayton"],["Toumani Camara","Matisse Thybulle","Robert Williams III","Dalano Banton","Kris Murray"]),
     ("Denver Nuggets",3,"Western Conference","Minnesota Timberwolves","Lost to Minnesota Timberwolves, 4-2",["Jamal Murray","Christian Braun","Michael Porter Jr.","Aaron Gordon","Nikola Jokic"],["Reggie Jackson","Peyton Watson","Zeke Nnaji","Julian Strawther","DeAndre Jordan"]),
     ("Houston Rockets",5,"Western Conference","Los Angeles Lakers","Lost to Los Angeles Lakers, 4-2",["Fred VanVleet","Jalen Green","Amen Thompson","Jabari Smith Jr.","Alperen Sengun"],["Dillon Brooks","Tari Eason","Cam Whitmore","Steven Adams","Reed Sheppard"]),
+    ("Los Angeles Lakers",4,"Western Conference","Oklahoma City Thunder","Lost to Oklahoma City Thunder, 4-1",["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"]),
+    ("Minnesota Timberwolves",6,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-2",["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"]),
 ]
 for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
     TEAM_PROFILES[name] = {"seed":seed,"conference":conf,"status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":opp,"first_round_result":result,"starters":starters,"subs":subs,"strengths":["main star creation","transition chances","playoff experience"],"concerns":["series ended in first round","needs depth/defense improvements","late-game consistency"]}
@@ -1618,6 +1618,7 @@ SECOND_ROUND_DEMO_BACKUP = {
         {"Game":"Game 4","Date":"May 10","Score":"Pistons 102, Cavaliers 99","Winner":"Detroit Pistons","GameID":"demo-det-cle-g4"},
         {"Game":"Game 5","Date":"May 12","Score":"Cavaliers 118, Pistons 114","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g5"},
         {"Game":"Game 6","Date":"May 14","Score":"Cavaliers 101, Pistons 98","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g6"},
+        {"Game":"Game 7","Date":"May 17","Score":"Cavaliers 109, Pistons 104","Winner":"Cleveland Cavaliers","GameID":"demo-det-cle-g7"},
     ]},
     "NYK-PHI": {"games":[
         {"Game":"Game 1","Date":"May 4","Score":"Knicks 137, 76ers 98","Winner":"New York Knicks","GameID":"demo-nyk-phi-g1"},
@@ -1642,6 +1643,21 @@ SECOND_ROUND_DEMO_BACKUP = {
     ]},
 }
 
+# Emergency/demo backup for conference finals when API has no rows yet.
+CONFERENCE_FINALS_DEMO_BACKUP = {
+    "NYK-CLE": {"games":[
+        {"Game":"Game 1","Date":"May 22","Score":"Knicks 108, Cavaliers 102","Winner":"New York Knicks","GameID":"demo-nyk-cle-g1"},
+        {"Game":"Game 2","Date":"May 24","Score":"Cavaliers 115, Knicks 110","Winner":"Cleveland Cavaliers","GameID":"demo-nyk-cle-g2"},
+        {"Game":"Game 3","Date":"May 26","Score":"Knicks 104, Cavaliers 99","Winner":"New York Knicks","GameID":"demo-nyk-cle-g3"},
+    ]},
+    "OKC-SAS": {"games":[
+        {"Game":"Game 1","Date":"May 21","Score":"Thunder 112, Spurs 105","Winner":"Oklahoma City Thunder","GameID":"demo-okc-sas-g1"},
+        {"Game":"Game 2","Date":"May 23","Score":"Spurs 118, Thunder 114","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g2"},
+        {"Game":"Game 3","Date":"May 25","Score":"Thunder 121, Spurs 116","Winner":"Oklahoma City Thunder","GameID":"demo-okc-sas-g3"},
+        {"Game":"Game 4","Date":"May 28","Score":"Spurs 110, Thunder 107","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g4"},
+    ]},
+}
+
 PLAYOFF_START_DATE = "2026-04-18"
 PLAYOFF_END_DATE = "2026-06-30"
 
@@ -1649,14 +1665,25 @@ PLAYOFF_END_DATE = "2026-06-30"
 # and Live Game Center from saying "no game" when NBA live feeds lag pregame.
 PLAYOFF_SCHEDULE_FALLBACK = [
     {
-        "game_id": "fallback-det-cle-20260517",
-        "date": "2026-05-17",
-        "time_et": "19:30",
-        "away": "Cleveland Cavaliers",
-        "home": "Detroit Pistons",
-        "round": "Second Round",
-        "series_key": "DET-CLE",
-        "label": "Cavaliers at Pistons",
+        "game_id": "fallback-okc-sas-20260530",
+        "date": "2026-05-30",
+        "time_et": "20:00",
+        "away": "Oklahoma City Thunder",
+        "home": "San Antonio Spurs",
+        "round": "Conference Finals",
+        "series_key": "OKC-SAS",
+        "label": "Thunder at Spurs",
+        "source": "Local playoff schedule fallback",
+    },
+    {
+        "game_id": "fallback-nyk-cle-20260531",
+        "date": "2026-05-31",
+        "time_et": "19:00",
+        "away": "New York Knicks",
+        "home": "Cleveland Cavaliers",
+        "round": "Conference Finals",
+        "series_key": "NYK-CLE",
+        "label": "Knicks at Cavaliers",
         "source": "Local playoff schedule fallback",
     },
 ]
@@ -1732,15 +1759,23 @@ for mirror, source in [("Orlando Magic","Detroit Pistons"),("Toronto Raptors","C
 
 FALLBACK_TOP_PLAYS = {
     "New York Knicks": [
-        {"Game":"Game 2 vs 76ers","Top Play":"New York closed out a 108-102 win and moved the series lead to 2-0.","Why it mattered":"The most recent completed game now drives the dashboard, bracket, and team outlook instead of stale Game 1 data."},
-        {"Game":"Game 2 vs 76ers","Top Play":"The Knicks protected the late-game margin and finished the fourth quarter with better control.","Why it mattered":"That is the type of playoff possession management that turns a 1-0 lead into a 2-0 series edge."},
-        {"Game":"Game 2 vs 76ers","Top Play":"New York held Philadelphia to 102 points.","Why it mattered":"The defensive floor is becoming a major part of the series story."},
+        {"Game":"Game 3 vs Cavaliers","Top Play":"New York took a 2-1 lead in the Eastern Conference Finals with a road win.","Why it mattered":"The dashboard, bracket, and live board now track the current conference finals chapter."},
+        {"Game":"Game 2 vs Cavaliers","Top Play":"Cleveland answered at home to even the series.","Why it mattered":"Home-court swings matter when both teams can defend at a high level."},
+    ],
+    "Oklahoma City Thunder": [
+        {"Game":"Game 4 vs Spurs","Top Play":"San Antonio evened the West finals on their home floor.","Why it mattered":"The series is tied 2-2 — every possession in the middle games decides the path to the Finals."},
+        {"Game":"Game 3 vs Spurs","Top Play":"OKC reclaimed home-court advantage with a road win in San Antonio.","Why it mattered":"SGA's creation in clutch minutes flipped the series momentum."},
+    ],
+    "San Antonio Spurs": [
+        {"Game":"Game 4 vs Thunder","Top Play":"Wembanyama's rim protection changed the game plan in the fourth quarter.","Why it mattered":"Even at 2-2, the Spurs showed they can win the possession battle against OKC's pace."},
+    ],
+    "Cleveland Cavaliers": [
+        {"Game":"Game 2 vs Knicks","Top Play":"Cleveland protected home court to level the East finals.","Why it mattered":"Mitchell and Mobley carried the defensive identity that keeps this series close."},
     ],
     "Minnesota Timberwolves": [
-        {"Game":"Game 1 vs Spurs","Top Play":"Anthony Edwards delivered late-game shot creation in a tight finish.","Why it mattered":"It gave Minnesota a reliable option when the game tightened."},
-        {"Game":"Game 1 vs Spurs","Top Play":"Minnesota's defensive length contested San Antonio's key looks near the rim and on the wing.","Why it mattered":"Those stops protected the narrow win."},
+        {"Game":"Game 6 vs Spurs","Top Play":"Anthony Edwards delivered late-game shot creation in a tight finish.","Why it mattered":"It gave Minnesota a fighting chance before the series ended."},
     ],
-    "Detroit Pistons": [{"Game":"Game 1 vs Cavaliers","Top Play":"Cade Cunningham organized Detroit's offense and kept the Pistons composed.","Why it mattered":"It helped Detroit take the early series lead."}],
+    "Detroit Pistons": [{"Game":"Game 7 vs Cavaliers","Top Play":"Cade Cunningham kept Detroit competitive in a winner-take-all road game.","Why it mattered":"The young core learned how tight a second-round Game 7 gets."}],
 }
 
 # ==========================================================
@@ -2053,26 +2088,17 @@ def build_first_round_series_cached(use_demo_backup=True, api_refresh=True):
             static_winner = static.get("winner")
             if max(sa, sb) != 4 or min(sa, sb) >= 4:
                 continue
-            if not _series_has_confirmed_winner(shell):
-                shell["a_wins"] = sa
-                shell["b_wins"] = sb
-                shell["winner"] = static_winner
-                if not shell.get("games"):
-                    shell["games"] = [
-                        dict(g, Source="Static fallback")
-                        for g in _static_first_round_games_for_pair(shell["a"], shell["b"])
-                    ]
-                shell["source"] = "Static fallback (series scores)"
-            elif static_winner and shell.get("winner") != static_winner:
-                shell["a_wins"] = sa
-                shell["b_wins"] = sb
-                shell["winner"] = static_winner
-                if not shell.get("games"):
-                    shell["games"] = [
-                        dict(g, Source="Static fallback")
-                        for g in _static_first_round_games_for_pair(shell["a"], shell["b"])
-                    ]
-                shell["source"] = "Static fallback (corrected winner)"
+            if _series_has_confirmed_winner(shell):
+                continue
+            shell["a_wins"] = sa
+            shell["b_wins"] = sb
+            shell["winner"] = static_winner
+            if not shell.get("games"):
+                shell["games"] = [
+                    dict(g, Source="Static fallback")
+                    for g in _static_first_round_games_for_pair(shell["a"], shell["b"])
+                ]
+            shell["source"] = "Static fallback (series scores)"
 
     return result
 
@@ -2147,6 +2173,10 @@ def build_conference_finals_series_cached(use_demo_backup=False, api_refresh=Fal
                     "GameID": g.get("GameID", ""),
                     "Source": "NBA API",
                 })
+        if use_demo_backup and not shell.get("games"):
+            backup = CONFERENCE_FINALS_DEMO_BACKUP.get(key)
+            if backup:
+                shell["games"] = [dict(g, Source="Demo backup") for g in backup.get("games", [])]
         out[key] = shell
     return clean_and_recount_series(out)
 
@@ -2449,6 +2479,31 @@ def get_display_matchup(team_name, stt=None):
     }
 
 
+def get_effective_team_profile(team_name, stt=None):
+    """Team profile overlaid with unified bracket state — round, opponent, and status stay current."""
+    base = dict(TEAM_PROFILES.get(team_name) or {})
+    try:
+        dm = get_display_matchup(team_name, stt)
+        status = str(dm.get("status") or "active")
+        if dm.get("eliminated") or status == "eliminated":
+            base["status"] = "Eliminated"
+            base["round"] = dm.get("round") or "Lost in playoffs"
+            base["current_opponent"] = None
+        elif status == "awaiting opponent":
+            base["status"] = "Active"
+            base["round"] = dm.get("round") or base.get("round", "Playoffs")
+            base["current_opponent"] = None
+        else:
+            base["status"] = "Active"
+            base["round"] = dm.get("round") or base.get("round", "Playoffs")
+            opp = dm.get("opponent")
+            if opp and opp not in ("TBD", ""):
+                base["current_opponent"] = opp
+    except Exception:
+        pass
+    return base
+
+
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = True):
     """Single cached playoff engine: every round, team status, and series scores in one snapshot."""
@@ -2630,7 +2685,7 @@ def series_for_team(team_name):
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
 def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = True):
     """Central lightweight team context reused by pages without rewalking bracket state."""
-    profile = TEAM_PROFILES.get(team_name, {})
+    profile = get_effective_team_profile(team_name)
     stt = get_playoff_state_cached(use_demo_backup, api_refresh)
     current_key, current_series = None, None
     for coll_name in ("finals", "cf", "second"):
@@ -3481,7 +3536,7 @@ def _layer1_state_to_home_snap(state):
 
 def get_home_layer1_snapshot(team_name):
     """CDN-first game snapshot for Home Dashboard (no box score / PBP)."""
-    profile = TEAM_PROFILES.get(team_name) or {}
+    profile = get_effective_team_profile(team_name)
     try:
         return _layer1_state_to_home_snap(_resolve_live_gc_layer1_fast(team_name, profile))
     except Exception:
@@ -3489,11 +3544,23 @@ def get_home_layer1_snapshot(team_name):
 
 
 def _live_gc_profile_context(team_name, profile):
-    """Series/matchup labels from profile only — no bracket API (Layer 1)."""
-    opp = (profile or {}).get("current_opponent") or ""
-    round_name = (profile or {}).get("round") or "Playoffs"
-    if opp:
-        series_text = f"{fan_nick(team_name)} vs {fan_nick(opp)}"
+    """Series/matchup labels from unified bracket state (not static profile fields)."""
+    dm = get_display_matchup(team_name)
+    opp = str(dm.get("opponent") or "").strip()
+    round_name = dm.get("round") or (profile or {}).get("round") or "Playoffs"
+    series_record = str(dm.get("series_record") or "").strip()
+    if opp and opp not in ("TBD", ""):
+        if series_record and series_record not in ("—", "-", ""):
+            parts = series_record.replace("-", "–").split("–")
+            if len(parts) == 2:
+                tw, ow = parts[0].strip(), parts[1].strip()
+                series_text = f"{fan_nick(team_name)} {tw}–{ow} {fan_nick(opp)}"
+            else:
+                series_text = f"{fan_nick(team_name)} vs {fan_nick(opp)}"
+        else:
+            series_text = f"{fan_nick(team_name)} vs {fan_nick(opp)}"
+    elif dm.get("status") == "awaiting opponent":
+        series_text = f"{fan_nick(team_name)} · awaiting opponent"
     else:
         series_text = fan_nick(team_name)
     return opp, round_name, series_text
@@ -3503,8 +3570,11 @@ def _pick_best_team_game_from_pool(games, team_name):
     """Choose best CDN/stats row for sidebar team from a list."""
     if not games or not team_name:
         return None
-    profile = TEAM_PROFILES.get(team_name) or {}
-    opponent = profile.get("current_opponent")
+    profile = get_effective_team_profile(team_name)
+    dm = get_display_matchup(team_name)
+    opponent = dm.get("opponent") or profile.get("current_opponent")
+    if opponent in ("TBD", ""):
+        opponent = profile.get("current_opponent")
     candidates = []
     for g in games:
         gn = normalize_scoreboard_game(dict(g))
@@ -3752,7 +3822,7 @@ def _gather_team_scoreboard_games(team_name):
     if not team_name or (not TEAM_ALIASES.get(team_name) and not TEAM_IDS.get(team_name)):
         return []
     t0 = pytime.perf_counter()
-    profile = TEAM_PROFILES.get(team_name) or {}
+    profile = get_effective_team_profile(team_name) or {}
     opponent = profile.get("current_opponent")
     by_gid = {}
     for g in _get_live_games_traced() if _live_gc_debug_enabled() else get_live_games():
@@ -4107,7 +4177,7 @@ def get_live_game_detection_context_impl(team_name):
             "best_stub_game": featured,
             "featured": featured,
         }
-    profile = TEAM_PROFILES.get(team_name) or {}
+    profile = get_effective_team_profile(team_name) or {}
     opponent = profile.get("current_opponent")
     today_et = _nba_et_date_today()
     window_rows = []
@@ -4228,7 +4298,7 @@ def get_current_or_today_game_uncached(team_name):
 
     if not game_row and NBA_STATS_AVAILABLE:
         try:
-            opp = TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+            opp = get_effective_team_profile(team_name).get("current_opponent")
             pool = []
             merged = {}
             for g in _merged_stats_games_et_window():
@@ -8079,22 +8149,24 @@ def render_playoff_state_debug_expander(location_key="playoff_state"):
 
 
 def _build_local_series_shell(team_name):
-    """Current playoff series view: newest formed bracket round first, then history."""
+    """Current playoff series view: active bracket round first; skip completed semis when advanced."""
     stt = get_merged_playoff_state()
-    for coll_name in ("finals", "cf"):
-        for _k, s in (stt.get(coll_name) or {}).items():
-            if team_name in (s.get("a"), s.get("b")):
-                return dict(s)
-
+    pst = get_team_playoff_status(team_name, stt)
+    if pst.get("status") == "eliminated":
+        return pst.get("series")
+    _sk, active = series_for_team(team_name)
+    if active:
+        return dict(active)
+    if pst.get("status") in ("awaiting opponent", "advanced"):
+        return None
     second_map = stt.get("second") or {}
     for _k, s in second_map.items():
         if team_name in (s.get("a"), s.get("b")):
-            return dict(s)
-
+            if not _series_has_confirmed_winner(s):
+                return dict(s)
     for _key, s in (stt.get("first") or {}).items():
         if team_name in (s.get("a"), s.get("b")):
             return dict(s)
-
     return None
 
 
@@ -8198,11 +8270,15 @@ def resolve_home_matchup_context_fast(team_name):
             "ctx": None,
             "fast_snapshot": snap,
         }
-    opp = snap.get("opponent") or profile.get("current_opponent")
+    opp = (
+        snap.get("opponent")
+        or pst.get("current_opponent")
+        or profile.get("current_opponent")
+    )
     return {
         "mode": "standard",
         "series": s,
-        "round_label": snap.get("round") or profile.get("round", "Playoffs"),
+        "round_label": snap.get("round") or pst.get("current_round") or profile.get("round", "Playoffs"),
         "opponent": opp,
         "opponent_display": opp,
         "advanced": False,
@@ -8419,7 +8495,7 @@ def _dashboard_section_order(
 
 
 def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_live_fetch=False):
-    profile = TEAM_PROFILES[team_name]
+    profile = get_effective_team_profile(team_name)
     lens = team_dashboard_lens(team_name)
     if skip_live_fetch:
         fb = None
@@ -9702,8 +9778,9 @@ def render_playoff_command_center(team_name):
 
 def home_injury_opponents_from_home_ctx(team_name, hctx, s_active=None):
     """Opponent list for injury merge using existing Home context (avoids extra ``series_for_team``)."""
+    eff = get_effective_team_profile(team_name)
     if not isinstance(hctx, dict):
-        return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+        return eff.get("current_opponent")
     ctx = hctx.get("ctx")
     if ctx and ctx.get("advanced"):
         return ctx.get("opponents", [])
@@ -9715,7 +9792,7 @@ def home_injury_opponents_from_home_ctx(team_name, hctx, s_active=None):
     if s and s.get("round") in ("Conference Finals", "NBA Finals"):
         opp = s["b"] if team_name == s["a"] else s["a"]
         return [opp]
-    return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+    return eff.get("current_opponent")
 
 
 def home_injury_opponents(team_name):
@@ -9726,7 +9803,7 @@ def home_injury_opponents(team_name):
     if s and s.get("round") in ("Conference Finals", "NBA Finals"):
         opp = s["b"] if team_name == s["a"] else s["a"]
         return [opp]
-    return TEAM_PROFILES.get(team_name, {}).get("current_opponent")
+    return get_effective_team_profile(team_name).get("current_opponent")
 
 def _first_round_synthetic_games(team_a, team_b):
     """First-round game rows from merged state, then static archive."""
@@ -10411,9 +10488,10 @@ def _live_series_board(away_name, home_name):
     pair = {away_name, home_name}
     stt = get_merged_playoff_state()
     candidates = []
-    candidates.extend(stt["second"].values())
-    candidates.extend((stt.get("cf") or {}).values())
     candidates.extend((stt.get("finals") or {}).values())
+    candidates.extend((stt.get("cf") or {}).values())
+    candidates.extend(stt["second"].values())
+    candidates.extend(stt["first"].values())
     for s in candidates:
         if not s:
             continue
@@ -12532,6 +12610,9 @@ def _render_live_gc_safe_board(team_name, profile, state, parsed):
         st.warning(banner) if "delayed" in banner.lower() or "last known" in banner.lower() else st.info(banner)
 
     opp_l, rnd_l, ser_l = _live_gc_profile_context(team_name, profile)
+    series_line, _series_src = _live_series_board(parsed["away_name"], parsed["home_name"])
+    if series_line:
+        ser_l = series_line
     away_logo = e(TEAM_LOGOS.get(parsed["away_name"], ""))
     home_logo = e(TEAM_LOGOS.get(parsed["home_name"], ""))
     chip = _live_status_chip(state)
@@ -12592,6 +12673,7 @@ def _render_live_gc_safe_board(team_name, profile, state, parsed):
 
 def render_live_game_center_safe(team_name, profile):
     """TEMPORARY safe mode — Layer 1 only; zero heavy feature execution."""
+    profile = get_effective_team_profile(team_name)
     _live_gc_trace_clear()
     t_page = pytime.perf_counter()
     section_ms = {}
@@ -12603,6 +12685,7 @@ def render_live_game_center_safe(team_name, profile):
         "</div>",
         unsafe_allow_html=True,
     )
+    st.caption("Scores and bracket context auto-refresh about every 60 seconds while this page is open.")
 
     if st.button("Refresh scoreboard", key=f"live_gc_safe_refresh_{team_name}", type="primary"):
         for fn in (fetch_cdn_scoreboard_only, _scoreboard_stats_today_et):
@@ -13463,7 +13546,7 @@ SHOW_PERF_DEBUG = st.sidebar.toggle(
 )
 if SHOW_PERF_DEBUG:
     render_playoff_state_debug_expander("sidebar")
-profile=TEAM_PROFILES[favorite_team]
+profile = get_effective_team_profile(favorite_team)
 inject_team_brand_css(favorite_team)
 labels=list(PAGES.keys())
 def_label=PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
@@ -13473,6 +13556,7 @@ _APP_PAGE_T0 = pytime.perf_counter()
 
 _PLAYOFF_AUTO_REFRESH_PAGES = {
     "Home Dashboard",
+    "Live Game Center",
     "Playoff Bracket",
     "Previous Rounds",
     "Legacy Tracker",
