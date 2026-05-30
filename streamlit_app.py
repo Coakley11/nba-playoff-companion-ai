@@ -1790,9 +1790,22 @@ LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 # Set False to restore full Layer 2/3 (analysis, box score, PBP, Plotly, etc.).
 LIVE_GC_SAFE_MODE = True
 
+# Developer workspace: when True, Dev Lab appears in the sidebar. When False, use the sidebar toggle.
+DEV_MODE = True
+
 
 def _live_gc_safe_mode_active():
     return bool(LIVE_GC_SAFE_MODE)
+
+
+def dev_lab_visible():
+    """Dev Lab is hidden from normal users unless DEV_MODE or the developer toggle is on."""
+    if DEV_MODE:
+        return True
+    try:
+        return bool(st.session_state.get("dev_lab_enabled", False))
+    except Exception:
+        return False
 
 def safe_int(x, default=0):
     try: return int(x or default)
@@ -11866,9 +11879,9 @@ def _live_gc_fetch_playbyplay(game_id):
     return actions
 
 
-def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None, state=None, section_ms=None):
+def _render_live_gc_debug(team_name, opp, layer1_loaded, live_attempted=False, live_count=None, errors=None, state=None, section_ms=None, force=False):
     """Live Game Center diagnostics — no extra API calls; reads session trace + cache stats."""
-    if not globals().get("SHOW_PERF_DEBUG", False):
+    if not force and not globals().get("SHOW_PERF_DEBUG", False):
         return
     errors = errors or []
     section_ms = section_ms or {}
@@ -13485,6 +13498,319 @@ def render_team_history_leaders_page(team_name):
 
 
 # ==========================================================
+# Dev Lab (developer / admin workspace)
+# ==========================================================
+
+_DEV_LAB_CACHE_FUNCTIONS = (
+    (get_playoff_state_cached, "Playoff state engine"),
+    (fetch_completed_games_recent, "Completed games (NBA API)"),
+    (fetch_cdn_scoreboard_only, "CDN live scoreboard"),
+    (_scoreboard_stats_today_et, "Stats scoreboard (today ET)"),
+    (get_live_games, "CDN scoreboard (legacy)"),
+    (featured_broadcast_state_cached, "Featured broadcast state"),
+    (get_team_context_cached, "Team context"),
+    (resolve_home_matchup_context_cached, "Home matchup context"),
+    (playoff_game_logs_for_player, "Player playoff game logs"),
+)
+
+
+def _dev_lab_cache_stats_dataframe():
+    rows = []
+    for fn, label in _DEV_LAB_CACHE_FUNCTIONS:
+        fp = _cache_data_fingerprint(fn)
+        if fp:
+            rows.append({"Cache function": label, **fp})
+    return pd.DataFrame(rows) if rows else pd.DataFrame({"Cache function": [], "hits": [], "misses": []})
+
+
+def _dev_lab_bracket_series_dataframe(stt):
+    rows = []
+    for round_label, coll in (
+        ("NBA Finals", "finals"),
+        ("Conference Finals", "cf"),
+        ("Second Round", "second"),
+        ("First Round", "first"),
+    ):
+        for key, s in (stt.get(coll) or {}).items():
+            if not s:
+                continue
+            rows.append({
+                "Round": s.get("round") or round_label,
+                "Series key": key,
+                "Team A": s.get("a"),
+                "Team B": s.get("b"),
+                "Score": f"{s.get('a_wins', 0)}–{s.get('b_wins', 0)}",
+                "Winner": s.get("winner") or "—",
+                "Games": len(s.get("games") or []),
+                "Source": s.get("source") or "—",
+            })
+    return pd.DataFrame(rows)
+
+
+def _dev_lab_api_probe(label, fn, *args, **kwargs):
+    """Run one cached feed with timing for Dev Lab diagnostics."""
+    t0 = pytime.perf_counter()
+    err = None
+    result = None
+    try:
+        result = fn(*args, **kwargs)
+    except Exception as exc:
+        err = repr(exc)
+    ms = (pytime.perf_counter() - t0) * 1000.0
+    fp = _cache_data_fingerprint(fn)
+    count = None
+    if isinstance(result, list):
+        count = len(result)
+    elif isinstance(result, tuple) and result and isinstance(result[0], list):
+        count = len(result[0])
+    elif isinstance(result, dict):
+        count = len(result)
+    return {
+        "Feed": label,
+        "OK": err is None,
+        "Ms": round(ms, 1),
+        "Rows": count if count is not None else "—",
+        "Cache hits": (fp or {}).get("hits", "—"),
+        "Cache misses": (fp or {}).get("misses", "—"),
+        "Error": (err or "")[:120],
+    }
+
+
+def _dev_lab_lineup_diagnostics(team_name, profile):
+    opp = get_display_matchup(team_name).get("opponent") or profile.get("current_opponent")
+    rows = []
+    for tm in [team_name] + ([opp] if opp and opp in TEAM_PROFILES else []):
+        meta = get_lineup_resolution_info(tm)
+        starters = estimated_starters_from_api(tm)
+        rows.append({
+            "Team": tm,
+            "Lineup source": meta.get("source", "—"),
+            "Updated": meta.get("updated", "—"),
+            "Starters": ", ".join(starters[:5]) if starters else "—",
+            "Profile round": (TEAM_PROFILES.get(tm) or {}).get("round", "—"),
+            "Effective round": get_effective_team_profile(tm).get("round", "—"),
+        })
+    return pd.DataFrame(rows)
+
+
+def render_dev_lab_page(team_name, profile, page_t0=None):
+    """Experimental sandbox — diagnostics and feature prototypes isolated from production UX."""
+    t0 = page_t0 or pytime.perf_counter()
+    use_demo, api_on = get_playoff_refresh_settings()
+
+    st.markdown(
+        "<div style='padding:10px 14px;border-radius:10px;background:#1e293b;color:#f8fafc;"
+        "border:1px solid #475569;margin-bottom:12px'>"
+        "<b>🛠️ Dev Lab</b> — developer workspace. Experiments here do not change production page layouts. "
+        "Set <code>DEV_MODE = False</code> to hide this page from the sidebar."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("DEV_MODE", "ON" if DEV_MODE else "OFF")
+    c2.metric("Safe mode (Live GC)", "ON" if LIVE_GC_SAFE_MODE else "OFF")
+    c3.metric("API auto-sync", "ON" if api_on else "OFF")
+    c4.metric("Demo fallback", "ON" if use_demo else "OFF")
+
+    tab_snap, tab_team, tab_api, tab_cache, tab_live, tab_lineup, tab_bracket, tab_sandbox = st.tabs([
+        "Playoff state",
+        "Team status",
+        "API feeds",
+        "Cache stats",
+        "Live GC",
+        "Lineups",
+        "Bracket",
+        "Sandbox",
+    ])
+
+    stt = get_merged_playoff_state(use_demo, api_on)
+
+    with tab_snap:
+        st.subheader("Unified playoff state snapshot")
+        st.caption(
+            f"TTL {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages · "
+            f"source flags: api_refresh={api_on}, use_demo_backup={use_demo}"
+        )
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("First-round series", len(stt.get("first") or {}))
+        col_b.metric("Second-round series", len(stt.get("second") or {}))
+        col_c.metric("Conference finals", len(stt.get("cf") or {}))
+        st.dataframe(_dev_lab_bracket_series_dataframe(stt), use_container_width=True, hide_index=True)
+        with st.expander("Raw state JSON (selected team context)", expanded=False):
+            ctx = get_team_context_cached(team_name, use_demo, api_on)
+            slim = {
+                "team": team_name,
+                "display_matchup": get_display_matchup(team_name, stt),
+                "series_for_team": series_for_team(team_name),
+                "home_matchup_fast": resolve_home_matchup_context_fast(team_name),
+                "effective_profile": get_effective_team_profile(team_name, stt),
+            }
+            st.json(slim)
+        if st.button("Clear playoff state cache", key="dev_clear_playoff_cache"):
+            for fn in (get_playoff_state_cached, fetch_completed_games_recent, build_first_round_series_cached,
+                       build_second_round_series_cached, build_conference_finals_series_cached, build_nba_finals_series_cached):
+                try:
+                    fn.clear()
+                except Exception:
+                    pass
+            st.rerun()
+
+    with tab_team:
+        st.subheader("Team status table")
+        st.dataframe(
+            playoff_status_debug_dataframe(use_demo, api_on),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption("Compare static TEAM_PROFILES vs bracket engine for the selected team.")
+        prof_static = TEAM_PROFILES.get(team_name) or {}
+        prof_eff = get_effective_team_profile(team_name, stt)
+        pst = get_team_playoff_status(team_name, stt)
+        compare = pd.DataFrame([
+            {"Field": "status", "Static profile": prof_static.get("status"), "Effective profile": prof_eff.get("status"), "Bracket engine": pst.get("status")},
+            {"Field": "round", "Static profile": prof_static.get("round"), "Effective profile": prof_eff.get("round"), "Bracket engine": pst.get("current_round")},
+            {"Field": "opponent", "Static profile": prof_static.get("current_opponent"), "Effective profile": prof_eff.get("current_opponent"), "Bracket engine": pst.get("current_opponent")},
+            {"Field": "series record", "Static profile": "—", "Effective profile": get_display_matchup(team_name, stt).get("series_record"), "Bracket engine": pst.get("series_record")},
+        ])
+        st.dataframe(compare, use_container_width=True, hide_index=True)
+
+    with tab_api:
+        st.subheader("API feed diagnostics")
+        probes = [
+            _dev_lab_api_probe("Completed games (playoffs)", fetch_completed_games_recent, api_refresh=api_on),
+            _dev_lab_api_probe("CDN scoreboard", fetch_cdn_scoreboard_only),
+            _dev_lab_api_probe("Stats today (ET)", _scoreboard_stats_today_et),
+            _dev_lab_api_probe("Featured broadcast", featured_broadcast_state_cached, team_name),
+        ]
+        st.dataframe(pd.DataFrame(probes), use_container_width=True, hide_index=True)
+        st.caption(f"NBA_LIVE_AVAILABLE={NBA_LIVE_AVAILABLE} · NBA_STATS_AVAILABLE={NBA_STATS_AVAILABLE} · NBA_SCOREBOARD_V3_AVAILABLE={NBA_SCOREBOARD_V3_AVAILABLE}")
+        if st.button("Refresh API probes", key="dev_refresh_api_probes"):
+            for fn in (fetch_completed_games_recent, fetch_cdn_scoreboard_only, _scoreboard_stats_today_et, featured_broadcast_state_cached):
+                try:
+                    fn.clear()
+                except Exception:
+                    pass
+            st.rerun()
+
+    with tab_cache:
+        st.subheader("Cache statistics")
+        st.dataframe(_dev_lab_cache_stats_dataframe(), use_container_width=True, hide_index=True)
+        st.caption("Streamlit `@st.cache_data` hit/miss counts for major feeds.")
+
+    with tab_live:
+        st.subheader("Live Game Center diagnostics")
+        eff = get_effective_team_profile(team_name)
+        t1 = pytime.perf_counter()
+        state = _resolve_live_gc_layer1_fast(team_name, eff)
+        resolve_ms = (pytime.perf_counter() - t1) * 1000.0
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Layer 1 resolve", f"{resolve_ms:.0f} ms")
+        m2.metric("Priority", state.get("priority") or "—")
+        m3.metric("Source", str(state.get("source_label") or "—")[:24])
+        m4.metric("CDN OK", "Yes" if state.get("cdn_ok") else "No")
+        parsed = state.get("parsed") or {}
+        if parsed:
+            st.json({
+                "phase": parsed.get("phase"),
+                "score": f"{parsed.get('away_score')}–{parsed.get('home_score')}",
+                "period": parsed.get("period"),
+                "clock": parsed.get("clock"),
+                "opp": parsed.get("opp_name"),
+            })
+        else:
+            st.info(state.get("feed_banner") or "No live row parsed for the selected team.")
+        opp = parsed.get("opp_name") or eff.get("current_opponent")
+        _render_live_gc_debug(
+            team_name,
+            opp,
+            layer1_loaded=True,
+            live_attempted=True,
+            live_count=state.get("live_count"),
+            errors=state.get("errors"),
+            state=state,
+            section_ms={"layer1_resolve": resolve_ms},
+            force=True,
+        )
+        with st.expander("Live GC trace (session)", expanded=False):
+            trace = st.session_state.get("live_gc_trace") or []
+            if trace:
+                t0_trace = trace[0].get("t", 0)
+                trace_rows = [{
+                    "Δms": round((ev.get("t", 0) - t0_trace) * 1000.0, 1),
+                    "event": ev.get("event"),
+                    "ms": ev.get("ms"),
+                    "count": ev.get("count"),
+                    "error": (str(ev.get("error"))[:80] if ev.get("error") else ""),
+                } for ev in trace[-30:]]
+                st.dataframe(pd.DataFrame(trace_rows), use_container_width=True, hide_index=True)
+            else:
+                st.caption("No live_gc_trace entries yet — open Live Game Center or re-run Layer 1 above.")
+
+    with tab_lineup:
+        st.subheader("Lineup diagnostics")
+        st.dataframe(_dev_lab_lineup_diagnostics(team_name, profile), use_container_width=True, hide_index=True)
+        hctx = resolve_home_matchup_context_fast(team_name)
+        st.caption(f"Home matchup mode: **{hctx.get('mode')}** · round: **{hctx.get('round_label')}**")
+        with st.expander("Home matchup context (raw)", expanded=False):
+            st.json(hctx)
+
+    with tab_bracket:
+        st.subheader("Bracket diagnostics")
+        st.dataframe(_dev_lab_bracket_series_dataframe(stt), use_container_width=True, hide_index=True)
+        for conf, key in (("East", "east_cf"), ("West", "west_cf")):
+            cf = stt.get(key)
+            if cf:
+                st.markdown(f"**{conf} Conference Finals**")
+                for k, s in cf.items():
+                    st.write(f"{k}: {s.get('a')} vs {s.get('b')} ({s.get('a_wins')}-{s.get('b_wins')})")
+            else:
+                st.caption(f"{conf} CF shell: waiting on second-round winners or API games.")
+        nf = stt.get("finals") or {}
+        if nf:
+            st.markdown("**NBA Finals**")
+            for k, s in nf.items():
+                st.write(f"{k}: {s.get('a')} vs {s.get('b')}")
+        else:
+            st.caption("Finals shell: not formed yet.")
+
+    with tab_sandbox:
+        st.subheader("Feature sandbox")
+        st.caption("Build and test new widgets here before promoting them to production pages.")
+        st.markdown("##### Widget smoke test")
+        st.write("Drop experimental Streamlit widgets in this tab during development.")
+        demo = st.selectbox("Sandbox control", ["Metric card", "Dataframe", "JSON dump"], key="dev_sandbox_demo")
+        if demo == "Metric card":
+            st.metric("Sandbox metric", "OK", delta="test")
+        elif demo == "Dataframe":
+            st.dataframe(pd.DataFrame({"col": [1, 2, 3]}), use_container_width=True)
+        else:
+            st.json({"sandbox": True, "team": team_name, "page": "Dev Lab"})
+        st.markdown("##### Franchise history module")
+        hist = franchise_history_data(team_name)
+        st.caption(f"Legends on board: {len(hist.get('legends') or [])} · context: {str(hist.get('context', ''))[:80]}…")
+        if st.checkbox("Preview history card HTML", key="dev_hist_preview"):
+            legends = sorted(hist.get("legends", []), key=lambda x: int(x.get("rank", 999)))[:3]
+            current_names = _history_current_names(team_name)
+            if legends:
+                st.markdown(
+                    "<div class='hist-grid'>"
+                    + "".join(_history_card_html(team_name, p, current=_is_current_history_player(p["name"], current_names))
+                    for p in legends)
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+
+    elapsed_ms = (pytime.perf_counter() - t0) * 1000.0
+    st.divider()
+    st.subheader("Page render timing")
+    t1, t2, t3 = st.columns(3)
+    t1.metric("Dev Lab render", f"{elapsed_ms:.0f} ms")
+    t2.metric("Selected team", team_name)
+    t3.metric("Branch target", "dev (see git workflow)")
+
+
+# ==========================================================
 # Sidebar
 # ==========================================================
 PAGES={
@@ -13505,9 +13831,11 @@ PAGE_LABEL_ALIASES = {
     "🏀 Playoff Bracket": "🏆 Playoff Bracket",
     "🏛️ Team History Leaders": "📚 Team History Leaders",
     "🏀 Matchup Lineups": "📋 Matchup Lineups",
+    "🧠 Matchup Intelligence": "🧠 Matchup Intelligence",
     "🏀 Player Playoff Tracker": "📈 Player Playoff Tracker",
     "🏀 Legacy Tracker": "👑 Legacy Tracker",
     "🏀 Previous Rounds": "📜 Previous Rounds",
+    "🛠️ Dev Lab": "🛠️ Dev Lab",
 }
 
 def _sidebar_team_label(team_name):
@@ -13539,6 +13867,15 @@ ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
     value=True,
     help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits."
 )
+if not DEV_MODE:
+    st.sidebar.toggle(
+        "Enable Dev Lab (developer)",
+        value=False,
+        key="dev_lab_enabled",
+        help="Show the Dev Lab page for testing features without affecting the main fan experience.",
+    )
+elif DEV_MODE:
+    st.sidebar.caption("🛠️ Dev mode — Dev Lab visible")
 SHOW_PERF_DEBUG = st.sidebar.toggle(
     "Show performance debug",
     value=False,
@@ -13548,10 +13885,13 @@ if SHOW_PERF_DEBUG:
     render_playoff_state_debug_expander("sidebar")
 profile = get_effective_team_profile(favorite_team)
 inject_team_brand_css(favorite_team)
-labels=list(PAGES.keys())
-def_label=PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
-page_label=st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
-page=PAGES[page_label]
+_pages = dict(PAGES)
+if dev_lab_visible():
+    _pages["🛠️ Dev Lab"] = "Dev Lab"
+labels = list(_pages.keys())
+def_label = PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
+page_label = st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
+page = _pages[page_label]
 _APP_PAGE_T0 = pytime.perf_counter()
 
 _PLAYOFF_AUTO_REFRESH_PAGES = {
@@ -13563,6 +13903,7 @@ _PLAYOFF_AUTO_REFRESH_PAGES = {
     "Matchup Lineups",
     "Matchup Intelligence",
     "Player Playoff Tracker",
+    "Dev Lab",
 }
 if page in _PLAYOFF_AUTO_REFRESH_PAGES:
     tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
@@ -13600,6 +13941,9 @@ elif page == "Matchup Lineups":
     if _is_home_eliminated(favorite_team): st.warning("This team is eliminated, so current matchup lineups are not active.")
     else:
         render_matchup_lineups_page(favorite_team, profile)
+
+elif page == "Dev Lab":
+    render_dev_lab_page(favorite_team, profile, page_t0=_APP_PAGE_T0)
 
 if globals().get("SHOW_PERF_DEBUG", False):
     elapsed_ms = (pytime.perf_counter() - _APP_PAGE_T0) * 1000
