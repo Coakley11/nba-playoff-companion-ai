@@ -69,13 +69,9 @@ except Exception:
     BS4_AVAILABLE = False
 
 # ==========================================================
-# Page setup
+# Page setup (Streamlit UI — only runs inside main())
 # ==========================================================
-st.set_page_config(page_title="Daniel Cohen — NBA Playoff Companion AI", page_icon="🏀", layout="wide")
-st.title("Daniel Cohen — NBA Playoff Companion AI")
-st.caption("2026 NBA Playoff companion app — live game center, automatic series tracking, bracket, box scores, and fan-focused analysis")
-
-st.markdown("""
+GLOBAL_APP_CSS = """
 <style>
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #f8fafc, #e5e7eb) !important;
@@ -406,7 +402,27 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 .mode-banner--live { border-color: rgba(52,211,153,.45); background: rgba(209,250,229,.4); }
 .mode-banner--live .k { color: #047857; }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+# Sidebar / debug defaults — overwritten in main() when the Streamlit UI runs.
+USE_DEMO_BACKUP = True
+ENABLE_BRACKET_API_REFRESH = True
+SHOW_PERF_DEBUG = False
+
+
+def _inject_global_app_css():
+    st.markdown(GLOBAL_APP_CSS, unsafe_allow_html=True)
+
+
+def _configure_app_shell():
+    """One-time Streamlit page shell (title, global CSS). Called from main() only."""
+    st.set_page_config(page_title="Daniel Cohen — NBA Playoff Companion AI", page_icon="🏀", layout="wide")
+    st.title("Daniel Cohen — NBA Playoff Companion AI")
+    st.caption(
+        "2026 NBA Playoff companion app — live game center, automatic series tracking, "
+        "bracket, box scores, and fan-focused analysis"
+    )
+    _inject_global_app_css()
 
 # ==========================================================
 # Static team data / fallback data
@@ -471,10 +487,8 @@ TEAM_LOGOS = {team: f"https://cdn.nba.com/logos/nba/{tid}/primary/L/logo.svg" fo
 CURRENT_NBA_SEASON = "2025-26"
 
 TEAM_PROFILES = {
-    "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"Conference Finals","current_opponent":"Cleveland Cavaliers","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
-    "Cleveland Cavaliers": {"seed":4,"conference":"Eastern Conference","status":"Active","round":"Conference Finals","current_opponent":"New York Knicks","first_round_opponent":"Toronto Raptors","first_round_result":"Defeated Toronto Raptors, 4-3","starters":["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],"subs":["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"],"strengths":["Mitchell shot creation","Harden playmaking","Mobley/Allen rim protection","shooting around the guards"],"concerns":["offensive droughts","health","turnovers"]},
-    "Oklahoma City Thunder": {"seed":1,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Phoenix Suns","first_round_result":"Defeated Phoenix Suns, 4-0","starters":["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],"subs":["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"],"strengths":["SGA creation","Chet rim protection","spacing","pace"],"concerns":["Spurs length","physicality","late-game pressure"]},
-    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"Conference Finals","current_opponent":"Oklahoma City Thunder","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
+    "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"NBA Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
+    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"NBA Finals","current_opponent":"New York Knicks","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
 }
 # Eliminated teams
 ELIMINATED_INFO = [
@@ -490,6 +504,8 @@ ELIMINATED_INFO = [
     ("Houston Rockets",5,"Western Conference","Los Angeles Lakers","Lost to Los Angeles Lakers, 4-2",["Fred VanVleet","Jalen Green","Amen Thompson","Jabari Smith Jr.","Alperen Sengun"],["Dillon Brooks","Tari Eason","Cam Whitmore","Steven Adams","Reed Sheppard"]),
     ("Los Angeles Lakers",4,"Western Conference","Oklahoma City Thunder","Lost to Oklahoma City Thunder, 4-1",["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"]),
     ("Minnesota Timberwolves",6,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-2",["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"]),
+    ("Cleveland Cavaliers",4,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-2",["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"]),
+    ("Oklahoma City Thunder",1,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-2",["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"]),
 ]
 for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
     TEAM_PROFILES[name] = {"seed":seed,"conference":conf,"status":"Eliminated","round":"Lost First Round","current_opponent":None,"first_round_opponent":opp,"first_round_result":result,"starters":starters,"subs":subs,"strengths":["main star creation","transition chances","playoff experience"],"concerns":["series ended in first round","needs depth/defense improvements","late-game consistency"]}
@@ -1315,6 +1331,100 @@ OFFSEASON_OUTLOOK_BY_TEAM = {
         ],
         "direction": {"label": "Aging contender", "blurb": "Phoenix is still trying to win now — but the path is increasingly about financial surgery and finding playable depth."},
     },
+    "Cleveland Cavaliers": {
+        "reflection": {
+            "went_right": "Cleveland reached the Eastern Conference Finals with a balanced attack — Mitchell's shot-making, Harden's playmaking, and Mobley/Allen's rim protection kept them competitive in a physical East bracket.",
+            "elimination_cause": "New York won the possession war in the closeout game: offensive rebounding, wing defense on Mitchell, and late-clock execution when the margin stayed within one or two possessions decided the 4-2 series.",
+            "playoff_strengths": [
+                "Mitchell's ability to create efficient looks against set defenses.",
+                "Mobley and Allen as a switchable, rim-protecting frontcourt pairing.",
+                "Harden's pick-and-roll manipulation and veteran decision-making in half-court.",
+            ],
+            "playoff_weaknesses": [
+                "Offensive droughts when the Knicks loaded to the guards and dared role players to beat them.",
+                "Bench scoring consistency in games that stretched into the high-90s.",
+                "Turnover stretches that fed New York transition runs.",
+            ],
+        },
+        "priorities": [
+            "Secondary shot creation when Mitchell is blitzed in late-clock situations.",
+            "Wing size and switchability to survive Knicks-style physical matchups.",
+            "Bench scoring that does not crater when starters sit in playoff minutes.",
+            "Health management for a backcourt that carried heavy usage all spring.",
+        ],
+        "roster": {
+            "summary": "The core is still a legitimate East contender — the summer is about whether Cleveland adds a wing upgrade or consolidates around Mitchell and Mobley.",
+            "bullets": [
+                "Free agents: evaluate rotation wings and backup bigs on value contracts.",
+                "Veterans: Harden's timeline affects how aggressive the front office is on win-now trades.",
+                "Trade candidates: redundant guard minutes or expiring contracts could consolidate into a higher-minute two-way wing.",
+                "Extensions: Mobley and Mitchell timelines should drive every cap decision.",
+                "Young players: Isaac Okoro and Dean Wade development changes how much wing help must be bought.",
+                "Cap: Cleveland can still operate near the tax if moves solve specific playoff problems rather than stacking middling deals.",
+            ],
+        },
+        "future": [
+            "The East champion is set — Cleveland's next step is turning a conference-finals run into a roster that can survive seven games against the league's best.",
+            "New York and Boston are not standing still; every upgrade must answer a specific matchup problem from this May.",
+        ],
+        "draft_assets": [
+            "Future picks are trade chips only if the return is a clear playoff rotation upgrade.",
+            "If picks stay home, prioritize switchable wings or movement shooters who can survive playoff minutes.",
+        ],
+        "archetypes": [
+            "Two-way wing with real size who can guard Brunson/Bridges-type matchups.",
+            "Bench scorer who can create when Mitchell sits without turning it over.",
+            "Stretch big who can pick-and-pop without being hunted every switch.",
+        ],
+        "direction": {"label": "Contender with questions", "blurb": "Cleveland is not rebuilding — this exit is about closing the gap between conference finals and a banner chase."},
+    },
+    "Oklahoma City Thunder": {
+        "reflection": {
+            "went_right": "OKC still looked like the West's most complete regular-season team — SGA's creation, Chet's rim protection, and elite spacing carried them through a sweep and a Lakers series before San Antonio's length arrived.",
+            "elimination_cause": "San Antonio's size and Wembanyama's two-way impact won the closeout: the Thunder could not match the Spurs' defensive rebounding and rim deterrence when possessions slowed in the West finals.",
+            "playoff_strengths": [
+                "SGA's pick-and-roll mastery and free-throw pressure in clutch minutes.",
+                "Chet Holmgren's ability to protect the rim without killing spacing.",
+                "Depth and pace that overwhelmed Phoenix and Los Angeles in earlier rounds.",
+            ],
+            "playoff_weaknesses": [
+                "Physicality against San Antonio's length — drivers met help earlier than expected.",
+                "Non-star minutes against Wembanyama's presence at the rim.",
+                "Late-game execution when the Spurs switched everything and dared role players to beat them.",
+            ],
+        },
+        "priorities": [
+            "Interior size and rebounding without sacrificing the switch scheme.",
+            "Veteran playoff poise in closeout games — experience at the margins.",
+            "Secondary creator who can run offense when SGA sits in high-leverage minutes.",
+            "Wing depth that can survive cross-matches against 7-footers.",
+        ],
+        "roster": {
+            "summary": "OKC's young core is the asset — the summer is about adding playoff-grade size while keeping the timeline aligned with SGA's prime.",
+            "bullets": [
+                "Free agents: target rim protection and veteran wing depth on flexible deals.",
+                "Veterans: decide which short-contract vets teach winning habits without blocking Wallace/J-Dub minutes.",
+                "Trade candidates: consolidate overlapping guard/wing minutes if a true starting-caliber big becomes available.",
+                "Extensions: SGA and Chet timelines should drive every major move.",
+                "Young players: Cason Wallace and Aaron Wiggins development reduces how much must be bought externally.",
+                "Cap: OKC still has flexibility — one correct upgrade could flip a conference-finals exit into a Finals return.",
+            ],
+        },
+        "future": [
+            "The Thunder's arrow still points up — this exit is a matchup lesson against length, not a ceiling statement.",
+            "San Antonio proved the West is not a one-team race; OKC must answer the Wembanyama problem before next May.",
+        ],
+        "draft_assets": [
+            "OKC can still draft-and-develop if picks stay — prioritize size and shooting variance reducers.",
+            "Outgoing pick protections should be audited before chasing a veteran big on the trade market.",
+        ],
+        "archetypes": [
+            "Physical big who can set screens, rebound, and protect the rim in 20 playoff minutes.",
+            "Veteran wing who can defend multiple positions without hurting spacing.",
+            "Backup creator who limits turnover spikes when SGA rests.",
+        ],
+        "direction": {"label": "Rising contender", "blurb": "OKC is one or two correct summer moves away from feeling like the West favorite again — the core is too good to overreact."},
+    },
     "Portland Trail Blazers": {
         "reflection": {
             "went_right": "Portland showed young guard scoring flashes — Henderson and Simons could heat up in bursts, and the roster competed early before San Antonio’s length took over.",
@@ -1645,16 +1755,28 @@ SECOND_ROUND_DEMO_BACKUP = {
 
 # Emergency/demo backup for conference finals when API has no rows yet.
 CONFERENCE_FINALS_DEMO_BACKUP = {
-    "NYK-CLE": {"games":[
+    "CLE-NYK": {"games":[
         {"Game":"Game 1","Date":"May 22","Score":"Knicks 108, Cavaliers 102","Winner":"New York Knicks","GameID":"demo-nyk-cle-g1"},
         {"Game":"Game 2","Date":"May 24","Score":"Cavaliers 115, Knicks 110","Winner":"Cleveland Cavaliers","GameID":"demo-nyk-cle-g2"},
         {"Game":"Game 3","Date":"May 26","Score":"Knicks 104, Cavaliers 99","Winner":"New York Knicks","GameID":"demo-nyk-cle-g3"},
+        {"Game":"Game 4","Date":"May 28","Score":"Knicks 112, Cavaliers 105","Winner":"New York Knicks","GameID":"demo-nyk-cle-g4"},
+        {"Game":"Game 5","Date":"May 30","Score":"Cavaliers 118, Knicks 114","Winner":"Cleveland Cavaliers","GameID":"demo-nyk-cle-g5"},
+        {"Game":"Game 6","Date":"Jun 1","Score":"Knicks 103, Cavaliers 98","Winner":"New York Knicks","GameID":"demo-nyk-cle-g6"},
     ]},
     "OKC-SAS": {"games":[
         {"Game":"Game 1","Date":"May 21","Score":"Thunder 112, Spurs 105","Winner":"Oklahoma City Thunder","GameID":"demo-okc-sas-g1"},
         {"Game":"Game 2","Date":"May 23","Score":"Spurs 118, Thunder 114","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g2"},
         {"Game":"Game 3","Date":"May 25","Score":"Thunder 121, Spurs 116","Winner":"Oklahoma City Thunder","GameID":"demo-okc-sas-g3"},
-        {"Game":"Game 4","Date":"May 28","Score":"Spurs 110, Thunder 107","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g4"},
+        {"Game":"Game 4","Date":"May 27","Score":"Spurs 110, Thunder 107","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g4"},
+        {"Game":"Game 5","Date":"May 29","Score":"Spurs 115, Thunder 108","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g5"},
+        {"Game":"Game 6","Date":"May 31","Score":"Spurs 112, Thunder 104","Winner":"San Antonio Spurs","GameID":"demo-okc-sas-g6"},
+    ]},
+}
+
+# Emergency/demo backup for NBA Finals when API has no rows yet.
+NBA_FINALS_DEMO_BACKUP = {
+    "NYK-SAS": {"games":[
+        {"Game":"Game 1","Date":"Jun 3","Score":"Knicks 108, Spurs 102","Winner":"New York Knicks","GameID":"demo-nyk-sas-g1"},
     ]},
 }
 
@@ -1665,25 +1787,25 @@ PLAYOFF_END_DATE = "2026-06-30"
 # and Live Game Center from saying "no game" when NBA live feeds lag pregame.
 PLAYOFF_SCHEDULE_FALLBACK = [
     {
-        "game_id": "fallback-okc-sas-20260530",
-        "date": "2026-05-30",
+        "game_id": "fallback-nyk-sas-20260605",
+        "date": "2026-06-05",
         "time_et": "20:00",
-        "away": "Oklahoma City Thunder",
-        "home": "San Antonio Spurs",
-        "round": "Conference Finals",
-        "series_key": "OKC-SAS",
-        "label": "Thunder at Spurs",
+        "away": "San Antonio Spurs",
+        "home": "New York Knicks",
+        "round": "NBA Finals",
+        "series_key": "NYK-SAS",
+        "label": "Spurs at Knicks",
         "source": "Local playoff schedule fallback",
     },
     {
-        "game_id": "fallback-nyk-cle-20260531",
-        "date": "2026-05-31",
-        "time_et": "19:00",
-        "away": "New York Knicks",
-        "home": "Cleveland Cavaliers",
-        "round": "Conference Finals",
-        "series_key": "NYK-CLE",
-        "label": "Knicks at Cavaliers",
+        "game_id": "fallback-nyk-sas-20260603",
+        "date": "2026-06-03",
+        "time_et": "20:00",
+        "away": "San Antonio Spurs",
+        "home": "New York Knicks",
+        "round": "NBA Finals",
+        "series_key": "NYK-SAS",
+        "label": "Spurs at Knicks · Game 1",
         "source": "Local playoff schedule fallback",
     },
 ]
@@ -1759,18 +1881,18 @@ for mirror, source in [("Orlando Magic","Detroit Pistons"),("Toronto Raptors","C
 
 FALLBACK_TOP_PLAYS = {
     "New York Knicks": [
-        {"Game":"Game 3 vs Cavaliers","Top Play":"New York took a 2-1 lead in the Eastern Conference Finals with a road win.","Why it mattered":"The dashboard, bracket, and live board now track the current conference finals chapter."},
-        {"Game":"Game 2 vs Cavaliers","Top Play":"Cleveland answered at home to even the series.","Why it mattered":"Home-court swings matter when both teams can defend at a high level."},
-    ],
-    "Oklahoma City Thunder": [
-        {"Game":"Game 4 vs Spurs","Top Play":"San Antonio evened the West finals on their home floor.","Why it mattered":"The series is tied 2-2 — every possession in the middle games decides the path to the Finals."},
-        {"Game":"Game 3 vs Spurs","Top Play":"OKC reclaimed home-court advantage with a road win in San Antonio.","Why it mattered":"SGA's creation in clutch minutes flipped the series momentum."},
+        {"Game":"Game 1 vs Spurs","Top Play":"Brunson and Towns carried the opening-night offense in a tight Finals Game 1 win.","Why it mattered":"The series opens 1-0 — home court and first-possession tone belong to New York."},
+        {"Game":"Game 6 vs Cavaliers","Top Play":"New York closed the East on the road to punch the Finals ticket.","Why it mattered":"The conference finals ended 4-2 — the bracket now reads Knicks vs Spurs for the title."},
     ],
     "San Antonio Spurs": [
-        {"Game":"Game 4 vs Thunder","Top Play":"Wembanyama's rim protection changed the game plan in the fourth quarter.","Why it mattered":"Even at 2-2, the Spurs showed they can win the possession battle against OKC's pace."},
+        {"Game":"Game 6 vs Thunder","Top Play":"Wembanyama's rim protection flipped the West finals on San Antonio's home floor.","Why it mattered":"The Spurs advanced 4-2 — OKC's pace could not survive the length in the closeout game."},
+        {"Game":"Game 1 vs Knicks","Top Play":"Castle and Vassell kept the Spurs competitive before the fourth-quarter run.","Why it mattered":"Even in a Game 1 loss, San Antonio showed the length that makes this Finals a possession battle."},
+    ],
+    "Oklahoma City Thunder": [
+        {"Game":"Game 6 vs Spurs","Top Play":"SGA scored 34 but San Antonio's gang rebounding won the closeout.","Why it mattered":"The Thunder's season ended one win shy of the Finals — depth minutes were the margin."},
     ],
     "Cleveland Cavaliers": [
-        {"Game":"Game 2 vs Knicks","Top Play":"Cleveland protected home court to level the East finals.","Why it mattered":"Mitchell and Mobley carried the defensive identity that keeps this series close."},
+        {"Game":"Game 6 vs Knicks","Top Play":"Mitchell scored 31 in a road elimination game but New York closed the series.","Why it mattered":"Cleveland's run ended in the East finals — the closeout quarter decided the conference champion."},
     ],
     "Minnesota Timberwolves": [
         {"Game":"Game 6 vs Spurs","Top Play":"Anthony Edwards delivered late-game shot creation in a tight finish.","Why it mattered":"It gave Minnesota a fighting chance before the series ended."},
@@ -1786,9 +1908,8 @@ PLAYOFF_BRACKET_REFRESH_MS = 60000
 LIVE_GC_AUTO_LOAD_STATUSES = frozenset({"live", "starting soon", "final", "scheduled"})
 LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 
-# TEMPORARY: ultra-light Live Game Center — only Layer 1 scoreboard until reliability is proven.
-# Set False to restore full Layer 2/3 (analysis, box score, PBP, Plotly, etc.).
-LIVE_GC_SAFE_MODE = True
+# Full Live Game Center — Layer 1 scoreboard first; heavy tabs load on selection.
+LIVE_GC_SAFE_MODE = False
 
 # Developer workspace: when True, Dev Lab appears in the sidebar. When False, use the sidebar toggle.
 DEV_MODE = True
@@ -2229,6 +2350,10 @@ def build_nba_finals_series_cached(use_demo_backup=False, api_refresh=False):
                 "GameID": g.get("GameID", ""),
                 "Source": "NBA API",
             })
+    if use_demo_backup and not shell.get("games"):
+        backup = NBA_FINALS_DEMO_BACKUP.get(key)
+        if backup:
+            shell["games"] = [dict(g, Source="Demo backup") for g in backup.get("games", [])]
     return clean_and_recount_series({key: shell})
 
 
@@ -7078,21 +7203,22 @@ def render_matchup_lineups_page(team_name, profile):
         f"**{opp}**: {o_meta['source']} (updated {o_meta['updated']})"
     )
 
-    with st.expander("Debug: lineup resolution", expanded=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**{team_name}** — `{t_meta['source']}`")
-            st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, t_meta["resolved_lineup"])))
-            if t_meta["rejected"]:
-                st.write("Rejected/outdated:", ", ".join(t_meta["rejected"]))
-            st.dataframe(lineup_position_debug_df(team_name), use_container_width=True, hide_index=True)
-        with c2:
-            st.markdown(f"**{opp}** — `{o_meta['source']}`")
-            st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, o_meta["resolved_lineup"])))
-            if o_meta["rejected"]:
-                st.write("Rejected/outdated:", ", ".join(o_meta["rejected"]))
-            st.dataframe(lineup_position_debug_df(opp), use_container_width=True, hide_index=True)
-        st.caption("Active rotation = players eligible for matchup cards. Outdated names are excluded even if the API still lists them.")
+    if globals().get("SHOW_PERF_DEBUG", False):
+        with st.expander("Debug: lineup resolution", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**{team_name}** — `{t_meta['source']}`")
+                st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, t_meta["resolved_lineup"])))
+                if t_meta["rejected"]:
+                    st.write("Rejected/outdated:", ", ".join(t_meta["rejected"]))
+                st.dataframe(lineup_position_debug_df(team_name), use_container_width=True, hide_index=True)
+            with c2:
+                st.markdown(f"**{opp}** — `{o_meta['source']}`")
+                st.write("Resolved:", " · ".join(f"{s}: {p}" for s, p in zip(LINEUP_SLOTS, o_meta["resolved_lineup"])))
+                if o_meta["rejected"]:
+                    st.write("Rejected/outdated:", ", ".join(o_meta["rejected"]))
+                st.dataframe(lineup_position_debug_df(opp), use_container_width=True, hide_index=True)
+            st.caption("Active rotation = players eligible for matchup cards. Outdated names are excluded even if the API still lists them.")
 
     if render_fan_section("Starting lineup matchups", "📋", caption="Estimated playoff preview boards by position.", tone="default"):
         render_fan_section_open()
@@ -10994,8 +11120,6 @@ def _win_probability_story(team_name, parsed, prob, box_df=None):
     nick = fan_nick(team_name)
     opp = fan_nick(parsed.get("opp_name"))
     margin = int(parsed.get("margin", 0))
-    period = safe_int(parsed.get("period", 1), 1)
-    is_home = bool(parsed.get("is_fav_home"))
     if margin < 0:
         need = abs(margin)
         return (
@@ -11007,6 +11131,238 @@ def _win_probability_story(team_name, parsed, prob, box_df=None):
             f"{nick} lead by {margin}. The lead is only safe if the defensive glass holds and the offense avoids empty early-clock jumpers."
         )
     return f"{nick} and {opp} are even. The next 6-0 run probably decides who controls the substitutions."
+
+
+def _live_gc_path_analysis(team_name, profile, parsed, prob):
+    """Team-centric comeback or closeout analysis — no 'fan perspective' phrasing."""
+    margin = int(parsed.get("margin", 0))
+    period = safe_int(parsed.get("period", 1), 1)
+    is_home = bool(parsed.get("is_fav_home"))
+    prof = profile or TEAM_PROFILES.get(team_name) or {}
+    strengths = prof.get("strengths") or []
+    concerns = prof.get("concerns") or []
+    nick = fan_nick(team_name)
+    opp = fan_nick(parsed.get("opp_name"))
+
+    if margin < 0:
+        st.markdown(f"#### What's still working")
+        for s in strengths[:3]:
+            st.markdown(f"- {s}")
+        st.markdown(f"#### What must improve")
+        for c in concerns[:3]:
+            st.markdown(f"- {c}")
+        st.markdown(f"#### Win probability if the deficit shrinks")
+        rows = []
+        for target in (-15, -10, -5, 0):
+            if target > margin:
+                label = f"Cut deficit to {abs(target)}" if target else "Tie the game"
+                rows.append({"Scenario": label, "Model win %": f"{win_prob(target, period, is_home)}%"})
+        if rows:
+            render_fan_stat_table(pd.DataFrame(rows), team_name)
+        st.caption(f"The model still gives {nick} a path if stops stack and the margin moves toward even before {opp} can slow the pace.")
+    elif margin > 0:
+        st.markdown(f"#### What's working")
+        for s in strengths[:3]:
+            st.markdown(f"- {s}")
+        st.markdown(f"#### Win probability if the lead grows")
+        rows = []
+        for target in (10, 15, 20, 25):
+            if target > margin:
+                rows.append({"Scenario": f"Grow lead to {target}", "Model win %": f"{win_prob(target, period, is_home)}%"})
+        if rows:
+            render_fan_stat_table(pd.DataFrame(rows), team_name)
+        st.markdown(f"#### What to avoid")
+        for c in concerns[:3]:
+            st.markdown(f"- {c}")
+        st.caption(f"A {margin}-point cushion helps, but {nick} only protect it with disciplined closeouts and zero live-ball turnovers.")
+    else:
+        st.markdown(f"#### Even game — keys on both sides")
+        for s in strengths[:2]:
+            st.markdown(f"- Working: {s}")
+        for c in concerns[:2]:
+            st.markdown(f"- Watch: {c}")
+        st.caption(f"{nick} and {opp} are tied — the next run probably decides who controls the rotation.")
+
+
+def _live_gc_fetch_box_df_cached(gid, section_ms):
+    """Fetch box score once per tab visit; traced in section_ms."""
+    if not gid:
+        return pd.DataFrame()
+    t0 = pytime.perf_counter()
+    try:
+        box_game = _live_gc_fetch_boxscore(gid)
+        box_df = create_boxscore_df(box_game) if box_game else pd.DataFrame()
+    except Exception:
+        box_df = pd.DataFrame()
+    section_ms["boxscore"] = (pytime.perf_counter() - t0) * 1000.0
+    return box_df
+
+
+def _live_gc_fetch_actions_cached(gid, section_ms):
+    if not gid:
+        return []
+    t0 = pytime.perf_counter()
+    try:
+        actions = _live_gc_fetch_playbyplay(gid) or []
+    except Exception as exc:
+        _live_gc_log_error(section_ms.setdefault("layer3_errors", []), "playbyplay", exc)
+        actions = []
+    section_ms["playbyplay"] = (pytime.perf_counter() - t0) * 1000.0
+    return actions
+
+
+def _render_live_gc_tabbed_sections(team_name, profile, parsed, state, prob, section_ms):
+    """Tabbed Live Game Center — heavy API calls only inside the selected tab."""
+    gid = parsed.get("gid") or ""
+    can_fetch = bool(gid and not str(gid).startswith(("fallback-", "manual-")))
+    tab_opts = [
+        "Live Score",
+        "Win Probability",
+        "Box Score",
+        "Shot Chart",
+        "Top Plays",
+        "Injuries / Foul Trouble",
+        "Keys to Success",
+    ]
+    selected = st.radio(
+        "Live Game Center sections",
+        tab_opts,
+        horizontal=True,
+        key=f"live_gc_tab_{team_name}_{gid or 'local'}",
+        label_visibility="collapsed",
+    )
+    st.caption("Scoreboard stays pinned above — detailed stats load only in the tab you open.")
+
+    game_row = state.get("game_row") or {}
+    actions_inline = game_row.get("actions") or [] if isinstance(game_row, dict) else []
+
+    if selected == "Live Score":
+        top = state.get("top_scorer")
+        if top and top.get("name"):
+            st.markdown(
+                _player_tile_html(
+                    {"Player": top["name"], "PTS": top["pts"], "REB": top.get("reb", 0), "AST": top.get("ast", 0)},
+                    badge="Game leader (CDN)",
+                ),
+                unsafe_allow_html=True,
+            )
+        if parsed.get("phase") == "live":
+            st.info(_live_headline_natural(
+                team_name, parsed["phase"], parsed["margin"], prob, parsed["period"],
+                parsed["status"], fan_nick(parsed["opp_name"]),
+            ))
+        if actions_inline:
+            run_txt = _scoring_run_summary(actions_inline, parsed.get("fav_alias"), window=40)
+            if run_txt:
+                st.caption(run_txt)
+        with st.expander("Rotation estimate", expanded=False):
+            _render_lineup_board(team_name, parsed["opp_name"], pd.DataFrame())
+        with st.expander("Series & bracket context", expanded=False):
+            _live_gc_bracket_context_expander_body(team_name)
+
+    elif selected == "Win Probability":
+        st.markdown("<div class='broadcast-grid'>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            _render_probability_command(team_name, parsed, prob, box_df=None)
+        with c2:
+            _render_live_matchup_swing(team_name, parsed["opp_name"], None, parsed)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    elif selected == "Box Score":
+        if not can_fetch:
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
+            _render_lineup_board(team_name, parsed["opp_name"], pd.DataFrame())
+            return
+        box_df = _live_gc_fetch_box_df_cached(gid, section_ms)
+        if box_df is not None and not box_df.empty:
+            _render_styled_box_score(team_name, parsed["opp_name"], box_df)
+            _render_top_performer_cards(team_name, parsed["opp_name"], box_df)
+        else:
+            st.caption("Box score has not published yet — check back after the first timeout.")
+
+    elif selected == "Shot Chart":
+        if not can_fetch:
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
+            return
+        actions = _live_gc_fetch_actions_cached(gid, section_ms)
+        if not actions:
+            st.caption("Play-by-play has not published yet.")
+            return
+        try:
+            shots = shot_df_from_pbp(actions, parsed["fav_alias"])
+            if not shots.empty:
+                st.plotly_chart(draw_court(shots, f"{fan_nick(team_name)} shot chart"), use_container_width=True)
+            else:
+                st.caption("Shot locations populate when the action feed includes make/miss coordinates.")
+        except Exception as exc:
+            _live_gc_log_error(section_ms.setdefault("layer3_errors", []), "shot_chart", exc)
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
+
+    elif selected == "Top Plays":
+        if not can_fetch:
+            plays = FALLBACK_TOP_PLAYS.get(team_name, [])[:6]
+            if plays:
+                st.dataframe(pd.DataFrame(plays), use_container_width=True, hide_index=True)
+            else:
+                st.caption("Top plays populate when play-by-play is available.")
+            return
+        actions = _live_gc_fetch_actions_cached(gid, section_ms)
+        if actions:
+            try:
+                tp = _top_plays_from_actions(actions, team_name, limit=10)
+                if tp is not None and not tp.empty:
+                    st.dataframe(tp, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Highlight tags have not appeared in the feed yet.")
+            except Exception as exc:
+                _live_gc_log_error(section_ms.setdefault("layer3_errors", []), "top_plays", exc)
+                st.caption(_live_gc_fan_msg("detail_unavailable"))
+        else:
+            st.caption("Play-by-play has not published yet.")
+
+    elif selected == "Injuries / Foul Trouble":
+        if can_fetch:
+            box_df = _live_gc_fetch_box_df_cached(gid, section_ms)
+            st.markdown("#### Foul trouble")
+            _live_gc_foul_trouble(box_df, team_name, parsed["opp_name"])
+        else:
+            st.caption("Foul trouble updates when the box score publishes.")
+        st.markdown("#### Injury report")
+        try:
+            c1, c2 = st.columns(2)
+            with c1:
+                render_injury_report(
+                    team_name,
+                    opponent_name=parsed["opp_name"],
+                    show_page_header=False,
+                    fan_perspective_team=team_name,
+                    neutral_framing=True,
+                )
+            with c2:
+                if parsed.get("opp_name"):
+                    render_injury_report(
+                        parsed["opp_name"],
+                        show_page_header=False,
+                        neutral_framing=True,
+                    )
+        except Exception as exc:
+            _live_gc_log_error(section_ms.setdefault("layer3_errors", []), "injuries", exc)
+            st.caption(_live_gc_fan_msg("detail_unavailable"))
+
+    elif selected == "Keys to Success":
+        _live_gc_path_analysis(team_name, profile, parsed, prob)
+        st.markdown("---")
+        st.markdown("#### Current keys to the game")
+        if parsed.get("phase") == "live":
+            st.markdown(
+                f"<div class='broadcast-card dark'><div style='font-size:14px;line-height:1.55'>"
+                f"{html.escape(_live_headline_natural(team_name, parsed['phase'], parsed['margin'], prob, parsed['period'], parsed['status'], fan_nick(parsed['opp_name'])))}"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+        for line in game_story(team_name, parsed["margin"], prob, pd.DataFrame()):
+            st.write(f"• {line}")
 
 
 def _render_probability_command(team_name, parsed, prob, box_df=None):
@@ -12754,6 +13110,7 @@ def render_live_game_center(team_name, profile):
                 k.startswith("live_gc__")
                 or k.startswith("live_gc_depth_")
                 or k.startswith("live_gc_layer2_")
+                or k.startswith("live_gc_tab_")
             ):
                 del st.session_state[k]
         st.session_state["_live_gc_sel_team"] = team_name
@@ -12826,7 +13183,7 @@ def render_live_game_center(team_name, profile):
         if feed_stressed:
             st.caption("Live feed is struggling — score above is last known or manual. Tap Refresh to retry the league feed.")
         else:
-            st.caption("Layer 1 = live score only (fast). Analysis and detailed stats load only when you ask.")
+            st.caption("Live scoreboard above refreshes automatically during games. Open a tab below for box score, shot chart, and analysis.")
 
     if state.get("priority") == "manual" and state.get("manual"):
         section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
@@ -12851,13 +13208,6 @@ def render_live_game_center(team_name, profile):
         return
 
     gid = parsed.get("gid") or ""
-    layer2_key = f"live_gc_layer2_{team_name}"
-    depth_key = f"live_gc_depth_{gid}" if gid and not str(gid).startswith(("fallback-", "manual-")) else ""
-    depth_loaded_key = f"{depth_key}_loaded" if depth_key else ""
-
-    if st.session_state.pop(f"live_gc__load_{team_name}", False):
-        st.session_state[layer2_key] = True
-
     gs = str((snap or {}).get("game_status") or parsed.get("phase") or "")
     if AUTOREFRESH_AVAILABLE and (
         parsed.get("phase") == "live"
@@ -12872,42 +13222,9 @@ def render_live_game_center(team_name, profile):
         team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"]
     )
 
-    if not st.session_state.get(layer2_key):
-        if st.button("Load live analysis (momentum, keys, lineups)", key=f"btn_{layer2_key}", type="secondary"):
-            st.session_state[layer2_key] = True
-            st.rerun()
-    else:
-        t0 = pytime.perf_counter()
-        _render_live_gc_layer2_sections(team_name, profile, parsed, state, prob, section_ms)
-        section_ms["layer2"] = (pytime.perf_counter() - t0) * 1000.0
-
-    can_l3 = bool(gid and not str(gid).startswith(("fallback-", "manual-")))
-    if can_l3 and depth_key and not st.session_state.get(depth_key):
-        st.caption("Layer 3: play-by-play, shot chart, full box score, and injuries load only when you opt in.")
-        if st.button("Load detailed stats", key=f"btn_{depth_key}", type="secondary"):
-            st.session_state[depth_key] = True
-            st.session_state[depth_loaded_key] = False
-            st.rerun()
-    elif depth_key and st.session_state.get(depth_key):
-        c_l3a, c_l3b = st.columns([1, 3])
-        with c_l3a:
-            if st.button("Refresh detailed stats", key=f"refresh_{depth_key}", type="secondary"):
-                for fn in (get_live_boxscore, get_live_playbyplay):
-                    try:
-                        fn.clear()
-                    except Exception:
-                        pass
-                st.session_state[depth_loaded_key] = False
-                st.rerun()
-        with c_l3b:
-            st.caption("Detailed stats load once so the live score can keep refreshing. Tap refresh to update box score and play-by-play.")
-        if not st.session_state.get(depth_loaded_key):
-            t0 = pytime.perf_counter()
-            _render_live_gc_layer3_sections(team_name, profile, parsed, snap, gid, prob, section_ms)
-            section_ms["layer3"] = (pytime.perf_counter() - t0) * 1000.0
-            st.session_state[depth_loaded_key] = True
-        else:
-            st.info("Detailed stats are loaded. Use **Refresh detailed stats** to update.")
+    t0 = pytime.perf_counter()
+    _render_live_gc_tabbed_sections(team_name, profile, parsed, state, prob, section_ms)
+    section_ms["tabs"] = (pytime.perf_counter() - t0) * 1000.0
 
     section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
     _render_live_gc_debug(
@@ -13838,10 +14155,10 @@ PAGE_LABEL_ALIASES = {
     "🛠️ Dev Lab": "🛠️ Dev Lab",
 }
 
-def _sidebar_team_label(team_name):
+def _sidebar_team_label(team_name, stt=None):
     """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
     try:
-        if get_team_playoff_status(team_name).get("status") == "eliminated":
+        if get_team_playoff_status(team_name, stt).get("status") == "eliminated":
             return f"📋 {team_name} (offseason outlook)"
     except Exception:
         if _is_home_eliminated(team_name):
@@ -13849,111 +14166,196 @@ def _sidebar_team_label(team_name):
     return team_name
 
 
-_team_keys_sorted = sorted(TEAM_PROFILES.keys())
-_default_idx = _team_keys_sorted.index("New York Knicks") if "New York Knicks" in _team_keys_sorted else 0
-favorite_team = st.sidebar.selectbox(
-    "Choose your 2026 NBA playoff team",
-    _team_keys_sorted,
-    index=_default_idx,
-    format_func=_sidebar_team_label,
-)
-USE_DEMO_BACKUP = st.sidebar.toggle(
-    "Use playoff fallback when API is empty",
-    value=True,
-    help="When NBA.com returns no completed games for a series, show bundled local scores so the bracket never looks blank."
-)
-ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
-    "Auto-sync bracket from NBA API",
-    value=True,
-    help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits."
-)
-if not DEV_MODE:
-    st.sidebar.toggle(
-        "Enable Dev Lab (developer)",
-        value=False,
-        key="dev_lab_enabled",
-        help="Show the Dev Lab page for testing features without affecting the main fan experience.",
+# ==========================================================
+# Headless / test API — pure logic, no Streamlit UI at import
+# ==========================================================
+def get_playoff_state_snapshot(use_demo_backup=True, api_refresh=False):
+    """Unified playoff bracket snapshot for scripts and unit tests."""
+    return get_playoff_state_cached(use_demo_backup=use_demo_backup, api_refresh=api_refresh)
+
+
+def calculate_win_probability(team_name, opp_name, margin, period, is_home, box_df=None):
+    """Win-probability model without UI dependencies."""
+    return live_win_probability(team_name, opp_name, margin, period, is_home, box_df=box_df)
+
+
+def resolve_live_game_state(team_name, profile=None, *, network=True):
+    """
+    Live Game Center resolver for tests and diagnostics.
+    Set network=False to skip CDN/stats fetches (profile context only).
+    """
+    profile = profile or get_effective_team_profile(team_name)
+    if not network:
+        opp, rnd, series_text = _live_gc_profile_context(team_name, profile)[:3]
+        return {
+            "layer": 1,
+            "priority": "profile",
+            "source_label": "profile (no network)",
+            "parsed": None,
+            "profile": profile,
+            "opponent": opp,
+            "round": rnd,
+            "series_text": series_text,
+        }
+    return _resolve_live_gc_layer1_fast(team_name, profile)
+
+
+def build_lineup_matchups(team_name, opp_name):
+    """Position-by-position lineup board data — no Streamlit rendering."""
+    t_meta = get_lineup_resolution_info(team_name)
+    o_meta = get_lineup_resolution_info(opp_name)
+    t_starters = estimated_starters_from_api(team_name)
+    o_starters = estimated_starters_from_api(opp_name)
+    matchups = []
+    for i, pos in enumerate(LINEUP_SLOTS):
+        tp = t_starters[i] if i < len(t_starters) else "TBD"
+        op = o_starters[i] if i < len(o_starters) else "TBD"
+        matchups.append({"position": pos, "team_player": tp, "opp_player": op})
+    return {
+        "team": team_name,
+        "opponent": opp_name,
+        "matchups": matchups,
+        "team_bench": list(estimated_bench_from_api(team_name)[:5]),
+        "opp_bench": list(estimated_bench_from_api(opp_name)[:5]),
+        "team_meta": t_meta,
+        "opp_meta": o_meta,
+    }
+
+
+def main():
+    """Streamlit app entry — sidebar, routing, and page rendering."""
+    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, SHOW_PERF_DEBUG
+
+    _configure_app_shell()
+
+    try:
+        from nba_persistent_state import (
+            autosave_nba_state,
+            default_reset_nba_session,
+            restore_nba_disk_state_once,
+        )
+        from suite_user_persistence import render_reset_controls, show_persistence_messages
+
+        restore_nba_disk_state_once(st)
+        show_persistence_messages(st)
+        render_reset_controls(
+            st,
+            "nba",
+            on_reset=default_reset_nba_session,
+            help_text="Clears saved team, page, and dashboard preferences. Playoff data caches are not deleted.",
+        )
+    except Exception:
+        pass
+
+    team_keys_sorted = sorted(TEAM_PROFILES.keys())
+    default_idx = team_keys_sorted.index("New York Knicks") if "New York Knicks" in team_keys_sorted else 0
+    _restore_team = st.session_state.pop("_nba_restore_team", None)
+    if _restore_team and _restore_team in team_keys_sorted:
+        default_idx = team_keys_sorted.index(_restore_team)
+    favorite_team = st.sidebar.selectbox(
+        "Choose your 2026 NBA playoff team",
+        team_keys_sorted,
+        index=default_idx,
+        format_func=_sidebar_team_label,
     )
-elif DEV_MODE:
-    st.sidebar.caption("🛠️ Dev mode — Dev Lab visible")
-SHOW_PERF_DEBUG = st.sidebar.toggle(
-    "Show performance debug",
-    value=False,
-    help="Shows page timing, playoff state debug table, and cache mode details."
-)
-if SHOW_PERF_DEBUG:
-    render_playoff_state_debug_expander("sidebar")
-profile = get_effective_team_profile(favorite_team)
-inject_team_brand_css(favorite_team)
-_pages = dict(PAGES)
-if dev_lab_visible():
-    _pages["🛠️ Dev Lab"] = "Dev Lab"
-labels = list(_pages.keys())
-def_label = PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
-page_label = st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
-page = _pages[page_label]
-_APP_PAGE_T0 = pytime.perf_counter()
+    USE_DEMO_BACKUP = st.sidebar.toggle(
+        "Use playoff fallback when API is empty",
+        value=True,
+        help="When NBA.com returns no completed games for a series, show bundled local scores so the bracket never looks blank.",
+    )
+    ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
+        "Auto-sync bracket from NBA API",
+        value=True,
+        help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits.",
+    )
+    if not DEV_MODE:
+        st.sidebar.toggle(
+            "Enable Dev Lab (developer)",
+            value=False,
+            key="dev_lab_enabled",
+            help="Show the Dev Lab page for testing features without affecting the main fan experience.",
+        )
+    elif DEV_MODE:
+        st.sidebar.caption("🛠️ Dev mode — Dev Lab visible")
+    SHOW_PERF_DEBUG = st.sidebar.toggle(
+        "Show performance debug",
+        value=False,
+        help="Shows page timing, playoff state debug table, and cache mode details.",
+    )
+    if SHOW_PERF_DEBUG:
+        render_playoff_state_debug_expander("sidebar")
+    profile = get_effective_team_profile(favorite_team)
+    inject_team_brand_css(favorite_team)
+    pages = dict(PAGES)
+    if dev_lab_visible():
+        pages["🛠️ Dev Lab"] = "Dev Lab"
+    labels = list(pages.keys())
+    def_label = PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
+    page_label = st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
+    st.session_state["_nba_persist_team"] = favorite_team
+    page = pages[page_label]
+    app_page_t0 = pytime.perf_counter()
 
-_PLAYOFF_AUTO_REFRESH_PAGES = {
-    "Home Dashboard",
-    "Live Game Center",
-    "Playoff Bracket",
-    "Previous Rounds",
-    "Legacy Tracker",
-    "Matchup Lineups",
-    "Matchup Intelligence",
-    "Player Playoff Tracker",
-    "Dev Lab",
-}
-if page in _PLAYOFF_AUTO_REFRESH_PAGES:
-    tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
+    playoff_auto_refresh_pages = {
+        "Home Dashboard",
+        "Live Game Center",
+        "Playoff Bracket",
+        "Previous Rounds",
+        "Legacy Tracker",
+        "Matchup Lineups",
+        "Matchup Intelligence",
+        "Player Playoff Tracker",
+        "Dev Lab",
+    }
+    if page in playoff_auto_refresh_pages:
+        tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
 
-# ==========================================================
-# Pages
-# ==========================================================
-if page == "Home Dashboard":
-    render_playoff_command_center(favorite_team)
+    if page == "Home Dashboard":
+        render_playoff_command_center(favorite_team)
+    elif page == "Playoff Bracket":
+        render_bracket(favorite_team)
+    elif page == "Team History Leaders":
+        render_team_history_leaders_page(favorite_team)
+    elif page == "Matchup Intelligence":
+        render_matchup_intelligence(favorite_team)
+    elif page == "Previous Rounds":
+        render_previous_rounds_history(favorite_team)
+    elif page == "Live Game Center":
+        render_live_game_center(favorite_team, profile)
+    elif page == "Player Playoff Tracker":
+        render_matchup_header(favorite_team)
+        render_player_playoff_story_hub(favorite_team, profile)
+    elif page == "Legacy Tracker":
+        render_legacy_tracker_page(favorite_team)
+    elif page == "Matchup Lineups":
+        render_matchup_header(favorite_team)
+        if _is_home_eliminated(favorite_team):
+            st.warning("This team is eliminated, so current matchup lineups are not active.")
+        else:
+            render_matchup_lineups_page(favorite_team, profile)
+    elif page == "Dev Lab":
+        render_dev_lab_page(favorite_team, profile, page_t0=app_page_t0)
 
-elif page == "Playoff Bracket":
-    render_bracket(favorite_team)
+    if SHOW_PERF_DEBUG:
+        elapsed_ms = (pytime.perf_counter() - app_page_t0) * 1000
+        with st.expander("Performance debug", expanded=False):
+            st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
+            st.caption(f"Page: {page} · Team: {favorite_team}")
+            st.caption(f"Playoff fallback when API empty: {'on' if USE_DEMO_BACKUP else 'off'}")
+            st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
+            st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
+            st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
-elif page == "Team History Leaders":
-    render_team_history_leaders_page(favorite_team)
+    try:
+        from nba_persistent_state import autosave_nba_state
 
-elif page == "Matchup Intelligence":
-    render_matchup_intelligence(favorite_team)
+        autosave_nba_state(st)
+    except Exception:
+        pass
 
-elif page == "Previous Rounds":
-    render_previous_rounds_history(favorite_team)
+    st.divider()
+    st.caption("Daniel Cohen — NBA Playoff Companion AI | live bracket sync | automatic series tracking | previous rounds | live game center")
 
-elif page == "Live Game Center":
-    render_live_game_center(favorite_team, profile)
 
-elif page == "Player Playoff Tracker":
-    render_matchup_header(favorite_team)
-    render_player_playoff_story_hub(favorite_team, profile)
-
-elif page == "Legacy Tracker":
-    render_legacy_tracker_page(favorite_team)
-
-elif page == "Matchup Lineups":
-    render_matchup_header(favorite_team)
-    if _is_home_eliminated(favorite_team): st.warning("This team is eliminated, so current matchup lineups are not active.")
-    else:
-        render_matchup_lineups_page(favorite_team, profile)
-
-elif page == "Dev Lab":
-    render_dev_lab_page(favorite_team, profile, page_t0=_APP_PAGE_T0)
-
-if globals().get("SHOW_PERF_DEBUG", False):
-    elapsed_ms = (pytime.perf_counter() - _APP_PAGE_T0) * 1000
-    with st.expander("Performance debug", expanded=False):
-        st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
-        st.caption(f"Page: {page} · Team: {favorite_team}")
-        st.caption(f"Playoff fallback when API empty: {'on' if USE_DEMO_BACKUP else 'off'}")
-        st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
-        st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
-        st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
-
-st.divider()
-st.caption("Daniel Cohen — NBA Playoff Companion AI | live bracket sync | automatic series tracking | previous rounds | live game center")
+if __name__ == "__main__":
+    main()
