@@ -14229,6 +14229,13 @@ def main():
     _configure_app_shell()
 
     try:
+        from suite_resume_launch import apply_suite_resume_launch
+
+        apply_suite_resume_launch(st, "nba")
+    except Exception:
+        pass
+
+    try:
         from nba_persistent_state import (
             autosave_nba_state,
             default_reset_nba_session,
@@ -14345,6 +14352,16 @@ def main():
             st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
+
+    try:
+        sig = (favorite_team, page_label or page)
+        if st.session_state.get("_suite_activity_sig") != sig:
+            st.session_state["_suite_activity_sig"] = sig
+            from nba_activity import log_from_page_context
+
+            log_from_page_context(favorite_team, page, page_label)
+    except Exception:
+        pass
 
     try:
         from nba_persistent_state import autosave_nba_state
