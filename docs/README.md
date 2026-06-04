@@ -1,21 +1,25 @@
 # NBA Playoff Companion AI — product documentation
 
-**Last updated:** 2026-06-03 · **Branch:** `dev` · **Entry:** `streamlit_app.py`
+**Last updated:** 2026-06-04 · **Branch:** `dev` · **Entry:** `streamlit_app.py`
 
-These markdown files are the **source of truth** for product vision, roadmap, and requirements. The codebase should follow this documentation—not the other way around.
+These markdown files are the **long-term memory** and **source of truth** for this project. The codebase must follow this documentation—not the other way around.
+
+**Start here:** [WORKFLOW.md](./WORKFLOW.md) (required read/update rules).
 
 ## How to use
 
 | Audience | Workflow |
 |----------|----------|
-| **Developers** | Read relevant docs before changing a page or engine. Update docs when behavior or requirements change. |
-| **Cursor agents** | Follow `.cursor/rules/nba-app-roadmap-docs.mdc` — read `docs/` before major work; update after shipping. |
-| **Dev Lab (in-app)** | Open **🛠️ Dev Lab → Product docs** to view priorities, roadmap, and known issues from these files. |
+| **Developers** | **Before:** APP_VISION → DEVELOPMENT_PRIORITIES → feature doc. **After:** COMPLETED_FEATURES + KNOWN_ISSUES + feature doc. |
+| **Cursor agents** | `.cursor/rules/nba-app-roadmap-docs.mdc` — docs-first enforced; no doc/code drift. |
+| **Dev Lab (in-app)** | **Product docs** tab — active priority, last updated, milestone, system completion %. |
 
 ## Document index
 
 | File | Purpose |
 |------|---------|
+| [WORKFLOW.md](./WORKFLOW.md) | **Required** before/after major work |
+| [SYSTEMS_STATUS.md](./SYSTEMS_STATUS.md) | Completion %, active priority, milestone (Dev Lab) |
 | [APP_VISION.md](./APP_VISION.md) | Product vision, fan experience goals, suite context |
 | [ROADMAP.md](./ROADMAP.md) | Long-term vision, planned features, milestones |
 | [DEVELOPMENT_PRIORITIES.md](./DEVELOPMENT_PRIORITIES.md) | Active P0–P2 work and deploy checks |

@@ -12,6 +12,7 @@
 | Stale API roster players | Lineups | Mitigated by curated overrides; verify when trades occur |
 | `DEV_MODE = True` in repo | Dev Lab | Hide for fan production (`DEV_MODE = False`) before wide release |
 | Reset button deploy | Persistence | Confirm visible reset on Streamlit `dev` after suite module sync |
+| Doc/code drift risk | Process | Mitigated by WORKFLOW.md + Cursor rule — still requires discipline on every PR |
 | NBA cloud persistence testing | Suite | Paused for heavy perf testing—verify before Finals traffic |
 
 ## Technical debt

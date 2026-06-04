@@ -1,5 +1,5 @@
 ---
-description: Use docs/ as source of truth for NBA Playoff Companion planning and architecture
+description: Enforce docs-first workflow — docs/ is long-term memory for NBA Playoff Companion
 globs:
   - docs/**/*.md
   - cursor-prompts/**/*.md
@@ -10,48 +10,83 @@ globs:
 alwaysApply: true
 ---
 
-# NBA Playoff Companion — documentation-first development
+# NBA Playoff Companion — documentation-first (enforced)
 
-**Primary source of truth:** `docs/` (not the codebase alone).
+**`docs/` is the long-term memory of this project.** Code must follow documented product vision. **Do not allow docs and code to drift apart.**
 
-Before **major changes** to any of these areas, read the matching doc:
+Read **`docs/WORKFLOW.md`** for the full contract.
 
-| Area | Doc |
-|------|-----|
-| Live Game Center | `docs/LIVE_GAME_CENTER.md` |
-| Home Dashboard | `docs/PAGES.md` (Home Dashboard) |
-| Playoff Bracket | `docs/PLAYOFF_ENGINE.md`, `docs/PAGES.md` |
+---
+
+## Before major work (mandatory)
+
+Read **in order**:
+
+1. `docs/APP_VISION.md`
+2. `docs/DEVELOPMENT_PRIORITIES.md`
+3. **Relevant feature doc:**
+
+| Work area | Required doc |
+|-----------|--------------|
+| Live Game Center | `docs/LIVE_GAME_CENTER.md` — **source of truth** for safe mode, layers, refresh, reliability |
+| Playoff bracket / status / elimination / offseason | `docs/PLAYOFF_ENGINE.md` — **source of truth** for advancement, elimination, bracket generation, offseason |
+| Home, lineups, MI, tracker, history, previous rounds | `docs/PAGES.md` + area doc if exists |
 | Legacy Tracker | `docs/LEGACY_TRACKER.md` |
-| Matchup Lineups | `docs/PAGES.md` |
-| Team History & Leaders | `docs/TEAM_HISTORY.md` |
-| Previous Rounds | `docs/PAGES.md` |
-| Offseason outlooks | `docs/PAGES.md`, `docs/APP_VISION.md` |
-| Dev Lab | `docs/PAGES.md`, `docs/DEVELOPMENT_PRIORITIES.md` |
+| Team History | `docs/TEAM_HISTORY.md` |
+
+**Major work** = new fan-visible behavior, engine rule change, live architecture change, or bracket/elimination logic change.
+
+---
+
+## After major work (mandatory)
+
+Update **all that apply** in the **same session / commit** as code:
+
+- `docs/COMPLETED_FEATURES.md` — shipped work
+- `docs/KNOWN_ISSUES.md` — new or resolved issues
+- **Relevant feature doc** — if behavior or constants changed
+- `docs/SYSTEMS_STATUS.md` — completion % or active priority / milestone
+- `docs/DEVELOPMENT_PRIORITIES.md` — check off tasks; adjust P0/P1
+- Bump **`Last updated: YYYY-MM-DD`** on every edited file
+
+Sync `cursor-prompts/nba_app_*.md` mirrors when planning files are used.
+
+---
+
+## Feature requests & new features
+
+- **Update docs first OR alongside code** in one change—never code-only for major features.
+- Do not implement anything that conflicts with `docs/PAGES.md` or area docs without updating docs first.
+- Move shipped items to `COMPLETED_FEATURES.md`; trim `ROADMAP.md` / priorities when done.
+
+---
+
+## Roadmap / planning conversations
 
 When the user asks for **roadmap**, **feature plan**, **implementation plan**, **enhancement plan**, **project strategy**, or **future ideas**:
 
-1. Read and update **`docs/`** first:
-   - `DEVELOPMENT_PRIORITIES.md` (active work)
-   - `ROADMAP.md` (vision, planned, milestones)
-   - `COMPLETED_FEATURES.md` (shipped)
-   - `KNOWN_ISSUES.md` (bugs/debt)
-   - Area docs when behavior changes (`LIVE_GAME_CENTER.md`, `PLAYOFF_ENGINE.md`, etc.)
+1. Read current `docs/` state (especially `DEVELOPMENT_PRIORITIES.md`, `ROADMAP.md`, `SYSTEMS_STATUS.md`).
+2. Update `docs/` (not only chat).
+3. Keep `cursor-prompts/nba_app_*.md` sections: Current Priorities, Next Features, Long-Term Vision, Completed Features, Notes.
+4. Long plans → `cursor-prompts/plans/YYYY-MM-DD-short-title.md`.
 
-2. Keep `cursor-prompts/nba_app_*.md` mirrors in sync (pointers or summaries).
+---
 
-3. Each cursor-prompts file should retain sections:
-   - `# Current Priorities`
-   - `# Next Features`
-   - `# Long-Term Vision`
-   - `# Completed Features`
-   - `# Notes`
+## Constants that must match docs
 
-4. Long plans → `cursor-prompts/plans/YYYY-MM-DD-short-title.md` and link from `docs/DEVELOPMENT_PRIORITIES.md`.
+When changing these, update the matching doc section the same commit:
 
-5. After shipping: move items to `COMPLETED_FEATURES.md`; do not implement features that conflict with `docs/PAGES.md` without updating docs.
+- `LIVE_GC_SAFE_MODE`, `PLAYOFF_BRACKET_REFRESH_MS`, Layer 1/2/3 behavior → `LIVE_GAME_CENTER.md`
+- Series win (4 wins), `get_playoff_state_cached`, elimination, offseason → `PLAYOFF_ENGINE.md`
 
-6. Work on branch **`dev`** unless the user requests `main`.
+---
 
-7. Bump **Last updated** dates in edited docs.
+## Dev Lab
 
-8. Dev Lab **Product docs** tab reads `docs/` via `product_docs.py` — verify it still renders after doc structure changes.
+`product_docs.py` + Dev Lab **Product docs** tab parse `docs/`. After doc structure changes, verify the tab still shows: active priority, last updated, milestone, system completion %.
+
+---
+
+## Branch
+
+Work on **`dev`** unless the user explicitly requests `main`.

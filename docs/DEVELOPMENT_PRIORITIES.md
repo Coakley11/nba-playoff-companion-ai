@@ -1,6 +1,6 @@
 # Development priorities
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-04
 
 ## Current Priorities
 
@@ -10,7 +10,10 @@
 - [x] Dev Lab **Product docs** tab reading markdown roadmap files (`product_docs.py`).
 - [x] Cursor rule `.cursor/rules/nba-app-roadmap-docs.mdc`.
 - [x] `cursor-prompts/` mirrors linked to `docs/`.
-- [ ] Read `docs/PAGES.md` + area doc before any Live GC or bracket engine change.
+- [x] Enforce docs-first workflow ([WORKFLOW.md](./WORKFLOW.md), expanded Cursor rule).
+- [x] Dev Lab dashboard: priority, milestone, system completion %, doc freshness.
+- [x] `LIVE_GAME_CENTER.md` and `PLAYOFF_ENGINE.md` as authoritative engine docs.
+- [ ] Read `docs/PAGES.md` + area doc before any Live GC or bracket engine change (team habit).
 
 ### P1 — Deploy & stability
 

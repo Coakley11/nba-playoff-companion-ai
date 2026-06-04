@@ -44,3 +44,7 @@
 - [x] `product_docs.py` loader for Dev Lab
 - [x] Dev Lab **Product docs** tab (priorities, planned, completed, known issues, full doc viewer)
 - [x] `cursor-prompts/` mirrors + `.cursor/rules/nba-app-roadmap-docs.mdc`
+- [x] [WORKFLOW.md](./WORKFLOW.md) — mandatory before/after major work
+- [x] [SYSTEMS_STATUS.md](./SYSTEMS_STATUS.md) — system completion % for Dev Lab
+- [x] Expanded [LIVE_GAME_CENTER.md](./LIVE_GAME_CENTER.md) and [PLAYOFF_ENGINE.md](./PLAYOFF_ENGINE.md) as source of truth
+- [x] Dev Lab Product docs — priority, last updated, milestone, progress bars

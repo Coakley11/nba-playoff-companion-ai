@@ -13913,45 +13913,98 @@ def _dev_lab_lineup_diagnostics(team_name, profile):
 def _render_dev_lab_product_docs():
     """Roadmap / priorities from docs/ — source of truth for product planning."""
     try:
-        from product_docs import docs_root, list_doc_files, read_doc, roadmap_snapshot
+        from product_docs import docs_root, list_doc_files, read_doc, roadmap_snapshot, workflow_checklist
     except ImportError as exc:
         st.warning(f"product_docs module unavailable: {exc}")
         return
 
     st.subheader("Product documentation (source of truth)")
     st.caption(
-        f"Markdown lives in `{docs_root()}`. Update these files before or alongside code changes. "
-        "Cursor agents use `.cursor/rules/nba-app-roadmap-docs.mdc`."
+        f"Markdown lives in `{docs_root()}`. Required workflow: **docs/WORKFLOW.md**. "
+        "Cursor: `.cursor/rules/nba-app-roadmap-docs.mdc`."
     )
     snap = roadmap_snapshot()
+
+    def _metric_short(text: str, limit: int = 36) -> str:
+        t = str(text or "—").strip()
+        return t if len(t) <= limit else t[: limit - 1] + "…"
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Docs last updated", snap.get("last_updated") or "—")
+    m2.metric("Active priority", _metric_short(snap.get("active_priority")))
+    m3.metric("Current milestone", _metric_short(snap.get("current_milestone")))
+    systems = snap.get("systems") or []
+    avg_pct = round(sum(s["pct"] for s in systems) / len(systems)) if systems else 0
+    m4.metric("Systems avg completion", f"{avg_pct}%", help=f"{len(systems)} tracked systems")
+
+    st.markdown("##### Active priority")
+    st.info(snap.get("active_priority") or "Set `## Active priority` in docs/SYSTEMS_STATUS.md")
+
+    st.markdown("##### Current milestone")
+    st.success(snap.get("current_milestone") or "Set `## Current milestone` in docs/SYSTEMS_STATUS.md")
+
+    st.markdown("##### Major systems — completion %")
+    st.caption("From docs/SYSTEMS_STATUS.md — update when shipping or regressing.")
+    if systems:
+        for row in systems:
+            label = f"{row['system']} ({row.get('doc', '')})" if row.get("doc") else row["system"]
+            st.progress(row["pct"] / 100.0, text=f"{label} — {row['pct']}%")
+    else:
+        st.warning("No system rows parsed — check `## System completion` table in SYSTEMS_STATUS.md")
+
+    with st.expander("Workflow checklist (required)", expanded=False):
+        for line in workflow_checklist():
+            st.markdown(f"- {line}")
+        if snap.get("workflow"):
+            st.markdown(snap["workflow"][:1200] + ("…" if len(snap.get("workflow", "")) > 1200 else ""))
+
+    freshness = snap.get("freshness") or {}
+    if freshness:
+        with st.expander("Document freshness", expanded=False):
+            fresh_rows = [{"File": k, "Last updated": v or "—"} for k, v in sorted(freshness.items())]
+            st.dataframe(pd.DataFrame(fresh_rows), use_container_width=True, hide_index=True)
+
     blocks = (
-        ("Current priorities", snap.get("priorities")),
+        ("Current priorities (full)", snap.get("priorities")),
         ("Next milestones", snap.get("milestones")),
         ("Planned features", snap.get("planned")),
         ("Completed features", snap.get("completed")),
         ("Known issues", snap.get("known_issues")),
     )
     for title, body in blocks:
-        with st.expander(title, expanded=title == "Current priorities"):
+        with st.expander(title, expanded=False):
             if body:
                 st.markdown(body)
             else:
-                st.caption(f"No `## {title}` section found in docs/ yet.")
+                st.caption(f"No matching section in docs/ yet.")
 
     if snap.get("vision"):
         with st.expander("App vision (excerpt)", expanded=False):
             st.markdown(snap["vision"])
 
     st.divider()
+    st.markdown("##### Source-of-truth feature docs")
+    st.markdown(
+        "- **Live Game Center** → `docs/LIVE_GAME_CENTER.md` (safe mode, layers, refresh, reliability)\n"
+        "- **Playoff engine** → `docs/PLAYOFF_ENGINE.md` (bracket, advancement, elimination, offseason)"
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Open LIVE_GAME_CENTER.md", key="dev_open_lgc_doc"):
+            st.session_state["dev_lab_doc_pick"] = "LIVE_GAME_CENTER.md"
+    with c2:
+        if st.button("Open PLAYOFF_ENGINE.md", key="dev_open_pe_doc"):
+            st.session_state["dev_lab_doc_pick"] = "PLAYOFF_ENGINE.md"
+
     doc_paths = list_doc_files()
     if not doc_paths:
         st.info("No .md files in docs/ yet.")
         return
-    pick = st.selectbox(
-        "Read full document",
-        [p.name for p in doc_paths],
-        key="dev_lab_doc_pick",
-    )
+    names = [p.name for p in doc_paths]
+    default = st.session_state.get("dev_lab_doc_pick", "WORKFLOW.md")
+    if default not in names:
+        default = names[0]
+    pick = st.selectbox("Read full document", names, index=names.index(default), key="dev_lab_doc_pick")
     if pick:
         st.markdown(read_doc(pick))
 
