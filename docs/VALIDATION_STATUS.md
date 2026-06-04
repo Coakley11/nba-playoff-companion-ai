@@ -10,6 +10,7 @@ Automated helpers:
 - `python scripts/cloud_factual_spotcheck.py` — per-page expected UI snapshot (run before Cloud browser pass)
 - `python scripts/audit_lineups.py` — Knicks/Spurs curated boards
 - `python scripts/validate_stability_phase.py` — docs + static Finals markers
+- `python scripts/audit_page_performance.py` — headless bottleneck ranking (see [PERFORMANCE_AUDIT.md](./PERFORMANCE_AUDIT.md))
 
 ---
 

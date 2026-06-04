@@ -1933,12 +1933,36 @@ LIVE_GC_ADVANCED_AUTO_STATUSES = frozenset({"live"})
 # Full Live Game Center — Layer 1 scoreboard first; heavy tabs load on selection.
 LIVE_GC_SAFE_MODE = False
 
+# Fast validation path: skip heavy charts, simulations, bracket API sync, and autorefresh.
+QA_MODE = False
+
 # Developer workspace: when True, Dev Lab appears in the sidebar. When False, use the sidebar toggle.
 DEV_MODE = True
 
+PAGE_PERF_KEY = "_nba_page_perf"
+
+
+def _qa_mode_active():
+    try:
+        if st.session_state.get("QA_MODE"):
+            return True
+    except Exception:
+        pass
+    return bool(globals().get("QA_MODE", False))
+
+
+def _qa_skip_heavy_ui():
+    """Charts, shot maps, legacy simulator, full matchup-intel board."""
+    return _qa_mode_active()
+
+
+def _qa_skip_expensive_apis():
+    """Bracket scoreboard loops, live injury pulls, player log fetches where avoidable."""
+    return _qa_mode_active()
+
 
 def _live_gc_safe_mode_active():
-    return bool(LIVE_GC_SAFE_MODE)
+    return bool(LIVE_GC_SAFE_MODE) or _qa_mode_active()
 
 
 def dev_lab_visible():
@@ -2081,6 +2105,9 @@ def get_playoff_refresh_settings():
     """Sidebar-aware flags: NBA API first, bundled demo rows only when the feed is empty."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", True))
     api_refresh = bool(globals().get("ENABLE_BRACKET_API_REFRESH", True))
+    if _qa_mode_active():
+        use_demo = True
+        api_refresh = False
     return use_demo, api_refresh
 
 
@@ -2105,6 +2132,8 @@ def first_round_series_for_team(team_name, stt=None):
 
 def tick_playoff_state_autorefresh(page_key, interval_ms=None):
     """Rerun the app on a timer so series scores and advancement stay current without code edits."""
+    if _qa_mode_active():
+        return
     if not AUTOREFRESH_AVAILABLE:
         return
     st_autorefresh(interval=interval_ms or PLAYOFF_BRACKET_REFRESH_MS, key=f"playoff_autorefresh_{page_key}")
@@ -5699,6 +5728,7 @@ def legacy_takeaways_eliminated(player, team_name, pts, reb, ast, stl, blk, fg, 
 
 def render_legacy_tracker_page(team_name):
     """Legacy Tracker: frozen postmortem for eliminated teams; live forecast + sliders for active teams."""
+    _page_perf_tick("legacy_start")
     render_matchup_header(team_name)
     render_playoff_matchup_ribbon(team_name)
     nick = fan_nick(team_name)
@@ -5736,8 +5766,23 @@ def render_legacy_tracker_page(team_name):
 
     player_pool = current_roster_names(team_name, limit=15)
     player = st.selectbox("Choose player", player_pool)
-    logs = playoff_game_logs_for_player(player)
-    current = summarize_playoff_logs(logs)
+    if _qa_skip_expensive_apis():
+        logs = None
+        current = {
+            "GP": 0,
+            "PTS": 18.0,
+            "REB": 6.0,
+            "AST": 3.0,
+            "STL": 0.8,
+            "BLK": 0.4,
+            "FG_PCT": 0.45,
+            "FG3_PCT": 0.34,
+            "PLUS_MINUS": 0.0,
+        }
+        st.caption("QA mode: NBA game-log API skipped — metrics are placeholders for layout testing.")
+    else:
+        logs = playoff_game_logs_for_player(player)
+        current = summarize_playoff_logs(logs)
 
     if logs is None or logs.empty:
         st.warning(
@@ -5833,24 +5878,25 @@ def render_legacy_tracker_page(team_name):
 
         st.markdown("### 4 · Final legacy interpretation")
         st.caption(exit_line)
-        st.plotly_chart(
-            px.bar(
-                pd.DataFrame(
-                    [
-                        {
-                            "What is locked": f"Actual exit after {series_wins_bracket} series win(s)",
-                            "Legacy score": final_score,
-                            "Mode": "Postmortem (no future ladder)",
-                        }
-                    ]
+        if not _qa_skip_heavy_ui():
+            st.plotly_chart(
+                px.bar(
+                    pd.DataFrame(
+                        [
+                            {
+                                "What is locked": f"Actual exit after {series_wins_bracket} series win(s)",
+                                "Legacy score": final_score,
+                                "Mode": "Postmortem (no future ladder)",
+                            }
+                        ]
+                    ),
+                    x="What is locked",
+                    y="Legacy score",
+                    color="Mode",
+                    title=f"{player}: legacy frozen at real elimination point",
                 ),
-                x="What is locked",
-                y="Legacy score",
-                color="Mode",
-                title=f"{player}: legacy frozen at real elimination point",
-            ),
-            use_container_width=True,
-        )
+                use_container_width=True,
+            )
         elim_lines = legacy_takeaways_eliminated(
             player, team_name, pts, reb, ast, stl, blk, fg, three, plus_minus, exit_line
         )
@@ -5916,6 +5962,10 @@ def render_legacy_tracker_page(team_name):
     a2.metric("Ceiling (fan model)", player_legacy_ceiling(player, team_name))
     a3.metric("Room to title ceiling", round(float(player_legacy_ceiling(player, team_name)) - locked_score, 1))
 
+    if _qa_skip_heavy_ui():
+        st.info("QA mode: legacy simulator sliders and path charts are skipped.")
+        return
+
     st.markdown("### B · Fan simulator - shape the playoff story")
     with st.container(border=True):
         st.caption(
@@ -5956,16 +6006,17 @@ def render_legacy_tracker_page(team_name):
     x3.metric("Banner jump", round(title_score - sim_now, 1))
     x4.metric("Personal ceiling", player_legacy_ceiling(player, team_name))
 
-    st.plotly_chart(
-        px.bar(
-            path,
-            x="Playoff picture",
-            y="Legacy score",
-            color="Fan read",
-            title=f"{player}: how the story climbs if the run keeps going",
-        ),
-        use_container_width=True,
-    )
+    if not _qa_skip_heavy_ui():
+        st.plotly_chart(
+            px.bar(
+                path,
+                x="Playoff picture",
+                y="Legacy score",
+                color="Fan read",
+                title=f"{player}: how the story climbs if the run keeps going",
+            ),
+            use_container_width=True,
+        )
     with st.expander("See the full ladder", expanded=False):
         st.dataframe(path, use_container_width=True, hide_index=True)
 
@@ -6617,6 +6668,7 @@ def _narrative_storylines(player, team_name, cur, reg, prev_summary, prof):
 
 def render_player_playoff_story_hub(team_name, profile):
     """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
+    _page_perf_tick("player_tracker_start")
     inject_team_brand_css(team_name)
     st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
     st.subheader("Player Playoff Story · the run, the pressure, the memory")
@@ -6661,7 +6713,7 @@ def render_player_playoff_story_hub(team_name, profile):
 
     prev_season = _prior_nba_season_label(season)
     prev_summary = None
-    if prev_season:
+    if prev_season and not _qa_skip_expensive_apis():
         prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
         if not prev_df.empty:
             prev_summary = summarize_playoff_logs(prev_df)
@@ -6930,6 +6982,15 @@ def render_player_playoff_story_hub(team_name, profile):
     # --- 7 · Visuals ---
 
     team_section_header("7 · Progression & raw log", "📈")
+    if _qa_skip_heavy_ui():
+        st.caption("QA mode: Plotly progression charts skipped — table and series cards remain for factual checks.")
+        show_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS"] if c in df.columns]
+        with st.expander("Full playoff game log (table)", expanded=True):
+            df_tbl = _df_newest_first_for_display(df)
+            st.dataframe(df_tbl[show_cols], use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
     tcol1, tcol2 = st.columns((1, 1))
     with tcol1:
         st.markdown("<div class='pp-card'><h4>Game-by-game progression</h4>", unsafe_allow_html=True)
@@ -7381,6 +7442,7 @@ def _lineup_xfactor_candidates(team_name, opp):
 
 
 def render_matchup_lineups_page(team_name, profile):
+    _page_perf_tick("lineups_start")
     inject_team_brand_css(team_name)
     mx = get_display_matchup(team_name)
     render_fan_page_hero(
@@ -7407,8 +7469,12 @@ def render_matchup_lineups_page(team_name, profile):
     series_obj = hctx.get("series") or _build_local_series_shell(team_name)
     round_label = hctx.get("round_label") or (series_obj or {}).get("round") or profile.get("round", "Playoffs")
     status = (hctx.get("ctx") or {}).get("status_text") or series_status_text(team_name, series_obj)
-    t_starters = estimated_starters_from_api(team_name)
-    o_starters = estimated_starters_from_api(opp)
+    if _qa_mode_active():
+        t_starters = _curated_starters_list(team_name)
+        o_starters = _curated_starters_list(opp)
+    else:
+        t_starters = estimated_starters_from_api(team_name)
+        o_starters = estimated_starters_from_api(opp)
     lead_t = t_starters[0] if t_starters and t_starters[0] != "TBD" else fan_nick(team_name)
     lead_o = o_starters[0] if o_starters and o_starters[0] != "TBD" else fan_nick(opp)
     headline = f"{lead_t} vs {lead_o} sets the first pressure point"
@@ -7994,6 +8060,12 @@ def render_matchup_intelligence(team_name):
         "SCOUTING BOARD",
     )
     render_playoff_matchup_ribbon(team_name)
+    if _qa_skip_heavy_ui():
+        st.info(
+            "QA mode: full scouting board, injury intel, and historical matchup analytics are skipped. "
+            "Turn off QA mode in the sidebar to load the full board."
+        )
+        return
     axes = team_dashboard_lens(team_name).get("identity_axes") or prof.get("strengths", [])
     cols = st.columns(3)
     for col, label in zip(cols, list(axes)[:3]):
@@ -8086,6 +8158,7 @@ def render_matchup_header(team_name, first_round=False):
     oseed = TEAM_PROFILES.get(opp, {}).get("seed", "—")
     e = html.escape
     opp_logo = TEAM_LOGOS.get(opp, "")
+    _page_perf_mark_first_paint()
     st.markdown(
         (
             '<div class="team-match-header"><div style="display:flex;align-items:center;'
@@ -8510,6 +8583,7 @@ def render_playoff_matchup_ribbon(team_name, stt=None):
         f"</div>",
         unsafe_allow_html=True,
     )
+    _page_perf_mark_first_paint()
 
 
 def render_playoff_state_debug_expander(location_key="playoff_state"):
@@ -9708,6 +9782,70 @@ def _home_dashboard_section_tick(section_ms, last_t, name):
     return now
 
 
+def _page_perf_begin(page_name):
+    st.session_state[PAGE_PERF_KEY] = {
+        "page": page_name,
+        "t0": pytime.perf_counter(),
+        "last_t": pytime.perf_counter(),
+        "sections": {},
+        "first_paint_ms": None,
+        "total_ms": None,
+    }
+
+
+def _page_perf_tick(name):
+    perf = st.session_state.get(PAGE_PERF_KEY)
+    if not perf:
+        return
+    now = pytime.perf_counter()
+    perf["sections"][name] = (now - perf["last_t"]) * 1000.0
+    perf["last_t"] = now
+
+
+def _page_perf_mark_first_paint():
+    perf = st.session_state.get(PAGE_PERF_KEY)
+    if not perf or perf.get("first_paint_ms") is not None:
+        return
+    perf["first_paint_ms"] = (pytime.perf_counter() - perf["t0"]) * 1000.0
+
+
+def _page_perf_merge_sections(section_ms):
+    if not section_ms:
+        return
+    perf = st.session_state.get(PAGE_PERF_KEY)
+    if perf:
+        perf["sections"].update(section_ms)
+
+
+def _page_perf_finish():
+    perf = st.session_state.get(PAGE_PERF_KEY)
+    if perf:
+        perf["total_ms"] = (pytime.perf_counter() - perf["t0"]) * 1000.0
+
+
+def _render_page_perf_report(page_name, team_name=""):
+    if not (globals().get("SHOW_PERF_DEBUG", False) or _qa_mode_active()):
+        return
+    perf = st.session_state.get(PAGE_PERF_KEY) or {}
+    total_ms = perf.get("total_ms")
+    if total_ms is None:
+        total_ms = (pytime.perf_counter() - perf.get("t0", pytime.perf_counter())) * 1000.0
+    fp_ms = perf.get("first_paint_ms")
+    sections = perf.get("sections") or {}
+    ranked = sorted(sections.items(), key=lambda kv: kv[1], reverse=True)
+    title = "QA performance" if _qa_mode_active() else "Page performance"
+    with st.expander(title, expanded=_qa_mode_active()):
+        st.caption(f"**{html.escape(page_name)}** · {html.escape(team_name)}")
+        st.caption(f"First paint: **{fp_ms:.0f} ms**" if fp_ms is not None else "First paint: (not marked — add hero/ribbon)")
+        st.caption(f"Total render: **{total_ms:.0f} ms**")
+        if _qa_mode_active():
+            st.caption("QA mode on — API sync, autorefresh, charts, and shot maps skipped.")
+        if ranked:
+            st.markdown("**Slowest sections (ms)**")
+            for i, (name, ms) in enumerate(ranked[:5], 1):
+                st.caption(f"{i}. {html.escape(name)} — **{ms:.0f}**")
+
+
 def _home_dashboard_perf_footer(
     t0, sections, fast_mode, api_calls, skipped_note="", section_ms=None
 ):
@@ -9740,6 +9878,8 @@ def render_playoff_command_center(team_name):
     sections = []
     section_ms = {}
     _t_tick = t0
+    if _qa_mode_active():
+        st.session_state[HOME_DASH_LIVE_UPDATES] = False
     st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
     live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
     is_eliminated = _is_home_eliminated(team_name)
@@ -10193,6 +10333,7 @@ def render_playoff_command_center(team_name):
         api_display = "quick view only"
 
     section_ms["page_total"] = (pytime.perf_counter() - t0) * 1000.0
+    _page_perf_merge_sections(section_ms)
     _home_dashboard_perf_footer(
         t0,
         sections,
@@ -10659,6 +10800,7 @@ def _bracket_fallback_dataframe(east_fr, east_sr, west_sr, west_fr, east_conf, w
 
 
 def render_bracket(favorite_team=None):
+    _page_perf_tick("bracket_start")
     if favorite_team:
         render_fan_page_hero(
             favorite_team,
@@ -10673,7 +10815,9 @@ def render_bracket(favorite_team=None):
         f"({'API + fallback' if use_demo and api_on else 'fallback only' if use_demo else 'API only'})."
     )
     render_playoff_matchup_ribbon(favorite_team)
+    _page_perf_tick("bracket_ribbon")
     stt = get_merged_playoff_state()
+    _page_perf_tick("playoff_state")
     east_fr = stt["east_fr"]
     west_fr = stt["west_fr"]
     east_sr = stt["east_sr"]
@@ -12450,8 +12594,10 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_previous_rounds_history(team_name):
+    _page_perf_tick("previous_start")
     profile = TEAM_PROFILES[team_name]
     stt = get_merged_playoff_state()
+    _page_perf_tick("playoff_state")
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
     render_playoff_matchup_ribbon(team_name)
     if render_fan_section("Round-by-round results", "📜", caption="Every series you played this postseason."):
@@ -12482,8 +12628,7 @@ def render_previous_rounds_history(team_name):
         sr_note = f"{s2['winner']} wins the series." if s2.get("winner") else None
         render_series_history_card(team_name, opp2, second_games, "Second Round", sr_note)
 
-    stt_paths = get_merged_playoff_state()
-    for round_label, coll in (("Conference Finals", stt_paths["cf"]), ("NBA Finals", stt_paths["finals"])):
+    for round_label, coll in (("Conference Finals", stt.get("cf") or {}), ("NBA Finals", stt.get("finals") or {})):
         for _k, s in (coll or {}).items():
             if team_name not in (s.get("a"), s.get("b")):
                 continue
@@ -13438,10 +13583,11 @@ def render_live_game_center_safe(team_name, profile):
     t_page = pytime.perf_counter()
     section_ms = {}
 
+    mode_lbl = "QA MODE" if _qa_mode_active() and not LIVE_GC_SAFE_MODE else "SAFE MODE"
     st.markdown(
-        "<div style='padding:8px 12px;border-radius:8px;background:#1e293b;color:#f8fafc;"
-        "font-size:13px;font-weight:700;margin-bottom:10px'>"
-        "SAFE MODE — live scoreboard only (analysis, box score, PBP, and charts disabled temporarily)"
+        f"<div style='padding:8px 12px;border-radius:8px;background:#1e293b;color:#f8fafc;"
+        f"font-size:13px;font-weight:700;margin-bottom:10px'>"
+        f"{mode_lbl} — live scoreboard only (analysis, box score, PBP, and charts disabled)"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -13491,9 +13637,11 @@ def render_live_game_center_safe(team_name, profile):
 def render_live_game_center(team_name, profile):
     """CDN-first Live Game Center: Layer 1 (fast) → Layer 2 (analysis) → Layer 3 (heavy, opt-in)."""
     if _live_gc_safe_mode_active():
+        _page_perf_tick("live_gc_safe")
         return render_live_game_center_safe(team_name, profile)
 
     _live_gc_trace_clear()
+    _page_perf_tick("live_gc_full")
     t_page = pytime.perf_counter()
     section_ms = {}
     if st.session_state.get("_live_gc_sel_team") != team_name:
@@ -14135,6 +14283,7 @@ def _inject_history_leaders_css():
 
 
 def render_team_history_leaders_page(team_name):
+    _page_perf_tick("history_start")
     inject_team_brand_css(team_name)
     data = franchise_history_data(team_name)
     legends = sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 999)))
@@ -14760,23 +14909,42 @@ def resolve_live_game_state(team_name, profile=None, *, network=True):
     return _resolve_live_gc_layer1_fast(team_name, profile)
 
 
+def _curated_starters_list(team_name):
+    curated = CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}
+    prof = TEAM_PROFILES.get(team_name) or {}
+    fallback = prof.get("starters") or ["TBD"] * 5
+    return [curated.get(s) or fallback[i] for i, s in enumerate(LINEUP_SLOTS)]
+
+
 def build_lineup_matchups(team_name, opp_name):
     """Position-by-position lineup board data — no Streamlit rendering."""
-    t_meta = get_lineup_resolution_info(team_name)
-    o_meta = get_lineup_resolution_info(opp_name)
-    t_starters = estimated_starters_from_api(team_name)
-    o_starters = estimated_starters_from_api(opp_name)
+    if _qa_mode_active():
+        t_starters = _curated_starters_list(team_name)
+        o_starters = _curated_starters_list(opp_name)
+        t_meta = {"source": "curated playoff override (QA)"}
+        o_meta = {"source": "curated playoff override (QA)"}
+    else:
+        t_meta = get_lineup_resolution_info(team_name)
+        o_meta = get_lineup_resolution_info(opp_name)
+        t_starters = estimated_starters_from_api(team_name)
+        o_starters = estimated_starters_from_api(opp_name)
     matchups = []
     for i, pos in enumerate(LINEUP_SLOTS):
         tp = t_starters[i] if i < len(t_starters) else "TBD"
         op = o_starters[i] if i < len(o_starters) else "TBD"
         matchups.append({"position": pos, "team_player": tp, "opp_player": op})
+    if _qa_mode_active():
+        t_bench = list((CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}).get("bench") or [])[:5]
+        o_bench = list((CURRENT_PLAYOFF_LINEUPS.get(opp_name) or {}).get("bench") or [])[:5]
+    else:
+        t_bench = list(estimated_bench_from_api(team_name)[:5])
+        o_bench = list(estimated_bench_from_api(opp_name)[:5])
     return {
         "team": team_name,
         "opponent": opp_name,
         "matchups": matchups,
-        "team_bench": list(estimated_bench_from_api(team_name)[:5]),
-        "opp_bench": list(estimated_bench_from_api(opp_name)[:5]),
+        "team_bench": t_bench,
+        "opp_bench": o_bench,
         "team_meta": t_meta,
         "opp_meta": o_meta,
     }
@@ -14784,7 +14952,7 @@ def build_lineup_matchups(team_name, opp_name):
 
 def main():
     """Streamlit app entry — sidebar, routing, and page rendering."""
-    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, SHOW_PERF_DEBUG
+    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, SHOW_PERF_DEBUG, QA_MODE
 
     _configure_app_shell()
 
@@ -14849,6 +15017,14 @@ def main():
         value=False,
         help="Shows page timing, playoff state debug table, and cache mode details.",
     )
+    QA_MODE = st.sidebar.toggle(
+        "QA mode (fast testing)",
+        value=bool(st.session_state.get("QA_MODE", False)),
+        key="QA_MODE",
+        help="Skips bracket API sync, autorefresh, Plotly charts, shot maps, legacy simulator, and full matchup intel. Shows per-page timing.",
+    )
+    if QA_MODE:
+        st.sidebar.caption("QA mode: demo bracket + cached lineups; use for factual spot-checks.")
     if SHOW_PERF_DEBUG:
         render_playoff_state_debug_expander("sidebar")
     profile = get_effective_team_profile(favorite_team)
@@ -14862,6 +15038,7 @@ def main():
     st.session_state["_nba_persist_team"] = favorite_team
     page = pages[page_label]
     app_page_t0 = pytime.perf_counter()
+    _page_perf_begin(page)
 
     playoff_auto_refresh_pages = {
         "Home Dashboard",
@@ -14903,13 +15080,17 @@ def main():
     elif page == "Dev Lab":
         render_dev_lab_page(favorite_team, profile, page_t0=app_page_t0)
 
+    _page_perf_finish()
+    _render_page_perf_report(page, favorite_team)
+
     if SHOW_PERF_DEBUG:
         elapsed_ms = (pytime.perf_counter() - app_page_t0) * 1000
         with st.expander("Performance debug", expanded=False):
             st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
             st.caption(f"Page: {page} · Team: {favorite_team}")
+            st.caption(f"QA mode: {'on' if QA_MODE else 'off'}")
             st.caption(f"Playoff fallback when API empty: {'on' if USE_DEMO_BACKUP else 'off'}")
-            st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH else 'off'}")
+            st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH and not QA_MODE else 'off'}")
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 

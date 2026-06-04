@@ -8,7 +8,6 @@ from typing import Any
 from suite_user_persistence import (
     autosave_if_changed,
     restore_once,
-    save_user_state,
 )
 
 APP_ID = "nba"
@@ -21,6 +20,7 @@ _PERSIST_KEYS = (
     "ENABLE_BRACKET_API_REFRESH",
     "dev_lab_enabled",
     "SHOW_PERF_DEBUG",
+    "QA_MODE",
     "HOME_DASH_LIVE_UPDATES",
     "manual_live_enabled",
 )
@@ -75,24 +75,8 @@ def default_reset_nba_session(st: Any) -> None:
 
     Called from sidebar Reset after ``reset_user_state`` deletes the disk file.
     """
-    from suite_user_persistence import _SESSION_RESTORED_PREFIX
+    from suite_user_persistence import finalize_suite_reset
 
     apply_nba_session_defaults(st)
-
     fresh = build_nba_disk_state(st)
-    save_user_state(APP_ID, fresh)
-
-    try:
-        from suite_cloud_state import (
-            clear_cloud_full_session,
-            save_cloud_full_session,
-            session_page_summary,
-        )
-
-        clear_cloud_full_session(APP_ID)
-        page, summary = session_page_summary(APP_ID, fresh)
-        save_cloud_full_session(APP_ID, fresh, page=page, summary=summary or "Reset to defaults")
-    except Exception:
-        pass
-
-    st.session_state[f"{_SESSION_RESTORED_PREFIX}{APP_ID}"] = True
+    finalize_suite_reset(st, APP_ID, fresh, summary="Reset to defaults")
