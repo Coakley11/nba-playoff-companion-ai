@@ -1,4 +1,4 @@
-"""Disk persistence for NBA Playoff Companion."""
+"""Disk + cloud persistence for NBA Playoff Companion."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import Any
 
 from suite_user_persistence import (
     autosave_if_changed,
-    reset_user_state,
     restore_once,
+    save_user_state,
 )
 
 APP_ID = "nba"
@@ -48,6 +48,15 @@ def apply_nba_disk_state(st: Any, state: dict[str, Any]) -> None:
         st.session_state[key] = copy.deepcopy(val)
 
 
+def apply_nba_session_defaults(st: Any) -> None:
+    """Return session keys to app widget defaults without touching playoff caches."""
+    ss = st.session_state
+    for key in _PERSIST_KEYS:
+        ss.pop(key, None)
+    for key in ("page_override", "page_label_last", "_nba_restore_team", "_nba_persist_team"):
+        ss.pop(key, None)
+
+
 def restore_nba_disk_state_once(st: Any) -> bool:
     return restore_once(
         st,
@@ -61,8 +70,29 @@ def autosave_nba_state(st: Any) -> None:
 
 
 def default_reset_nba_session(st: Any) -> None:
-    reset_user_state(APP_ID)
-    for key in list(st.session_state.keys()):
-        if str(key).startswith("_suite_"):
-            st.session_state.pop(key, None)
-    st.session_state.pop("page_override", None)
+    """
+    Full NBA reset: session defaults, fresh local disk, and cleared cloud ``full_session``.
+
+    Called from sidebar Reset after ``reset_user_state`` deletes the disk file.
+    """
+    from suite_user_persistence import _SESSION_RESTORED_PREFIX
+
+    apply_nba_session_defaults(st)
+
+    fresh = build_nba_disk_state(st)
+    save_user_state(APP_ID, fresh)
+
+    try:
+        from suite_cloud_state import (
+            clear_cloud_full_session,
+            save_cloud_full_session,
+            session_page_summary,
+        )
+
+        clear_cloud_full_session(APP_ID)
+        page, summary = session_page_summary(APP_ID, fresh)
+        save_cloud_full_session(APP_ID, fresh, page=page, summary=summary or "Reset to defaults")
+    except Exception:
+        pass
+
+    st.session_state[f"{_SESSION_RESTORED_PREFIX}{APP_ID}"] = True
