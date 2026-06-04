@@ -1,0 +1,57 @@
+---
+description: Use docs/ as source of truth for NBA Playoff Companion planning and architecture
+globs:
+  - docs/**/*.md
+  - cursor-prompts/**/*.md
+  - streamlit_app.py
+  - product_docs.py
+  - nba_persistent_state.py
+  - nba_activity.py
+alwaysApply: true
+---
+
+# NBA Playoff Companion — documentation-first development
+
+**Primary source of truth:** `docs/` (not the codebase alone).
+
+Before **major changes** to any of these areas, read the matching doc:
+
+| Area | Doc |
+|------|-----|
+| Live Game Center | `docs/LIVE_GAME_CENTER.md` |
+| Home Dashboard | `docs/PAGES.md` (Home Dashboard) |
+| Playoff Bracket | `docs/PLAYOFF_ENGINE.md`, `docs/PAGES.md` |
+| Legacy Tracker | `docs/LEGACY_TRACKER.md` |
+| Matchup Lineups | `docs/PAGES.md` |
+| Team History & Leaders | `docs/TEAM_HISTORY.md` |
+| Previous Rounds | `docs/PAGES.md` |
+| Offseason outlooks | `docs/PAGES.md`, `docs/APP_VISION.md` |
+| Dev Lab | `docs/PAGES.md`, `docs/DEVELOPMENT_PRIORITIES.md` |
+
+When the user asks for **roadmap**, **feature plan**, **implementation plan**, **enhancement plan**, **project strategy**, or **future ideas**:
+
+1. Read and update **`docs/`** first:
+   - `DEVELOPMENT_PRIORITIES.md` (active work)
+   - `ROADMAP.md` (vision, planned, milestones)
+   - `COMPLETED_FEATURES.md` (shipped)
+   - `KNOWN_ISSUES.md` (bugs/debt)
+   - Area docs when behavior changes (`LIVE_GAME_CENTER.md`, `PLAYOFF_ENGINE.md`, etc.)
+
+2. Keep `cursor-prompts/nba_app_*.md` mirrors in sync (pointers or summaries).
+
+3. Each cursor-prompts file should retain sections:
+   - `# Current Priorities`
+   - `# Next Features`
+   - `# Long-Term Vision`
+   - `# Completed Features`
+   - `# Notes`
+
+4. Long plans → `cursor-prompts/plans/YYYY-MM-DD-short-title.md` and link from `docs/DEVELOPMENT_PRIORITIES.md`.
+
+5. After shipping: move items to `COMPLETED_FEATURES.md`; do not implement features that conflict with `docs/PAGES.md` without updating docs.
+
+6. Work on branch **`dev`** unless the user requests `main`.
+
+7. Bump **Last updated** dates in edited docs.
+
+8. Dev Lab **Product docs** tab reads `docs/` via `product_docs.py` — verify it still renders after doc structure changes.

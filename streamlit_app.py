@@ -13910,6 +13910,52 @@ def _dev_lab_lineup_diagnostics(team_name, profile):
     return pd.DataFrame(rows)
 
 
+def _render_dev_lab_product_docs():
+    """Roadmap / priorities from docs/ — source of truth for product planning."""
+    try:
+        from product_docs import docs_root, list_doc_files, read_doc, roadmap_snapshot
+    except ImportError as exc:
+        st.warning(f"product_docs module unavailable: {exc}")
+        return
+
+    st.subheader("Product documentation (source of truth)")
+    st.caption(
+        f"Markdown lives in `{docs_root()}`. Update these files before or alongside code changes. "
+        "Cursor agents use `.cursor/rules/nba-app-roadmap-docs.mdc`."
+    )
+    snap = roadmap_snapshot()
+    blocks = (
+        ("Current priorities", snap.get("priorities")),
+        ("Next milestones", snap.get("milestones")),
+        ("Planned features", snap.get("planned")),
+        ("Completed features", snap.get("completed")),
+        ("Known issues", snap.get("known_issues")),
+    )
+    for title, body in blocks:
+        with st.expander(title, expanded=title == "Current priorities"):
+            if body:
+                st.markdown(body)
+            else:
+                st.caption(f"No `## {title}` section found in docs/ yet.")
+
+    if snap.get("vision"):
+        with st.expander("App vision (excerpt)", expanded=False):
+            st.markdown(snap["vision"])
+
+    st.divider()
+    doc_paths = list_doc_files()
+    if not doc_paths:
+        st.info("No .md files in docs/ yet.")
+        return
+    pick = st.selectbox(
+        "Read full document",
+        [p.name for p in doc_paths],
+        key="dev_lab_doc_pick",
+    )
+    if pick:
+        st.markdown(read_doc(pick))
+
+
 def render_dev_lab_page(team_name, profile, page_t0=None):
     """Experimental sandbox — diagnostics and feature prototypes isolated from production UX."""
     t0 = page_t0 or pytime.perf_counter()
@@ -13919,6 +13965,7 @@ def render_dev_lab_page(team_name, profile, page_t0=None):
         "<div style='padding:10px 14px;border-radius:10px;background:#1e293b;color:#f8fafc;"
         "border:1px solid #475569;margin-bottom:12px'>"
         "<b>🛠️ Dev Lab</b> — developer workspace. Experiments here do not change production page layouts. "
+        "Product roadmap: <b>Product docs</b> tab (reads <code>docs/*.md</code>). "
         "Set <code>DEV_MODE = False</code> to hide this page from the sidebar."
         "</div>",
         unsafe_allow_html=True,
@@ -13930,7 +13977,8 @@ def render_dev_lab_page(team_name, profile, page_t0=None):
     c3.metric("API auto-sync", "ON" if api_on else "OFF")
     c4.metric("Demo fallback", "ON" if use_demo else "OFF")
 
-    tab_snap, tab_team, tab_api, tab_cache, tab_live, tab_lineup, tab_bracket, tab_sandbox = st.tabs([
+    tab_docs, tab_snap, tab_team, tab_api, tab_cache, tab_live, tab_lineup, tab_bracket, tab_sandbox = st.tabs([
+        "Product docs",
         "Playoff state",
         "Team status",
         "API feeds",
@@ -13940,6 +13988,9 @@ def render_dev_lab_page(team_name, profile, page_t0=None):
         "Bracket",
         "Sandbox",
     ])
+
+    with tab_docs:
+        _render_dev_lab_product_docs()
 
     stt = get_merged_playoff_state(use_demo, api_on)
 
@@ -14249,7 +14300,7 @@ def main():
             st,
             "nba",
             on_reset=default_reset_nba_session,
-            help_text="Clears saved team, page, and dashboard preferences. Playoff data caches are not deleted.",
+            help_text="Clears saved team, page, toggles, local disk, and cloud session. Playoff data caches are not deleted.",
         )
     except Exception:
         pass

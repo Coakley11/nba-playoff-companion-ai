@@ -1,46 +1,48 @@
-# nba-playoff-companion-ai
-NBA Playoff Companion AI is an interactive basketball analytics app built with Python and Streamlit. Users can explore playoff teams, compare players, analyze trends, view stats, and get AI-powered matchup insights through interactive dashboards and visualizations.
-
 # NBA Playoff Companion AI
 
-NBA Playoff Companion AI is an interactive basketball analytics app built with Python and Streamlit.
+Daniel Cohen **NBA Playoff Companion AI** — a fan-first Streamlit app for the 2026 NBA playoffs: bracket, live games, matchups, player stories, franchise history, and offseason outlooks.
+
+## Product documentation (source of truth)
+
+Planning and architecture live in **[`docs/`](docs/)** — read before major feature work:
+
+- [docs/README.md](docs/README.md) — index
+- [docs/APP_VISION.md](docs/APP_VISION.md) — vision & UX goals
+- [docs/PAGES.md](docs/PAGES.md) — every fan-facing page
+- [docs/DEVELOPMENT_PRIORITIES.md](docs/DEVELOPMENT_PRIORITIES.md) — active work
+
+**Dev Lab → Product docs** tab displays priorities, roadmap, and known issues from these files.
+
+Cursor agents: see [cursor-prompts/](cursor-prompts/) and `.cursor/rules/nba-app-roadmap-docs.mdc`.
 
 ## Features
 
-- Explore NBA playoff teams
-- Compare players and teams
-- View basketball statistics
-- Analyze trends
-- Get matchup insights
-- Use interactive dashboards and visualizations
+- Home Dashboard (playoff command center)
+- Live Game Center
+- Playoff Bracket
+- Matchup Lineups & Matchup Intelligence
+- Player Playoff Tracker & Legacy Tracker
+- Team History & Leaders & Previous Rounds
+- Offseason outlooks for eliminated teams
 
-## Tech Used
+## Tech
 
-- Python
-- Streamlit
-- pandas
+- Python, Streamlit, pandas
+- NBA API / CDN scoreboard feeds (with demo fallback)
+- Optional suite persistence (Supabase) via shared modules
 
-## How to Run
-
-1. Install the required packages:
+## Run locally
 
 ```bash
 pip install -r requirements.txt
-```
-
-2. Run the app:
-
-```bash
 streamlit run streamlit_app.py
 ```
 
+Enable **Dev Lab** via `DEV_MODE = True` at top of `streamlit_app.py` or the sidebar developer toggle.
+
 ## Deployment
 
-This app can be deployed on Streamlit Cloud by connecting the GitHub repository and setting the main file path to:
-
-```text
-streamlit_app.py
-```
+Streamlit Cloud: branch **`dev`**, main file **`streamlit_app.py`**.
 
 ## Author
 
