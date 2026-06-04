@@ -33,6 +33,7 @@ DOC_INDEX: tuple[tuple[str, str], ...] = (
     ("APP_VISION.md", "App vision"),
     ("ROADMAP.md", "Roadmap"),
     ("PHASE_STABILITY.md", "Stability phase (active)"),
+    ("VALIDATION_STATUS.md", "Validation status (P1–P4)"),
     ("DEVELOPMENT_PRIORITIES.md", "Development priorities"),
     ("SYSTEMS_STATUS.md", "Systems status"),
     ("PAGES.md", "Pages & UX"),

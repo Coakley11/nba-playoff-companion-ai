@@ -4,6 +4,8 @@
 
 **Goal:** Move from feature-rich → **stable, polished, trustworthy**. No major new systems until this phase completes.
 
+**Validation tracker:** [VALIDATION_STATUS.md](./VALIDATION_STATUS.md) (manual P1/P2 pass/fail + Home perf timings).
+
 ---
 
 ## Priority order (do not reorder without doc update)

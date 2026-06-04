@@ -67,6 +67,25 @@ def main() -> int:
     check("NYK-SAS" in app_src and "NBA Finals" in app_src, "Finals bracket markers missing")
     print(f"  active teams (static): {', '.join(active_teams)}")
 
+    check("VALIDATION_STATUS.md" in names, "VALIDATION_STATUS.md not in Dev Lab DOC_INDEX")
+    val_doc = read_doc("VALIDATION_STATUS.md")
+    check(bool(val_doc.strip()), "VALIDATION_STATUS.md empty")
+    check("P1 — Live Game Center" in val_doc, "validation checklist missing P1")
+
+    elim_count = app_src.count('"status":"Eliminated"') + app_src.count('"Eliminated"')
+    check(elim_count >= 6, f"expected eliminated profile markers, saw ~{elim_count}")
+
+    for marker in (
+        "completed playoff postmortem",
+        "live forecast",
+        "render_previous_rounds_history",
+        "_sidebar_team_label",
+        "offseason outlook",
+    ):
+        check(marker in app_src, f"missing Finals view marker: {marker}")
+
+    print("  lineups: run scripts/audit_lineups.py separately")
+
     if FAILURES:
         print("\nFAILED:")
         for f in FAILURES:

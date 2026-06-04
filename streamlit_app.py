@@ -3684,13 +3684,19 @@ def _layer1_state_to_home_snap(state):
     }
 
 
-def get_home_layer1_snapshot(team_name):
-    """CDN-first game snapshot for Home Dashboard (no box score / PBP)."""
+@st.cache_data(ttl=28)
+def get_home_layer1_snapshot_cached(team_name):
+    """CDN-first game snapshot for Home (cached ~28s — avoids duplicate CDN hits per rerun)."""
     profile = get_effective_team_profile(team_name)
     try:
         return _layer1_state_to_home_snap(_resolve_live_gc_layer1_fast(team_name, profile))
     except Exception:
         return None
+
+
+def get_home_layer1_snapshot(team_name):
+    """CDN-first game snapshot for Home Dashboard (no box score / PBP)."""
+    return get_home_layer1_snapshot_cached(team_name)
 
 
 def _live_gc_profile_context(team_name, profile):
@@ -9476,6 +9482,7 @@ HOME_DASH_LIVE_UPDATES = "home_dash_live_updates"
 HOME_DASH_LOAD_INJ = "home_dash_load_inj"
 HOME_DASH_LOAD_STARS = "home_dash_load_stars"
 HOME_DASH_LOAD_LEGACY = "home_dash_load_legacy"
+LIVE_GC_VALIDATION_LOG_KEY = "live_gc_validation_log"
 
 
 def _home_dashboard_fast_context(team_name):
@@ -9519,11 +9526,16 @@ def _home_dashboard_perf_footer(
         st.caption(f"Feed checks this run: {html.escape(str(api_calls))}")
         st.caption(f"Sections ready: {html.escape(sec_txt)}")
         if section_ms:
-            slowest = sorted(section_ms.items(), key=lambda kv: kv[1], reverse=True)[:5]
-            st.caption(
-                "Slowest sections (ms): "
-                + ", ".join(f"{html.escape(k)}={v:.0f}" for k, v in slowest)
-            )
+            ranked = sorted(section_ms.items(), key=lambda kv: kv[1], reverse=True)
+            top3 = ranked[:3]
+            st.markdown("**Top 3 slowest sections (ms)**")
+            for i, (name, ms) in enumerate(top3, 1):
+                st.caption(f"{i}. {html.escape(name)} — **{ms:.0f}** ms")
+            if len(ranked) > 3:
+                st.caption(
+                    "Next: "
+                    + ", ".join(f"{html.escape(k)}={v:.0f}" for k, v in ranked[3:6])
+                )
 
 
 def render_playoff_command_center(team_name):
@@ -9762,12 +9774,14 @@ def render_playoff_command_center(team_name):
                     )
                 )
     sections.append("runway")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "runway")
     render_fan_section_close()
 
     if render_fan_section("3 · What it feels like", "🎙️", caption="Short broadcast read on the series.", tone="default"):
         render_fan_section_open()
         render_team_outlook(team_name, compact_home=True, series_obj=current_series_obj)
         sections.append("outlook_compact")
+        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "outlook_compact")
         render_fan_section_close()
 
     sec4_title = "4 · Next-round lens" if hctx.get("advanced") else "4 · Series at a glance"
@@ -9801,6 +9815,7 @@ def render_playoff_command_center(team_name):
                 f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
             )
     sections.append("fast_series_snapshot")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fast_series_snapshot")
     render_fan_section_close()
 
     if render_fan_section("5 · Who's available", "🩹", caption="Injury snapshot when live mode is on.", tone="default"):
@@ -9919,6 +9934,7 @@ def render_playoff_command_center(team_name):
     def sec_outlook_full():
         render_team_outlook(team_name, compact_home=False, series_obj=current_series_obj)
 
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "sections_1_to_5")
     with st.expander("Who's available", expanded=False):
         if st.button("Fetch injury report", key=f"home_fetch_inj_{team_name}"):
             st.session_state[HOME_DASH_LOAD_INJ] = True
@@ -12828,6 +12844,7 @@ def _render_live_gc_trust_strip(team_name, state):
     c3.metric("Clock", clock_txt)
     c4.metric("Source", src)
     c5.metric("Last updated", ts)
+    _live_gc_record_validation_tick(team_name, state)
 
 
 def _render_live_gc_layer1(team_name, profile, state):
@@ -14058,8 +14075,26 @@ def _render_dev_lab_product_docs():
                 "3. Score must **not** show fake **0–0** while game is in progress (Q1+ guard)\n"
                 "4. If CDN fails: **last-known score** appears with stale banner\n"
                 "5. **Emergency score entry** overrides feed until disabled\n"
-                "6. Repeat with **LIVE_GC_SAFE_MODE** if full mode regresses"
+                "6. Repeat with **LIVE_GC_SAFE_MODE** if full mode regresses\n\n"
+                "Track pass/fail in **`docs/VALIDATION_STATUS.md`**."
             )
+        log = st.session_state.get(LIVE_GC_VALIDATION_LOG_KEY) or []
+        with st.expander("Live GC session log (last visits)", expanded=bool(log)):
+            if log:
+                st.dataframe(pd.DataFrame(log), use_container_width=True, hide_index=True)
+                if st.button("Clear Live GC log", key="dev_clear_lgc_log"):
+                    st.session_state.pop(LIVE_GC_VALIDATION_LOG_KEY, None)
+                    st.rerun()
+            else:
+                st.caption("Open **Live Game Center** during a game to populate trust-strip ticks.")
+
+    st.markdown("##### Cloud / repo validation scripts")
+    st.code(
+        "python scripts/validate_stability_phase.py\npython scripts/audit_lineups.py",
+        language="bash",
+    )
+    if st.button("Open VALIDATION_STATUS.md", key="dev_open_validation_status"):
+        st.session_state["dev_lab_doc_pick"] = "VALIDATION_STATUS.md"
 
     st.markdown("##### Active priority")
     st.info(snap.get("active_priority") or "Set `## Active priority` in docs/SYSTEMS_STATUS.md")

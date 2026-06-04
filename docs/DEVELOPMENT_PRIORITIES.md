@@ -1,6 +1,6 @@
 # Development priorities
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-05
 
 **Active phase:** [PHASE_STABILITY.md](./PHASE_STABILITY.md) — stability, correctness, polish (not new features).
 
@@ -17,7 +17,7 @@
 
 ### P2 — Home Dashboard speed
 
-- [x] Section timing in perf footer (identify slowest blocks)
+- [x] Section timing in perf footer — **top 3 slowest** with exact ms (SHOW_PERF_DEBUG)
 - [x] Hero/header first paint before matchup ribbon and game-watch CDN card
 - [ ] Quick view first paint target &lt; 3s on Streamlit Cloud
 - [ ] Confirm 8s live bundle timeout UX is acceptable
