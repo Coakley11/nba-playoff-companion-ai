@@ -63,10 +63,12 @@ def main() -> int:
     opp = OPP_TEAM if team == DEFAULT_TEAM else DEFAULT_TEAM
 
     app.QA_MODE = True
+    app.ULTRA_FAST_VALIDATION_MODE = True
     _st.session_state["QA_MODE"] = True
+    _st.session_state["ULTRA_FAST_VALIDATION_MODE"] = True
 
     print("NBA Playoff Companion — performance audit (headless)")
-    print(f"Team: {team} · QA_MODE=True (demo bracket, no API sync)\n")
+    print(f"Team: {team} · QA + Ultra-fast (demo snapshot, no network)\n")
 
     timings: list[tuple[str, float]] = []
 

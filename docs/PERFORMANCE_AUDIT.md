@@ -9,9 +9,10 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 ## Quick start (testing)
 
 1. Open the app on Streamlit Cloud (`dev`).
-2. Sidebar → turn on **QA mode (fast testing)**.
-3. Optional: **Show performance debug** for cache tables.
-4. Each page shows a **QA performance** expander with:
+2. Sidebar → turn on **Ultra-fast validation (no network)** for P5 browser spot-checks (fastest).
+3. Or **QA mode (fast testing)** for fuller UI with heavy sections behind **Load full page** buttons.
+4. Optional: **Show performance debug** for cache tables.
+5. Each page shows a **QA / Ultra-fast performance** expander with:
    - **First paint** (hero + matchup ribbon)
    - **Total render**
    - **Top 5 slowest sections** (ms)
@@ -20,13 +21,25 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 
 | Area | Behavior |
 |------|----------|
-| Bracket API sync | Off — demo backup only |
+| Bracket API sync | Forced off (sidebar toggles hidden) |
 | 60s autorefresh | Off |
-| Live Game Center | Safe/QA path — Layer 1 only (no box/PBP/shot charts) |
+| Playoff engine | One **session snapshot** per run (`_validation_playoff_stt`) |
+| Sidebar team labels | Use cached snapshot (no N× rebuild) |
+| Live Game Center | Safe path; ultra skips CDN entirely |
 | Matchup Intelligence | Fast ribbon only — no full scouting board |
 | Legacy Tracker | No Plotly, no simulator sliders |
 | Player Playoff Tracker | No Plotly; no prior-season log fetch |
 | Matchup Lineups | Curated `CURRENT_PLAYOFF_LINEUPS` — no rotation API |
+| Fan pages (QA) | Hero + ribbon + facts; **Load full page** for body |
+
+### Ultra-fast mode (additional)
+
+| Area | Behavior |
+|------|----------|
+| Network | Blocked — no CDN, stats API, ESPN, player-id/headshots |
+| Page body | Prebuilt snapshot (table/text) until **Load full page** |
+| Bracket | Compact dataframe only until expanded |
+| Home / Previous / History | Text facts only until expanded |
 
 ---
 

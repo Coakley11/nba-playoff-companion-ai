@@ -21,6 +21,7 @@ _PERSIST_KEYS = (
     "dev_lab_enabled",
     "SHOW_PERF_DEBUG",
     "QA_MODE",
+    "ULTRA_FAST_VALIDATION_MODE",
     "HOME_DASH_LIVE_UPDATES",
     "manual_live_enabled",
 )

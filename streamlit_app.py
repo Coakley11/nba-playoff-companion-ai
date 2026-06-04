@@ -1935,6 +1935,11 @@ LIVE_GC_SAFE_MODE = False
 
 # Fast validation path: skip heavy charts, simulations, bracket API sync, and autorefresh.
 QA_MODE = False
+# Ultra-fast: static/demo snapshot only — no network, no Plotly, minimal HTML (browser QA).
+ULTRA_FAST_VALIDATION_MODE = False
+
+VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
+VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
 
 # Developer workspace: when True, Dev Lab appears in the sidebar. When False, use the sidebar toggle.
 DEV_MODE = True
@@ -1951,18 +1956,109 @@ def _qa_mode_active():
     return bool(globals().get("QA_MODE", False))
 
 
+def _ultra_fast_active():
+    try:
+        if st.session_state.get("ULTRA_FAST_VALIDATION_MODE"):
+            return True
+    except Exception:
+        pass
+    return bool(globals().get("ULTRA_FAST_VALIDATION_MODE", False))
+
+
+def _validation_mode_active():
+    return _qa_mode_active() or _ultra_fast_active()
+
+
 def _qa_skip_heavy_ui():
     """Charts, shot maps, legacy simulator, full matchup-intel board."""
-    return _qa_mode_active()
+    return _validation_mode_active()
 
 
 def _qa_skip_expensive_apis():
     """Bracket scoreboard loops, live injury pulls, player log fetches where avoidable."""
-    return _qa_mode_active()
+    return _validation_mode_active()
+
+
+def _validation_skip_network():
+    """No CDN, stats API, ESPN, or player-id lookups."""
+    return _ultra_fast_active()
+
+
+def _validation_full_page_key(page_name):
+    return f"_validation_full_{page_name.replace(' ', '_').lower()}"
+
+
+def _validation_page_deferred(page_name):
+    """QA/ultra: heavy body deferred until user expands (ultra defaults deferred)."""
+    if _ultra_fast_active():
+        return not st.session_state.get(_validation_full_page_key(page_name), False)
+    if _qa_mode_active():
+        return not st.session_state.get(_validation_full_page_key(page_name), False)
+    return False
+
+
+def _validation_offer_full_page(page_name, *, label="Load full page content"):
+    if st.button(label, key=f"val_expand_{_validation_full_page_key(page_name)}"):
+        st.session_state[_validation_full_page_key(page_name)] = True
+        st.rerun()
+    return True
+
+
+def _warm_validation_playoff_state():
+    if not _validation_mode_active():
+        return
+    if st.session_state.get(VALIDATION_WARMED_KEY):
+        return
+    t0 = pytime.perf_counter()
+    stt = get_playoff_state_cached(True, False)
+    st.session_state[VALIDATION_PLAYOFF_STATE_KEY] = stt
+    st.session_state[VALIDATION_WARMED_KEY] = True
+    st.session_state["_validation_warm_ms"] = (pytime.perf_counter() - t0) * 1000.0
+
+
+def _get_validation_playoff_state():
+    _warm_validation_playoff_state()
+    stt = st.session_state.get(VALIDATION_PLAYOFF_STATE_KEY)
+    if stt:
+        return stt
+    return get_playoff_state_cached(True, False)
+
+
+def _validation_gates_status():
+    """What validation modes are skipping (for perf footer / Cloud checks)."""
+    return {
+        "qa_mode": _qa_mode_active(),
+        "ultra_fast": _ultra_fast_active(),
+        "api_sync_off": _validation_mode_active(),
+        "autorefresh_off": _validation_mode_active(),
+        "plotly_skipped": _qa_skip_heavy_ui(),
+        "live_gc_safe": _live_gc_safe_mode_active(),
+        "lineups_curated": _validation_mode_active(),
+        "network_blocked": _validation_skip_network(),
+        "playoff_state_session": bool(st.session_state.get(VALIDATION_WARMED_KEY)),
+    }
+
+
+def _render_validation_mode_banner():
+    if not _validation_mode_active():
+        return
+    g = _validation_gates_status()
+    mode = "ULTRA-FAST VALIDATION" if g["ultra_fast"] else "QA MODE"
+    warm = st.session_state.get("_validation_warm_ms")
+    warm_txt = f" · playoff snapshot warmed in {warm:.0f} ms" if warm else ""
+    st.markdown(
+        f"<div style='padding:8px 12px;border-radius:8px;background:#0f172a;color:#e2e8f0;"
+        f"font-size:12px;line-height:1.45;margin-bottom:8px'>"
+        f"<b>{html.escape(mode)}</b> — API sync off · autorefresh off · Plotly off · "
+        f"Live GC safe · curated lineups · session playoff cache{warm_txt}"
+        f"{' · <b>no network</b>' if g['network_blocked'] else ''}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _live_gc_safe_mode_active():
-    return bool(LIVE_GC_SAFE_MODE) or _qa_mode_active()
+    return bool(LIVE_GC_SAFE_MODE) or _validation_mode_active()
 
 
 def dev_lab_visible():
@@ -2105,7 +2201,7 @@ def get_playoff_refresh_settings():
     """Sidebar-aware flags: NBA API first, bundled demo rows only when the feed is empty."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", True))
     api_refresh = bool(globals().get("ENABLE_BRACKET_API_REFRESH", True))
-    if _qa_mode_active():
+    if _validation_mode_active():
         use_demo = True
         api_refresh = False
     return use_demo, api_refresh
@@ -2117,6 +2213,10 @@ def get_merged_playoff_state(use_demo_backup=None, api_refresh=None):
         d_demo, d_api = get_playoff_refresh_settings()
         use_demo_backup = d_demo if use_demo_backup is None else use_demo_backup
         api_refresh = d_api if api_refresh is None else api_refresh
+    else:
+        d_demo, d_api = use_demo_backup, api_refresh
+    if _validation_mode_active() and not d_api and d_demo:
+        return _get_validation_playoff_state()
     return get_playoff_state_cached(use_demo_backup, api_refresh)
 
 
@@ -2132,7 +2232,7 @@ def first_round_series_for_team(team_name, stt=None):
 
 def tick_playoff_state_autorefresh(page_key, interval_ms=None):
     """Rerun the app on a timer so series scores and advancement stay current without code edits."""
-    if _qa_mode_active():
+    if _validation_mode_active():
         return
     if not AUTOREFRESH_AVAILABLE:
         return
@@ -4886,6 +4986,8 @@ def get_roster_cached(team_name: str):
 
 @st.cache_data(ttl=86400)
 def get_player_id(name):
+    if _validation_skip_network():
+        return None
     if not NBA_STATS_AVAILABLE: return None
     try:
         matches = [p for p in nba_players.get_players() if p["full_name"] == name]
@@ -4923,6 +5025,8 @@ def season_averages(name):
 
 @st.cache_data(ttl=604800)
 def headshot(name):
+    if _validation_skip_network():
+        return ""
     pid = get_player_id(name)
     return f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png" if pid else "https://cdn.nba.com/headshots/nba/latest/1040x760/fallback.png"
 
@@ -5728,9 +5832,19 @@ def legacy_takeaways_eliminated(player, team_name, pts, reb, ast, stl, blk, fg, 
 
 def render_legacy_tracker_page(team_name):
     """Legacy Tracker: frozen postmortem for eliminated teams; live forecast + sliders for active teams."""
+    if _ultra_fast_active() and _validation_page_deferred("legacy"):
+        _render_ultra_snapshot_legacy(team_name)
+        _validation_offer_full_page("legacy", label="Load full Legacy Tracker")
+        return
     _page_perf_tick("legacy_start")
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     render_matchup_header(team_name)
-    render_playoff_matchup_ribbon(team_name)
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
+    if _validation_page_deferred("legacy"):
+        _validation_facts_block(team_name)
+        _validation_offer_full_page("legacy", label="Load full Legacy Tracker")
+        return
     nick = fan_nick(team_name)
     is_elim = _is_home_eliminated(team_name)
     team_tri = (TEAM_ALIASES.get(team_name) or "").upper()
@@ -6668,13 +6782,24 @@ def _narrative_storylines(player, team_name, cur, reg, prev_summary, prof):
 
 def render_player_playoff_story_hub(team_name, profile):
     """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
+    if _ultra_fast_active() and _validation_page_deferred("player_tracker"):
+        _render_ultra_snapshot_tracker(team_name, profile)
+        _validation_offer_full_page("player_tracker", label="Load full Player Playoff Tracker")
+        return
     _page_perf_tick("player_tracker_start")
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     inject_team_brand_css(team_name)
     st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
     st.subheader("Player Playoff Story · the run, the pressure, the memory")
     st.caption(
         f"Built for **{fan_nick(team_name)}** fans: what the numbers say, what the series feels like, and how this chapter might be remembered."
     )
+    if _validation_page_deferred("player_tracker"):
+        _validation_facts_block(team_name)
+        _validation_offer_full_page("player_tracker", label="Load full Player Playoff Tracker")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
 
     plist = current_roster_names(team_name)
     c_sel1, c_sel2 = st.columns([1.1, 1])
@@ -7442,7 +7567,13 @@ def _lineup_xfactor_candidates(team_name, opp):
 
 
 def render_matchup_lineups_page(team_name, profile):
+    if _ultra_fast_active() and _validation_page_deferred("lineups"):
+        _render_ultra_snapshot_lineups(team_name, profile)
+        _validation_offer_full_page("lineups", label="Load full Matchup Lineups board")
+        return
     _page_perf_tick("lineups_start")
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     inject_team_brand_css(team_name)
     mx = get_display_matchup(team_name)
     render_fan_page_hero(
@@ -8051,8 +8182,10 @@ def _inject_matchup_intel_css():
 
 def render_matchup_intelligence(team_name):
     _inject_matchup_intel_css()
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     prof = TEAM_PROFILES.get(team_name) or {}
-    mx = get_display_matchup(team_name)
+    mx = get_display_matchup(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
     render_fan_page_hero(
         team_name,
         "Matchup Intelligence",
@@ -9823,8 +9956,18 @@ def _page_perf_finish():
         perf["total_ms"] = (pytime.perf_counter() - perf["t0"]) * 1000.0
 
 
+def _page_perf_startup_tick(phase_name, t_ref):
+    """Record main() startup phase ms into the active page perf bucket."""
+    perf = st.session_state.get(PAGE_PERF_KEY)
+    if not perf:
+        return pytime.perf_counter()
+    now = pytime.perf_counter()
+    perf.setdefault("sections", {})[f"startup_{phase_name}"] = (now - t_ref) * 1000.0
+    return now
+
+
 def _render_page_perf_report(page_name, team_name=""):
-    if not (globals().get("SHOW_PERF_DEBUG", False) or _qa_mode_active()):
+    if not (globals().get("SHOW_PERF_DEBUG", False) or _validation_mode_active()):
         return
     perf = st.session_state.get(PAGE_PERF_KEY) or {}
     total_ms = perf.get("total_ms")
@@ -9833,17 +9976,117 @@ def _render_page_perf_report(page_name, team_name=""):
     fp_ms = perf.get("first_paint_ms")
     sections = perf.get("sections") or {}
     ranked = sorted(sections.items(), key=lambda kv: kv[1], reverse=True)
-    title = "QA performance" if _qa_mode_active() else "Page performance"
-    with st.expander(title, expanded=_qa_mode_active()):
+    title = "Ultra-fast validation timing" if _ultra_fast_active() else ("QA performance" if _qa_mode_active() else "Page performance")
+    with st.expander(title, expanded=_validation_mode_active()):
         st.caption(f"**{html.escape(page_name)}** · {html.escape(team_name)}")
         st.caption(f"First paint: **{fp_ms:.0f} ms**" if fp_ms is not None else "First paint: (not marked — add hero/ribbon)")
         st.caption(f"Total render: **{total_ms:.0f} ms**")
-        if _qa_mode_active():
-            st.caption("QA mode on — API sync, autorefresh, charts, and shot maps skipped.")
+        if _validation_mode_active():
+            gates = _validation_gates_status()
+            st.caption(
+                "Gates: "
+                + ", ".join(
+                    k.replace("_", " ")
+                    for k, v in gates.items()
+                    if v and k not in ("qa_mode", "ultra_fast")
+                )
+            )
         if ranked:
             st.markdown("**Slowest sections (ms)**")
             for i, (name, ms) in enumerate(ranked[:5], 1):
                 st.caption(f"{i}. {html.escape(name)} — **{ms:.0f}**")
+
+
+def _validation_facts_block(team_name):
+    stt = _get_validation_playoff_state()
+    mx = get_display_matchup(team_name, stt)
+    pst = get_team_playoff_status(team_name, stt)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Round", mx.get("round_short") or "—")
+    c2.metric("Opponent", mx.get("opponent_nick") or "TBD")
+    c3.metric("Series", mx.get("series_record") or "—")
+    c4.metric("Status", mx.get("status_badge") or "—")
+    st.caption(f"Data: demo playoff snapshot · source {pst.get('data_source', 'demo')}")
+
+
+def _render_ultra_snapshot_home(team_name):
+    _render_validation_mode_banner()
+    ident = team_fan_identity(team_name)
+    render_fan_page_hero(team_name, f"{fan_nick(team_name)} Playoff Pulse", ident["stakes"], "YOUR TEAM")
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+    _validation_facts_block(team_name)
+
+
+def _render_ultra_snapshot_bracket(team_name):
+    _render_validation_mode_banner()
+    render_fan_page_hero(team_name, "Playoff Bracket", "Compact bracket facts for validation.", "YOUR TEAM")
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+    stt = _get_validation_playoff_state()
+    st.dataframe(
+        _bracket_fallback_dataframe(
+            stt["east_fr"], stt["east_sr"], stt["west_sr"], stt["west_fr"],
+            stt.get("east_cf") or {}, stt.get("west_cf") or {}, stt.get("finals") or {},
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def _render_ultra_snapshot_lineups(team_name, profile):
+    _render_validation_mode_banner()
+    mx = get_display_matchup(team_name, _get_validation_playoff_state())
+    render_fan_page_hero(team_name, "Matchup Lineups", f"{mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']}", "MATCHUP BOARD")
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+    opp = profile.get("current_opponent") or mx.get("opponent") or "Opponent"
+    for side, tm in ((fan_nick(team_name), team_name), (fan_nick(opp), opp)):
+        board = CURRENT_PLAYOFF_LINEUPS.get(tm) or {}
+        lineup = [board.get(s, "TBD") for s in LINEUP_SLOTS]
+        st.markdown(f"**{html.escape(side)}:** " + " · ".join(html.escape(n) for n in lineup))
+
+
+def _render_ultra_snapshot_tracker(team_name, profile):
+    _render_validation_mode_banner()
+    render_matchup_header(team_name)
+    anchor = (profile.get("starters") or ["—"])[0]
+    st.subheader(f"Player Playoff Tracker · {html.escape(anchor)}")
+    st.caption("Ultra-fast: no game-log API or charts — expand for full tracker.")
+    _validation_facts_block(team_name)
+
+
+def _render_ultra_snapshot_legacy(team_name):
+    _render_validation_mode_banner()
+    render_matchup_header(team_name)
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+    st.subheader(f"Legacy Tracker · {fan_nick(team_name)}")
+    st.caption("Ultra-fast: no game logs, Plotly, or simulator — expand for full legacy board.")
+    _validation_facts_block(team_name)
+
+
+def _render_ultra_snapshot_history(team_name):
+    _render_validation_mode_banner()
+    data = franchise_history_data(team_name)
+    render_fan_page_hero(team_name, f"{fan_nick(team_name)} Franchise Playoff Legends", data.get("context", ""), "TEAM HISTORY LEADERS")
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+    for p in sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 99)))[:6]:
+        st.markdown(f"**{p.get('rank')}. {html.escape(p.get('name', ''))}** — {html.escape(p.get('tier', ''))}")
+
+
+def _render_ultra_snapshot_previous(team_name):
+    _render_validation_mode_banner()
+    stt = _get_validation_playoff_state()
+    profile = TEAM_PROFILES[team_name]
+    render_fan_page_hero(team_name, "Playoff path so far", "Series results from demo snapshot.", "PLAYOFF HISTORY")
+    render_playoff_matchup_ribbon(team_name, stt)
+    for coll, label in (("first", "First Round"), ("second", "Second Round"), ("cf", "Conference Finals"), ("finals", "NBA Finals")):
+        for _k, s in (stt.get(coll) or {}).items():
+            if team_name not in (s.get("a"), s.get("b")):
+                continue
+            tw, ow, opp = _team_series_record(team_name, s)
+            st.markdown(
+                f"**{label}:** {tw}–{ow} vs {html.escape(fan_nick(opp))} · winner={html.escape(str(s.get('winner') or 'TBD'))}"
+            )
+    if not any(team_name in (s.get("a"), s.get("b")) for c in ("first", "second", "cf", "finals") for s in (stt.get(c) or {}).values()):
+        st.caption(profile.get("first_round_result") or "No series shell for this team in snapshot.")
 
 
 def _home_dashboard_perf_footer(
@@ -9874,11 +10117,16 @@ def _home_dashboard_perf_footer(
 
 
 def render_playoff_command_center(team_name):
+    if _ultra_fast_active() and _validation_page_deferred("home"):
+        _render_ultra_snapshot_home(team_name)
+        _validation_offer_full_page("home", label="Load full Home Dashboard")
+        return
     t0 = pytime.perf_counter()
     sections = []
     section_ms = {}
     _t_tick = t0
-    if _qa_mode_active():
+    if _validation_mode_active():
+        _render_validation_mode_banner()
         st.session_state[HOME_DASH_LIVE_UPDATES] = False
     st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
     live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
@@ -9916,9 +10164,18 @@ def render_playoff_command_center(team_name):
     sections.append("hero_first_paint")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
 
-    render_playoff_matchup_ribbon(team_name)
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
     sections.append("matchup_ribbon")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "matchup_ribbon")
+    if _validation_page_deferred("home"):
+        _validation_facts_block(team_name)
+        _validation_offer_full_page("home", label="Load full Home Dashboard sections")
+        section_ms["page_total"] = (pytime.perf_counter() - t0) * 1000.0
+        _page_perf_merge_sections(section_ms)
+        _home_dashboard_perf_footer(
+            t0, sections, True, "validation snapshot", skipped_note="", section_ms=section_ms
+        )
+        return
     if is_eliminated:
         st.success(
             f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
@@ -9945,7 +10202,7 @@ def render_playoff_command_center(team_name):
     _inject_home_command_center_css()
     sections.append("inject_css")
 
-    if not is_eliminated:
+    if not is_eliminated and not _validation_mode_active():
         with game_watch_slot.container():
             render_home_current_game_card(team_name)
         sections.append("current_game_watch")
@@ -10814,10 +11071,21 @@ def render_bracket(favorite_team=None):
         f"Bracket auto-updates every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s from NBA.com when sync is on "
         f"({'API + fallback' if use_demo and api_on else 'fallback only' if use_demo else 'API only'})."
     )
-    render_playoff_matchup_ribbon(favorite_team)
+    render_playoff_matchup_ribbon(favorite_team, _get_validation_playoff_state() if _validation_mode_active() else None)
     _page_perf_tick("bracket_ribbon")
     stt = get_merged_playoff_state()
     _page_perf_tick("playoff_state")
+    if _validation_page_deferred("bracket"):
+        st.dataframe(
+            _bracket_fallback_dataframe(
+                stt["east_fr"], stt["east_sr"], stt["west_sr"], stt["west_fr"],
+                stt.get("east_cf") or {}, stt.get("west_cf") or {}, stt.get("finals") or {},
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+        _validation_offer_full_page("bracket", label="Load full Playoff Bracket HTML")
+        return
     east_fr = stt["east_fr"]
     west_fr = stt["west_fr"]
     east_sr = stt["east_sr"]
@@ -12594,12 +12862,29 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_previous_rounds_history(team_name):
+    if _ultra_fast_active() and _validation_page_deferred("previous_rounds"):
+        _render_ultra_snapshot_previous(team_name)
+        _validation_offer_full_page("previous_rounds", label="Load full Previous Rounds cards")
+        return
     _page_perf_tick("previous_start")
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     profile = TEAM_PROFILES[team_name]
     stt = get_merged_playoff_state()
     _page_perf_tick("playoff_state")
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
-    render_playoff_matchup_ribbon(team_name)
+    render_playoff_matchup_ribbon(team_name, stt)
+    if _validation_page_deferred("previous_rounds"):
+        for coll, label in (("first", "First Round"), ("second", "Second Round"), ("cf", "Conference Finals"), ("finals", "NBA Finals")):
+            for _k, s in (stt.get(coll) or {}).items():
+                if team_name not in (s.get("a"), s.get("b")):
+                    continue
+                tw, ow, opp = _team_series_record(team_name, s)
+                st.markdown(
+                    f"**{label}:** {tw}–{ow} vs {html.escape(fan_nick(opp))} · winner={html.escape(str(s.get('winner') or 'TBD'))}"
+                )
+        _validation_offer_full_page("previous_rounds", label="Load full Previous Rounds cards")
+        return
     if render_fan_section("Round-by-round results", "📜", caption="Every series you played this postseason."):
         render_fan_section_open()
     fr_shell = None
@@ -13578,10 +13863,21 @@ def _render_live_gc_safe_board(team_name, profile, state, parsed):
 
 def render_live_game_center_safe(team_name, profile):
     """TEMPORARY safe mode — Layer 1 only; zero heavy feature execution."""
-    profile = get_effective_team_profile(team_name)
+    profile = get_effective_team_profile(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
     _live_gc_trace_clear()
     t_page = pytime.perf_counter()
     section_ms = {}
+
+    if _validation_skip_network():
+        _render_validation_mode_banner()
+        render_fan_page_hero(team_name, "Live Game Center", "Profile-only scoreboard (no CDN fetch).", "LIVE")
+        render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state())
+        _validation_facts_block(team_name)
+        opp, rnd, ser = _live_gc_profile_context(team_name, profile)[:3]
+        st.info(f"**{fan_nick(team_name)}** · {html.escape(rnd)} · {html.escape(ser)} vs {html.escape(fan_nick(opp) if opp else 'TBD')}")
+        if _validation_page_deferred("live_gc"):
+            _validation_offer_full_page("live_gc", label="Load Live Game Center (CDN scoreboard)")
+            return
 
     mode_lbl = "QA MODE" if _qa_mode_active() and not LIVE_GC_SAFE_MODE else "SAFE MODE"
     st.markdown(
@@ -13636,6 +13932,9 @@ def render_live_game_center_safe(team_name, profile):
 
 def render_live_game_center(team_name, profile):
     """CDN-first Live Game Center: Layer 1 (fast) → Layer 2 (analysis) → Layer 3 (heavy, opt-in)."""
+    if _ultra_fast_active() and _validation_page_deferred("live_gc"):
+        render_live_game_center_safe(team_name, profile)
+        return
     if _live_gc_safe_mode_active():
         _page_perf_tick("live_gc_safe")
         return render_live_game_center_safe(team_name, profile)
@@ -14283,7 +14582,13 @@ def _inject_history_leaders_css():
 
 
 def render_team_history_leaders_page(team_name):
+    if _ultra_fast_active() and _validation_page_deferred("team_history"):
+        _render_ultra_snapshot_history(team_name)
+        _validation_offer_full_page("team_history", label="Load full Team History board")
+        return
     _page_perf_tick("history_start")
+    if _validation_mode_active():
+        _render_validation_mode_banner()
     inject_team_brand_css(team_name)
     data = franchise_history_data(team_name)
     legends = sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 999)))
@@ -14291,13 +14596,18 @@ def render_team_history_leaders_page(team_name):
     current_entries = [p for p in legends if _is_current_history_player(p["name"], current_names) or p.get("current_watch")]
     _inject_history_leaders_css()
     render_fan_page_hero(team_name, f"{fan_nick(team_name)} Franchise Playoff Legends", data.get("context", "Franchise history and current-player chase board."), "TEAM HISTORY LEADERS")
-    render_playoff_matchup_ribbon(team_name)
+    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
     mx = get_display_matchup(team_name)
     if not mx["eliminated"]:
         st.caption(
             f"Live bracket: **{mx['round_short']}** · **{mx['series_record']}** vs {mx['opponent_nick']} · "
             f"**{mx['series_wins']}** series won — chase boards update as the run continues."
         )
+    if _validation_page_deferred("team_history"):
+        for p in sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 99)))[:8]:
+            st.markdown(f"**{p.get('rank')}. {html.escape(p.get('name', ''))}** — {html.escape(p.get('tier', ''))}")
+        _validation_offer_full_page("team_history", label="Load full Team History board")
+        return
     st.markdown("<div class='hist-note'><b>Data note:</b> this page uses curated franchise-history fallback boards with estimates where full historical playoff leader feeds are not available. Estimated columns are labeled as estimates; live/current-player context comes from the selected team's roster helpers.</div>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
@@ -14952,9 +15262,11 @@ def build_lineup_matchups(team_name, opp_name):
 
 def main():
     """Streamlit app entry — sidebar, routing, and page rendering."""
-    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, SHOW_PERF_DEBUG, QA_MODE
+    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, SHOW_PERF_DEBUG, QA_MODE, ULTRA_FAST_VALIDATION_MODE
 
+    boot_t0 = pytime.perf_counter()
     _configure_app_shell()
+    boot_t = boot_t0
 
     try:
         from suite_resume_launch import apply_suite_resume_launch
@@ -14987,21 +15299,41 @@ def main():
     _restore_team = st.session_state.pop("_nba_restore_team", None)
     if _restore_team and _restore_team in team_keys_sorted:
         default_idx = team_keys_sorted.index(_restore_team)
+
+    QA_MODE = st.sidebar.toggle(
+        "QA mode (fast testing)",
+        value=bool(st.session_state.get("QA_MODE", False)),
+        key="QA_MODE",
+        help="Skips bracket API sync, autorefresh, Plotly, and heavy Live GC. Uses one session playoff snapshot.",
+    )
+    ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
+        "Ultra-fast validation (no network)",
+        value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
+        key="ULTRA_FAST_VALIDATION_MODE",
+        help="Fastest Cloud QA: static/demo snapshot pages, no API/CDN/Plotly/headshots. Expand per page for full UI.",
+    )
+    if _validation_mode_active():
+        USE_DEMO_BACKUP = True
+        ENABLE_BRACKET_API_REFRESH = False
+        _warm_validation_playoff_state()
+    else:
+        USE_DEMO_BACKUP = st.sidebar.toggle(
+            "Use playoff fallback when API is empty",
+            value=True,
+            help="When NBA.com returns no completed games for a series, show bundled local scores so the bracket never looks blank.",
+        )
+        ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
+            "Auto-sync bracket from NBA API",
+            value=True,
+            help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits.",
+        )
+
+    _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
     favorite_team = st.sidebar.selectbox(
         "Choose your 2026 NBA playoff team",
         team_keys_sorted,
         index=default_idx,
-        format_func=_sidebar_team_label,
-    )
-    USE_DEMO_BACKUP = st.sidebar.toggle(
-        "Use playoff fallback when API is empty",
-        value=True,
-        help="When NBA.com returns no completed games for a series, show bundled local scores so the bracket never looks blank.",
-    )
-    ENABLE_BRACKET_API_REFRESH = st.sidebar.toggle(
-        "Auto-sync bracket from NBA API",
-        value=True,
-        help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits.",
+        format_func=(lambda tn: _sidebar_team_label(tn, _val_stt)) if _val_stt else _sidebar_team_label,
     )
     if not DEV_MODE:
         st.sidebar.toggle(
@@ -15017,17 +15349,16 @@ def main():
         value=False,
         help="Shows page timing, playoff state debug table, and cache mode details.",
     )
-    QA_MODE = st.sidebar.toggle(
-        "QA mode (fast testing)",
-        value=bool(st.session_state.get("QA_MODE", False)),
-        key="QA_MODE",
-        help="Skips bracket API sync, autorefresh, Plotly charts, shot maps, legacy simulator, and full matchup intel. Shows per-page timing.",
-    )
-    if QA_MODE:
-        st.sidebar.caption("QA mode: demo bracket + cached lineups; use for factual spot-checks.")
+    if _ultra_fast_active():
+        st.sidebar.caption("Ultra-fast: no network — use for P5 factual spot-checks on Cloud.")
+    elif QA_MODE:
+        st.sidebar.caption("QA mode: demo bracket + session snapshot; expand pages for full UI.")
     if SHOW_PERF_DEBUG:
         render_playoff_state_debug_expander("sidebar")
-    profile = get_effective_team_profile(favorite_team)
+    boot_t = _page_perf_startup_tick("sidebar_toggles", boot_t) if st.session_state.get(PAGE_PERF_KEY) else boot_t
+    profile = get_effective_team_profile(
+        favorite_team, _val_stt if _validation_mode_active() else None
+    )
     inject_team_brand_css(favorite_team)
     pages = dict(PAGES)
     if dev_lab_visible():
@@ -15039,6 +15370,8 @@ def main():
     page = pages[page_label]
     app_page_t0 = pytime.perf_counter()
     _page_perf_begin(page)
+    perf = st.session_state.get(PAGE_PERF_KEY) or {}
+    perf.setdefault("sections", {})["startup_before_page"] = (app_page_t0 - boot_t0) * 1000.0
 
     playoff_auto_refresh_pages = {
         "Home Dashboard",
@@ -15088,9 +15421,11 @@ def main():
         with st.expander("Performance debug", expanded=False):
             st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
             st.caption(f"Page: {page} · Team: {favorite_team}")
-            st.caption(f"QA mode: {'on' if QA_MODE else 'off'}")
+            st.caption(f"QA mode: {'on' if QA_MODE else 'off'} · Ultra-fast: {'on' if ULTRA_FAST_VALIDATION_MODE else 'off'}")
             st.caption(f"Playoff fallback when API empty: {'on' if USE_DEMO_BACKUP else 'off'}")
-            st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH and not QA_MODE else 'off'}")
+            st.caption(f"Bracket NBA API auto-sync: {'on' if ENABLE_BRACKET_API_REFRESH and not _validation_mode_active() else 'off'}")
+            if _validation_mode_active():
+                st.caption("Validation gates: " + ", ".join(k for k, v in _validation_gates_status().items() if v))
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
