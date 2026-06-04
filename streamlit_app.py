@@ -13941,7 +13941,7 @@ FRANCHISE_HISTORY_DATA.update({
             _hist_player(2, "Dominique Wilkins", "1982-1994", "Scoring icon", "Legendary playoff scoring duels.", "Dominique is Atlanta's athletic scoring identity.", 1900, 25.4, 520, 210, 85, 35, 40, 28, 6, 75, 0, 0),
             _hist_player(3, "Trae Young", "2018-present", "Current guard face", "2021 Eastern Conference Finals run.", "Trae is chasing Dominique for the clearest modern Hawks playoff identity.", 1200, 26.8, 120, 430, 45, 5, 130, 20, 5, 45, 0, 0, ["Dominique Wilkins", "Bob Pettit"], True),
             _hist_player(4, "Dikembe Mutombo", "1996-2001", "Defensive anchor", "Elite rim protection in Hawks playoff years.", "Mutombo is the defensive counterweight to Atlanta's scoring legends.", 400, 9.0, 520, 25, 25, 120, 0, 0, 0, 44, 0, 0),
-            _hist_player(5, "Jalen Johnson", "2021-present", "Current wing watch", "Current two-way forward with upside.", "Johnson's chase starts with becoming the frontcourt bridge Trae needs for a deep run.", 90, 15.0, 45, 20, 6, 5, 5, 1, 0, 6, 0, 0, ["Dominique Wilkins"], True),
+            _hist_player(5, "Jalen Johnson", "2021-present", "Current wing watch", "Current two-way forward with upside.", "Johnson's chase starts with becoming the frontcourt bridge Atlanta needs for a deep run.", 90, 15.0, 45, 20, 6, 5, 5, 1, 0, 6, 0, 0, ["Dominique Wilkins"], True),
         ],
     },
 })

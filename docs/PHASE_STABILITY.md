@@ -4,7 +4,9 @@
 
 **Goal:** Move from feature-rich → **stable, polished, trustworthy**. No major new systems until this phase completes.
 
-**Validation tracker:** [VALIDATION_STATUS.md](./VALIDATION_STATUS.md) (manual P1/P2 pass/fail + Home perf timings).
+**Validation tracker:** [VALIDATION_STATUS.md](./VALIDATION_STATUS.md) (manual P1–P5 pass/fail + Home perf timings).
+
+**Factual accuracy (stability):** Code fixes on `dev` (`e1e68e8+`). UI sign-off = P5 Cloud spot-check + `scripts/cloud_factual_spotcheck.py`.
 
 ---
 
@@ -70,7 +72,19 @@
 
 ---
 
-### 5. UI/UX polish
+### 5. Factual accuracy — Cloud UI verification
+
+| Task | Done when |
+|------|-----------|
+| `audit_factual_accuracy.py` exits 0 | ✓ on `dev` |
+| `cloud_factual_spotcheck.py` exits 0 | Run before each Cloud deploy |
+| P5 table in VALIDATION_STATUS.md checked in browser | All fan pages + four eliminated teams |
+
+**Live GC:** frozen except validation fixes (P1).
+
+---
+
+### 6. UI/UX polish
 
 | Task | Done when |
 |------|-----------|
@@ -82,7 +96,7 @@
 
 ---
 
-### 6. Documentation discipline
+### 7. Documentation discipline
 
 | Task | Done when |
 |------|-----------|
