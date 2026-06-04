@@ -1,6 +1,6 @@
 # Phase: Stability, correctness & polish
 
-**Last updated:** 2026-06-04 · **Status:** ACTIVE
+**Last updated:** 2026-06-05 · **Status:** ACTIVE
 
 **Goal:** Move from feature-rich → **stable, polished, trustworthy**. No major new systems until this phase completes.
 
@@ -15,7 +15,8 @@
 | Task | Done when |
 |------|-----------|
 | Trust strip always shows status, score, clock, source, last updated | ✓ `_render_live_gc_trust_strip` on full + safe paths |
-| Safe mode verified during real games | Checklist in Dev Lab + manual game-night test |
+| No fake 0–0 over live feed (Q1+ guard + last-known fallback) | ✓ `_live_gc_suspicious_zero_zero_live` in resolver + trust strip |
+| Safe mode verified during real games | Dev Lab game-night checklist + manual browser test |
 | Layer 1 proven stable on Cloud | No timeout; refresh ≤60s; no fake 0–0 over live feed |
 | No new L2/L3 features | Until Layer 1 sign-off |
 

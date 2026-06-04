@@ -614,7 +614,7 @@ PLAYER_POSITION_OVERRIDES = {
 CURRENT_PLAYOFF_LINEUPS = {
     "New York Knicks": {
         "PG": "Jalen Brunson", "SG": "Mikal Bridges", "SF": "OG Anunoby", "PF": "Josh Hart", "C": "Karl-Anthony Towns",
-        "bench": ["Miles McBride", "Mitchell Robinson", "Jordan Clarkson", "Landry Shamet"],
+        "bench": ["Miles McBride", "Mitchell Robinson", "Jordan Clarkson", "Landry Shamet", "Jose Alvarado"],
     },
     "Cleveland Cavaliers": {
         "PG": "James Harden", "SG": "Donovan Mitchell", "SF": "Max Strus", "PF": "Evan Mobley", "C": "Jarrett Allen",
@@ -638,7 +638,7 @@ CURRENT_PLAYOFF_LINEUPS = {
     },
     "San Antonio Spurs": {
         "PG": "Stephon Castle", "SG": "Devin Vassell", "SF": "Keldon Johnson", "PF": "Jeremy Sochan", "C": "Victor Wembanyama",
-        "bench": ["Tre Jones", "Julian Champagnie", "Zach Collins", "Malaki Branham"],
+        "bench": ["Tre Jones", "Julian Champagnie", "Zach Collins", "Malaki Branham", "Blake Wesley"],
     },
     "Minnesota Timberwolves": {
         "PG": "Mike Conley", "SG": "Anthony Edwards", "SF": "Jaden McDaniels", "PF": "Naz Reid", "C": "Rudy Gobert",
@@ -649,7 +649,7 @@ CURRENT_PLAYOFF_LINEUPS = {
 # Players removed from active playoff rotation in this app universe (still on API rosters).
 OUTDATED_PLAYOFF_PLAYERS = {
     "Cleveland Cavaliers": ["Darius Garland"],
-    "New York Knicks": [],
+    "New York Knicks": ["Precious Achiuwa"],
     "Detroit Pistons": [],
     "Philadelphia 76ers": [],
     "Oklahoma City Thunder": [],
@@ -3610,6 +3610,18 @@ def _is_live_gc_shell_row(game_row):
     return bool(game_row.get("_fallback_schedule")) or gid.startswith("fallback-") or gid.startswith("manual-")
 
 
+def _live_gc_suspicious_zero_zero_live(parsed):
+    """Live Q1+ with 0–0 is usually a stale CDN row — do not treat as real scoreboard."""
+    if not isinstance(parsed, dict):
+        return False
+    if parsed.get("phase") != "live":
+        return False
+    period = safe_int(parsed.get("period", 0), 0)
+    if period < 1:
+        return False
+    return safe_int(parsed.get("away_score", 0), 0) == 0 and safe_int(parsed.get("home_score", 0), 0) == 0
+
+
 def _live_gc_row_needs_stats_enrich(game_row):
     """CDN row present but scores/clock may be stale — merge stats-today."""
     if not isinstance(game_row, dict) or _is_live_gc_shell_row(game_row):
@@ -3844,8 +3856,37 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
 
     if game_row and not _is_live_gc_shell_row(game_row):
         parsed = _live_gc_parse_game_row(game_row, team_name)
+        if _live_gc_suspicious_zero_zero_live(parsed) and last_known and isinstance(last_known.get("parsed"), dict):
+            parsed = dict(last_known["parsed"])
+            saved_at = last_known.get("saved_at")
+            try:
+                lk_dt = (
+                    datetime.fromisoformat(str(saved_at).replace("Z", "+00:00"))
+                    if saved_at
+                    else datetime.now(timezone.utc)
+                )
+            except Exception:
+                lk_dt = datetime.now(timezone.utc)
+            feed_banner = feed_banner or _live_gc_fan_msg("last_known")
+            return {
+                "layer": 1,
+                "priority": "stale",
+                "source_label": "Using last known score",
+                "feed_banner": feed_banner,
+                "parsed": parsed,
+                "game_row": last_known.get("game_row"),
+                "snap": {"game_found": True, "game_status": parsed.get("phase", "live"), "detection_tier": "zero_zero_guard"},
+                "manual": None,
+                "live_count": live_count,
+                "errors": errors,
+                "updated_at": lk_dt,
+                "last_known_at": lk_dt,
+                "top_scorer": None,
+                "cdn_ok": cdn_ok,
+            }
         top_scorer = _live_gc_top_scorer_snapshot(game_row, team_name)
-        _live_gc_save_last_known(team_name, parsed, game_row, source_label)
+        if not _live_gc_suspicious_zero_zero_live(parsed):
+            _live_gc_save_last_known(team_name, parsed, game_row, source_label)
         phase = parsed.get("phase", "pregame")
         gs = _layer1_snap_game_status(game_row, phase)
         return {
@@ -9511,6 +9552,21 @@ def render_playoff_command_center(team_name):
         html.escape(ident["stakes"]),
         badge="TONIGHT'S FEEL",
     )
+
+    api_calls = 0
+    skip_note = ""
+    fast_hctx, fast_s, fast_p = _home_dashboard_fast_context(team_name)
+    hero_slot = st.empty()
+    emph_slot = st.empty()
+    game_watch_slot = st.empty()
+    hero_slot.markdown(
+        _home_command_center_hero_html(team_name, fast_hctx, fast_p, injury_use_live=False),
+        unsafe_allow_html=True,
+    )
+    emph_slot.markdown(_dashboard_emphasis_html(team_name, fast_p), unsafe_allow_html=True)
+    sections.append("hero_first_paint")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
+
     render_playoff_matchup_ribbon(team_name)
     sections.append("matchup_ribbon")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "matchup_ribbon")
@@ -9540,27 +9596,18 @@ def render_playoff_command_center(team_name):
     _inject_home_command_center_css()
     sections.append("inject_css")
 
-    render_home_current_game_card(team_name)
-    sections.append("current_game_watch")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "current_game_watch")
+    if not is_eliminated:
+        with game_watch_slot.container():
+            render_home_current_game_card(team_name)
+        sections.append("current_game_watch")
+        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "current_game_watch")
+    else:
+        sections.append("current_game_watch_skipped_eliminated")
 
     if is_eliminated:
         render_offseason_future_outlook_sections(team_name)
         sections.append("offseason_outlook_top")
-
-    api_calls = 0
-    skip_note = ""
-
-    fast_hctx, fast_s, fast_p = _home_dashboard_fast_context(team_name)
-    hero_slot = st.empty()
-    emph_slot = st.empty()
-    hero_slot.markdown(
-        _home_command_center_hero_html(team_name, fast_hctx, fast_p, injury_use_live=False),
-        unsafe_allow_html=True,
-    )
-    emph_slot.markdown(_dashboard_emphasis_html(team_name, fast_p), unsafe_allow_html=True)
-    sections.append("hero_first_paint")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
+        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "offseason_outlook_top")
 
     hctx, s_active, pctx = fast_hctx, fast_s, fast_p
     injury_live = False
@@ -9678,6 +9725,7 @@ def render_playoff_command_center(team_name):
     elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
     sections.append("series_board")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "series_board")
     render_fan_section_close()
 
     if render_fan_section(
@@ -12758,7 +12806,7 @@ def _render_live_gc_trust_strip(team_name, state):
     if len(src) > 32:
         src = src[:29] + "…"
     ts = _format_live_gc_updated_at(state.get("updated_at") or state.get("last_known_at"))
-    if parsed:
+    if parsed and not _live_gc_suspicious_zero_zero_live(parsed):
         score_txt = f"{parsed.get('away_score', '—')}–{parsed.get('home_score', '—')}"
         if parsed.get("period") and parsed.get("clock"):
             clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
@@ -13995,6 +14043,23 @@ def _render_dev_lab_product_docs():
     systems = snap.get("systems") or []
     avg_pct = round(sum(s["pct"] for s in systems) / len(systems)) if systems else 0
     m4.metric("Systems avg completion", f"{avg_pct}%", help=f"{len(systems)} tracked systems")
+
+    phase_doc = read_doc("PHASE_STABILITY.md")
+    if phase_doc:
+        st.markdown("##### Stability phase")
+        st.caption("Authoritative charter: `docs/PHASE_STABILITY.md`")
+        if st.button("Open PHASE_STABILITY.md", key="dev_open_phase_stability"):
+            st.session_state["dev_lab_doc_pick"] = "PHASE_STABILITY.md"
+        with st.expander("Live GC game-night checklist (P1)", expanded=False):
+            st.markdown(
+                "During a **live NBA game** on `dev`, verify:\n"
+                "1. Trust strip shows **Status, Score, Clock, Source, Last updated** within ~60s refresh\n"
+                "2. Run **2–3 auto-refresh cycles** — page must not freeze\n"
+                "3. Score must **not** show fake **0–0** while game is in progress (Q1+ guard)\n"
+                "4. If CDN fails: **last-known score** appears with stale banner\n"
+                "5. **Emergency score entry** overrides feed until disabled\n"
+                "6. Repeat with **LIVE_GC_SAFE_MODE** if full mode regresses"
+            )
 
     st.markdown("##### Active priority")
     st.info(snap.get("active_priority") or "Set `## Active priority` in docs/SYSTEMS_STATUS.md")

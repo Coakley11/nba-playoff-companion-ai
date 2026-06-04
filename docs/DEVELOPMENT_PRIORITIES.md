@@ -10,13 +10,15 @@
 
 - [x] Phase charter in [PHASE_STABILITY.md](./PHASE_STABILITY.md)
 - [x] **Trust strip** on every Live GC path (score, clock, status, source, last updated)
+- [x] **0–0 live guard** — last-known fallback when CDN returns stale zeros (Q1+)
 - [ ] Verify safe mode during real game (manual + Dev Lab checklist)
 - [ ] Cloud Layer 1: CDN resolve &lt; 3s typical; no blank board on refresh
 - [ ] **Freeze** new Live GC features until Layer 1 sign-off ([LIVE_GAME_CENTER.md](./LIVE_GAME_CENTER.md))
 
 ### P2 — Home Dashboard speed
 
-- [ ] Section timing in perf footer (identify slowest blocks)
+- [x] Section timing in perf footer (identify slowest blocks)
+- [x] Hero/header first paint before matchup ribbon and game-watch CDN card
 - [ ] Quick view first paint target &lt; 3s on Streamlit Cloud
 - [ ] Confirm 8s live bundle timeout UX is acceptable
 - [ ] Cache audit: `get_playoff_state_cached`, `resolve_home_matchup_context_fast`
@@ -29,7 +31,8 @@
 
 ### P4 — NBA Finals state correctness
 
-- [ ] Run `scripts/qa_bracket_logic.py` — zero failures on `dev`
+- [x] Run `scripts/qa_finals_state.py` — Knicks/Spurs active; others eliminated
+- [ ] Run `scripts/qa_bracket_logic.py` full audit on `dev` (heavy import)
 - [ ] Active vs eliminated: bracket, Home, engine agree (Dev Lab team table)
 - [ ] Offseason mode only for eliminated teams
 

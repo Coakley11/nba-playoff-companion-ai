@@ -93,13 +93,14 @@ Fans must never hunt inside expanders or Layer 2 tabs for basic score metadata.
 ## Reliability requirements (must hold)
 
 1. **Trust strip** visible on every path (including safe mode and feed-unavailable).
-2. **First paint** must not await Layer 2/3 network calls.  
-2. **Instant shell** visible before Layer 1 resolve completes.  
-3. **Clear empty state** via `_live_gc_fan_msg` / `feed_banner` when no game—never a blank main panel.  
-4. **Home Dashboard** deep links set `st.session_state["page_override"] = "🔴 Live Game Center"`.  
-5. **Win probability** uses `live_win_probability` / headless `calculate_win_probability`—deterministic for tests.  
-6. **Trace** optional: `live_gc_trace` session list; Dev Lab Live GC tab for diagnostics.  
-7. **API flags** — behavior when `NBA_LIVE_AVAILABLE`, `NBA_STATS_AVAILABLE`, `NBA_SCOREBOARD_V3_AVAILABLE` are false must degrade gracefully (banner + profile context).
+2. **No fake 0–0** during live Q1+: `_live_gc_suspicious_zero_zero_live` falls back to last-known score when CDN returns stale zeros.
+3. **First paint** must not await Layer 2/3 network calls.
+4. **Instant shell** visible before Layer 1 resolve completes.
+5. **Clear empty state** via `_live_gc_fan_msg` / `feed_banner` when no game—never a blank main panel.
+6. **Home Dashboard** deep links set `st.session_state["page_override"] = "🔴 Live Game Center"`.
+7. **Win probability** uses `live_win_probability` / headless `calculate_win_probability`—deterministic for tests.
+8. **Trace** optional: `live_gc_trace` session list; Dev Lab Live GC tab for diagnostics.
+9. **API flags** — behavior when `NBA_LIVE_AVAILABLE`, `NBA_STATS_AVAILABLE`, `NBA_SCOREBOARD_V3_AVAILABLE` are false must degrade gracefully (banner + profile context).
 
 ---
 
