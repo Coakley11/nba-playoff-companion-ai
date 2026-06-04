@@ -16,6 +16,7 @@ DOCS_DIR = Path(__file__).resolve().parent / "docs"
 
 TRACKED_DOC_FILES: tuple[str, ...] = (
     "APP_VISION.md",
+    "PHASE_STABILITY.md",
     "DEVELOPMENT_PRIORITIES.md",
     "ROADMAP.md",
     "WORKFLOW.md",
@@ -31,6 +32,7 @@ DOC_INDEX: tuple[tuple[str, str], ...] = (
     ("WORKFLOW.md", "Workflow (required)"),
     ("APP_VISION.md", "App vision"),
     ("ROADMAP.md", "Roadmap"),
+    ("PHASE_STABILITY.md", "Stability phase (active)"),
     ("DEVELOPMENT_PRIORITIES.md", "Development priorities"),
     ("SYSTEMS_STATUS.md", "Systems status"),
     ("PAGES.md", "Pages & UX"),

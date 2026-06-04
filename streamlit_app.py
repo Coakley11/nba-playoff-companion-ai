@@ -9456,7 +9456,16 @@ def _home_dashboard_live_data_bundle(team_name):
     return hctx, s_active, pctx
 
 
-def _home_dashboard_perf_footer(t0, sections, fast_mode, api_calls, skipped_note=""):
+def _home_dashboard_section_tick(section_ms, last_t, name):
+    """Record ms since previous tick; returns updated last_t."""
+    now = pytime.perf_counter()
+    section_ms[name] = (now - last_t) * 1000.0
+    return now
+
+
+def _home_dashboard_perf_footer(
+    t0, sections, fast_mode, api_calls, skipped_note="", section_ms=None
+):
     if skipped_note:
         st.markdown(skipped_note, unsafe_allow_html=True)
     if not globals().get("SHOW_PERF_DEBUG", False):
@@ -9468,11 +9477,19 @@ def _home_dashboard_perf_footer(t0, sections, fast_mode, api_calls, skipped_note
         st.caption("Quick view is on." if fast_mode else "Live view is on.")
         st.caption(f"Feed checks this run: {html.escape(str(api_calls))}")
         st.caption(f"Sections ready: {html.escape(sec_txt)}")
+        if section_ms:
+            slowest = sorted(section_ms.items(), key=lambda kv: kv[1], reverse=True)[:5]
+            st.caption(
+                "Slowest sections (ms): "
+                + ", ".join(f"{html.escape(k)}={v:.0f}" for k, v in slowest)
+            )
 
 
 def render_playoff_command_center(team_name):
     t0 = pytime.perf_counter()
     sections = []
+    section_ms = {}
+    _t_tick = t0
     st.session_state.setdefault(HOME_DASH_LIVE_UPDATES, False)
     live_on = bool(st.session_state.get(HOME_DASH_LIVE_UPDATES, False))
     is_eliminated = _is_home_eliminated(team_name)
@@ -9496,6 +9513,7 @@ def render_playoff_command_center(team_name):
     )
     render_playoff_matchup_ribbon(team_name)
     sections.append("matchup_ribbon")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "matchup_ribbon")
     if is_eliminated:
         st.success(
             f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
@@ -9524,6 +9542,7 @@ def render_playoff_command_center(team_name):
 
     render_home_current_game_card(team_name)
     sections.append("current_game_watch")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "current_game_watch")
 
     if is_eliminated:
         render_offseason_future_outlook_sections(team_name)
@@ -9541,6 +9560,7 @@ def render_playoff_command_center(team_name):
     )
     emph_slot.markdown(_dashboard_emphasis_html(team_name, fast_p), unsafe_allow_html=True)
     sections.append("hero_first_paint")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
 
     hctx, s_active, pctx = fast_hctx, fast_s, fast_p
     injury_live = False
@@ -9586,6 +9606,7 @@ def render_playoff_command_center(team_name):
             emph_slot.markdown(_dashboard_emphasis_html(team_name, pctx), unsafe_allow_html=True)
             sections.append("hero_live_refresh")
             sections.append("live_bundle_ok")
+            _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "live_bundle")
     else:
         sections.append("fast_path")
 
@@ -9907,12 +9928,14 @@ def render_playoff_command_center(team_name):
     else:
         api_display = "quick view only"
 
+    section_ms["page_total"] = (pytime.perf_counter() - t0) * 1000.0
     _home_dashboard_perf_footer(
         t0,
         sections,
         fast_mode=perf_fast,
         api_calls=api_display,
         skipped_note=skip_note,
+        section_ms=section_ms,
     )
 
 def home_injury_opponents_from_home_ctx(team_name, hctx, s_active=None):
@@ -12725,6 +12748,40 @@ def _format_live_gc_updated_at(dt):
         return "—"
 
 
+def _render_live_gc_trust_strip(team_name, state):
+    """Always-visible Layer 1 metadata: status, score, clock, source, last updated."""
+    parsed = state.get("parsed")
+    if state.get("priority") == "manual" and state.get("manual"):
+        parsed = state["manual"]
+    chip = _live_status_chip(state)
+    src = str(state.get("source_label") or "—")
+    if len(src) > 32:
+        src = src[:29] + "…"
+    ts = _format_live_gc_updated_at(state.get("updated_at") or state.get("last_known_at"))
+    if parsed:
+        score_txt = f"{parsed.get('away_score', '—')}–{parsed.get('home_score', '—')}"
+        if parsed.get("period") and parsed.get("clock"):
+            clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
+        elif parsed.get("period"):
+            clock_txt = f"Q{parsed['period']}"
+        else:
+            clock_txt = str(parsed.get("status") or parsed.get("phase") or "—")
+    else:
+        score_txt = "—"
+        clock_txt = "—" if chip in ("UNAVAILABLE", "FEED UNAVAILABLE") else chip
+    st.markdown(
+        "<div style='font-size:11px;font-weight:800;letter-spacing:.08em;color:#64748b;"
+        "margin:0 0 6px 0'>LIVE SCOREBOARD</div>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Status", chip)
+    c2.metric("Score", score_txt)
+    c3.metric("Clock", clock_txt)
+    c4.metric("Source", src)
+    c5.metric("Last updated", ts)
+
+
 def _render_live_gc_layer1(team_name, profile, state):
     """Layer 1 broadcast shell — score, clock, series, win prob, top scorer (CDN-first)."""
     parsed = state.get("parsed")
@@ -13075,6 +13132,7 @@ def render_live_game_center_safe(team_name, profile):
     elif state.get("parsed"):
         parsed = state["parsed"]
 
+    _render_live_gc_trust_strip(team_name, state)
     if parsed:
         _render_live_gc_safe_board(team_name, profile, state, parsed)
     else:
@@ -13142,6 +13200,7 @@ def render_live_game_center(team_name, profile):
         st.session_state["_live_gc_gid"] = parsed.get("gid")
 
     with layer1_slot.container():
+        _render_live_gc_trust_strip(team_name, state)
         if state.get("priority") == "manual" and state.get("manual"):
             _render_manual_live_game_center(team_name, state["manual"])
         elif parsed:

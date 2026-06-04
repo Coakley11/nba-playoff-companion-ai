@@ -1,6 +1,8 @@
 # Roadmap — NBA Playoff Companion AI
 
-**Last updated:** 2026-06-03 · **Branch:** `dev`
+**Last updated:** 2026-06-04 · **Branch:** `dev`
+
+**Active phase:** [PHASE_STABILITY.md](./PHASE_STABILITY.md) — new features **frozen** until Live GC + cloud smoke pass.
 
 ## Long-Term Vision
 
@@ -13,7 +15,9 @@
 
 ## Planned Features
 
-- Re-enable full Live Game Center (disable `LIVE_GC_SAFE_MODE` default) after Cloud performance validation.
+*(Deferred during stability phase — see [PHASE_STABILITY.md](./PHASE_STABILITY.md).)*
+
+- Re-enable full Live Game Center (disable `LIVE_GC_SAFE_MODE` default) after Layer 1 game-night sign-off.
 - Visible **Reset to default** on deployed `dev` (suite persistence parity with other apps).
 - Expand **Matchup Intelligence** with cached opponent tendencies (pace, ORtg proxy from box logs).
 - **Previous Rounds** export/share (markdown or image card) for social posts.
@@ -30,7 +34,8 @@
 
 ## Next Milestones
 
-1. **Docs + Dev Lab product tab** — `docs/` as source of truth; in-app roadmap viewer.
-2. **Cloud stability** — confirm `dev` deploy loads all pages under 8s first paint.
-3. **Persistence verification** — cloud `full_session` + Command Center activity after real usage.
-4. **NBA Finals readiness** — bracket engine + Live GC stress test with concurrent users.
+1. **Live GC game-night ready** — trust strip + real-game verification ([PHASE_STABILITY.md](./PHASE_STABILITY.md)).
+2. **Cloud smoke pass** — all pages, active + eliminated team on `dev`.
+3. **Home Dashboard speed** — section timing targets met.
+4. **Finals state correctness** — engine + UI agree for active/eliminated teams.
+5. Persistence verification + NBA Finals load test (after 1–4).

@@ -74,9 +74,26 @@ Parsed game must expose: phase, scores, period, clock, opponent (`opp_name`), op
 
 ---
 
+## Trust strip (authoritative — always visible)
+
+Every Live GC render (full, safe, no-feed) must call `_render_live_gc_trust_strip` after Layer 1 resolve:
+
+| Field | Source |
+|-------|--------|
+| **Status** | `_live_status_chip(state)` |
+| **Score** | `parsed` away–home scores, or `—` if no feed row |
+| **Clock** | Quarter + clock from `parsed`, or status text |
+| **Source** | `state.source_label` |
+| **Last updated** | `state.updated_at` (or last-known timestamp if stale) |
+
+Fans must never hunt inside expanders or Layer 2 tabs for basic score metadata.
+
+---
+
 ## Reliability requirements (must hold)
 
-1. **First paint** must not await Layer 2/3 network calls.  
+1. **Trust strip** visible on every path (including safe mode and feed-unavailable).
+2. **First paint** must not await Layer 2/3 network calls.  
 2. **Instant shell** visible before Layer 1 resolve completes.  
 3. **Clear empty state** via `_live_gc_fan_msg` / `feed_banner` when no game—never a blank main panel.  
 4. **Home Dashboard** deep links set `st.session_state["page_override"] = "🔴 Live Game Center"`.  

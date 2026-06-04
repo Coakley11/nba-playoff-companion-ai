@@ -1,6 +1,6 @@
 # Completed features
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-04
 
 ## Completed Features
 
@@ -8,6 +8,7 @@
 
 - [x] Home Dashboard — playoff command center, quick/live modes, elimination offseason blocks
 - [x] Live Game Center — Layer 1/2/3 architecture + safe mode path
+- [x] Live Game Center — always-visible trust strip (status, score, clock, source, last updated)
 - [x] Playoff Bracket — full bracket with API sync + demo fallback
 - [x] Matchup Lineups — position matchups, curated playoff rotations
 - [x] Matchup Intelligence — injury + narrative matchup hub

@@ -2,29 +2,29 @@
 
 **Last updated:** 2026-06-04
 
-Completion % is a **planning estimate** for the 2026 playoff season build—not a CI metric. Update when a system materially ships or regresses.
+Completion % is a **planning estimate** for the stability phase—not a CI metric. Update when a system materially improves or regresses.
 
 ## System completion
 
 | System | Completion % | Doc | Notes |
 |--------|-------------|-----|-------|
-| Playoff engine | 88 | PLAYOFF_ENGINE.md | API + demo merge, 4-round builders, team status map |
-| Live Game Center | 72 | LIVE_GAME_CENTER.md | Layer 1 solid; full L2/L3 needs Cloud perf validation |
-| Home Dashboard | 85 | PAGES.md | Quick/live modes, elimination offseason blocks |
-| Playoff Bracket UI | 90 | PAGES.md | Auto-refresh, fallback scores |
-| Matchup Lineups | 80 | PAGES.md | Curated rotations; API stale-player filters |
-| Matchup Intelligence | 75 | PAGES.md | Injury + narrative hub |
-| Player Playoff Tracker | 78 | PAGES.md | Logs, charts, hub |
-| Legacy Tracker | 80 | LEGACY_TRACKER.md | Career chase framing |
-| Team History & Leaders | 82 | TEAM_HISTORY.md | Legends board + sort |
-| Previous Rounds | 85 | PAGES.md | Series history cards |
-| Suite persistence | 65 | DEVELOPMENT_PRIORITIES.md | Cloud session on dev; reset UX verify on Cloud |
-| Documentation system | 92 | WORKFLOW.md | docs/ + Dev Lab Product docs + Cursor rule |
+| Live Game Center | 68 | LIVE_GAME_CENTER.md | **P1** — trust strip + game-night proof pending |
+| Home Dashboard | 78 | PAGES.md | **P2** — section timing audit in progress |
+| Playoff engine | 85 | PLAYOFF_ENGINE.md | **P4** — Finals consistency pass pending |
+| Matchup Lineups | 72 | PAGES.md | **P3** — rotation audit pending |
+| Playoff Bracket UI | 88 | PAGES.md | Stable; maintain during engine fixes |
+| Matchup Intelligence | 75 | PAGES.md | No expansion this phase |
+| Player Playoff Tracker | 78 | PAGES.md | No expansion this phase |
+| Legacy Tracker | 80 | LEGACY_TRACKER.md | No expansion this phase |
+| Team History & Leaders | 82 | TEAM_HISTORY.md | No expansion this phase |
+| Previous Rounds | 85 | PAGES.md | No expansion this phase |
+| Suite persistence | 65 | DEVELOPMENT_PRIORITIES.md | After P1–P2 |
+| Documentation system | 95 | WORKFLOW.md | Ongoing discipline |
 
 ## Active priority
 
-**P1 — Deploy & stability:** Confirm Streamlit Cloud `dev` deploy; validate Live GC Layer 1; set `DEV_MODE = False` for fan production when ready.
+**P1 — Live Game Center reliability:** Trust strip on all paths; prove Layer 1 during a real game; freeze new Live GC features.
 
 ## Current milestone
 
-**Cloud smoke pass** — All `PAGES` routes render for an active team (e.g. Knicks) and an eliminated team; build matches `dev` tip.
+**Live Game Center reliable during an actual game** + **Cloud smoke pass** on `dev`.
