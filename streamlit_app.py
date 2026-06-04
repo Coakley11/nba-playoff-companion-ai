@@ -1603,8 +1603,31 @@ def _offseason_players_out_bullets(od):
     ]
 
 
+def _offseason_playoff_recap_banner(team_name):
+    """Eliminated-team playoff path recap — series results before offseason modules."""
+    prof = TEAM_PROFILES.get(team_name) or {}
+    nick = fan_nick(team_name)
+    try:
+        exit_line = _elimination_exit_line(team_name)
+    except Exception:
+        exit_line = prof.get("first_round_result") or "Playoff exit"
+    fr = prof.get("first_round_result") or "First-round result logged"
+    seed = prof.get("seed", "—")
+    th = get_team_theme(team_name)
+    return f"""
+<div style="padding:14px 16px;border-radius:14px;border:1px solid {th['border']};
+background:linear-gradient(135deg,{th['bg0']},#0f172a);margin:0 0 14px;color:#f8fafc">
+  <div style="font-size:11px;font-weight:900;letter-spacing:.14em;color:{th['accent']};text-transform:uppercase">Playoff recap</div>
+  <div style="font-size:1.1rem;font-weight:900;margin:6px 0">{html.escape(nick)} · postseason closed</div>
+  <div style="font-size:13px;line-height:1.5;color:#e2e8f0"><b>How it ended:</b> {html.escape(exit_line)}</div>
+  <div style="font-size:12px;color:#cbd5e1;margin-top:6px"><b>First round:</b> {html.escape(fr)} · <b>Seed:</b> {html.escape(str(seed))}</div>
+</div>
+"""
+
+
 def render_offseason_future_outlook_sections(team_name):
     """Home Dashboard: high-visibility offseason analysis (eliminated teams only)."""
+    st.markdown(_offseason_playoff_recap_banner(team_name), unsafe_allow_html=True)
     od = get_offseason_outlook(team_name)
     ref = od["reflection"]
     nick = fan_nick(team_name)
@@ -5091,6 +5114,18 @@ def player_resume_profile(player_name, team_name=""):
             "team_context": "For Minnesota, the live question is whether he becomes the greatest Timberwolves playoff figure since Kevin Garnett, or eventually pushes into a higher tier.",
             "comps": ["Kevin Garnett", "Dwyane Wade", "Kobe Bryant", "Michael Jordan", "Jimmy Butler", "Clyde Drexler"]
         },
+        "wembanyama": {
+            "baseline": 62, "ceiling": 98, "role": "franchise anchor big",
+            "resume": "Wembanyama enters as the rare two-way big who can erase shots, stretch a defense, and still carry late-clock creation when the game slows down.",
+            "team_context": "For San Antonio, a deep run is measured against Tim Duncan and David Robinson — top-five Spurs playoff impact is the realistic bar if the rim deterrence matches the hype.",
+            "comps": ["Tim Duncan", "David Robinson", "Hakeem Olajuwon", "Kareem Abdul-Jabbar", "Anthony Davis", "Patrick Ewing"]
+        },
+        "castle": {
+            "baseline": 52, "ceiling": 88, "role": "lead guard",
+            "resume": "Castle is the possession hub: pace, downhill reads, and the willingness to absorb traps so Wembanyama can play in space.",
+            "team_context": "A long Spurs run puts Castle in the Tony Parker conversation for trust and Finals-stage creation — top-five guard in franchise playoff memory if the half-court holds.",
+            "comps": ["Tony Parker", "Manu Ginobili", "Chris Paul", "Jason Kidd", "Tyrese Maxey", "Derrick White"]
+        },
     }
 
     for key, prof in profiles.items():
@@ -5235,6 +5270,36 @@ def specific_legacy_comparison(player, team, pts, fg, three, plus_minus, rounds,
         if weak:
             return "The athletic moments would travel, but inefficient scoring keeps the comparison closer to Jimmy Butler-style competitive force than Jordan/Kobe/Wade territory."
         return "This keeps building Edwards as Minnesota's post-KG playoff face; the top-tier leap needs either the Finals stage or a title."
+
+    if "wembanyama" in n or "wemby" in n:
+        if title and plus_minus >= 2:
+            return "A championship with Wembanyama as the defensive hub would place him in the Tim Duncan tier for San Antonio — top-three Spurs playoff impact with David Robinson as the only other big-man comp at that height."
+        if rounds >= 3 and star_line:
+            return "A Finals run on this line starts a real top-five Spurs postseason argument: behind Duncan, in the Robinson/Manu conversation for two-way gravity, not just highlight blocks."
+        if weak:
+            return "The highlights travel, but foul trouble or turnovers keep the read closer to a talented young big than a Duncan/Robinson chapter."
+        return "This run builds Wembanyama toward the Duncan standard — the leap into top-three franchise playoff history needs sustained rim deterrence plus a deep series win."
+
+    if "castle" in n:
+        if title:
+            return "A title with Castle running the offense would make him the best Spurs lead guard since Tony Parker in a championship year — not Manu's creativity, but real Finals trust."
+        if rounds >= 3:
+            return "A deep run puts Castle in the Tony Parker lane for modern Spurs fans: top-five guard in franchise playoff memory if the creation holds under pressure."
+        return "Castle's chapter is still forming — the Parker/Manu guard comps open up only if the playmaking survives playoff traps."
+
+    if "gilgeous" in n or ("shai" in n and "thunder" in team.lower()):
+        if title:
+            return "A Thunder title would lock Shai into the Kevin Durant tier for OKC playoff history — top-two guard scorer with a real banner, ahead of the Westbrook volume years in impact-per-possession talk."
+        if rounds >= 3:
+            return "A Finals trip keeps Shai in the top-three Thunder playoff guard conversation with Durant and Payton — the exact rank depends on efficiency in the biggest games."
+        return "Shai is already in the Durant/Westbrook neighborhood for OKC; the next step is a Finals stage, not just another scoring month."
+
+    if "mitchell" in n and team == "Cleveland Cavaliers":
+        if title:
+            return "A Cavaliers title with Mitchell as the engine would put him beside Kyrie Irving in franchise playoff memory — top-three guard scorer with a ring, not just a loud regular season."
+        if rounds >= 3:
+            return "A deep run on this line moves Mitchell toward the Kyrie/Mark Price guard tier — top-five Cavs playoff scorer if the efficiency survives traps."
+        return "Mitchell's Cavs case is still a scoring-star climb; the Irving comp needs a conference-final or Finals stage, not just one hot series."
 
     if any(x in role for x in ["contributor", "role", "wing", "rotation"]):
         comps = _remove_self_comparisons(player, player_resume_profile(player, team).get("comps", []))
@@ -5626,7 +5691,8 @@ def render_legacy_tracker_page(team_name):
             ]
             if c in logs.columns
         ]
-        render_fan_stat_table(logs[show_cols], team_name)
+        prep_logs = _prepare_chrono_playoff_logs(logs)
+        render_fan_stat_table(_df_newest_first_for_display(prep_logs)[show_cols], team_name)
 
     pts0 = float(current.get("PTS", 20.0) or 20.0)
     reb0 = float(current.get("REB", 6.0) or 6.0)
@@ -5721,7 +5787,12 @@ def render_legacy_tracker_page(team_name):
         st.markdown("### 6 · Offseason / future implications for this player")
         st.write(f"• {elim_lines[6]}")
         st.markdown("### 7 · Historical / franchise comparison (actual outcomes only)")
-        st.write(f"• {elim_lines[7]}")
+        hist_line = specific_legacy_comparison(
+            player, team_name, pts, fg, three, plus_minus, series_wins_bracket, False, final
+        )
+        st.write(f"• {hist_line}")
+        if elim_lines[7] and elim_lines[7] != hist_line:
+            st.caption(elim_lines[7])
 
         st.info(
             "Fan toy, not an official ranking. Eliminated mode **never** blends hypothetical Finals numbers — "
@@ -6349,6 +6420,18 @@ def _historical_comparison_lines(player, team_name, cur, prev_summary, prof, rol
             lines.append(
                 f"For {nick}, this is the **lead-guard playoff chapter** fans wanted when the front office bet on shot creation — {ppg:.1f} PPG is the engine number people will cite if the run keeps advancing."
             )
+        elif "knicks" in team_name.lower() and "towns" in player.lower():
+            lines.append(
+                f"At **{ppg:.1f} PPG**, Towns is in the Patrick Ewing spacing-big lane for New York — not the same role, but the kind of playoff volume that moves him toward the franchise's top-five postseason scorers if the Finals stage holds."
+            )
+        elif "spurs" in team_name.lower() and "wembanyama" in player.lower():
+            lines.append(
+                f"**{ppg:.1f} PPG** with two-way counting stats puts Wembanyama in the Tim Duncan / David Robinson conversation for San Antonio — top-five Spurs playoff impact is the realistic ceiling if rim deterrence matches the scoring."
+            )
+        elif "spurs" in team_name.lower() and "castle" in player.lower():
+            lines.append(
+                f"Castle at **{ppg:.1f} PPG** is building a Tony Parker-style trust case — not the same craft yet, but the lead-guard lane for a deep Spurs run."
+            )
 
     if d_stk >= 2.4 and ("wing" in role_lower or "two-way" in role_lower):
         lines.append(
@@ -6459,6 +6542,7 @@ def _narrative_storylines(player, team_name, cur, reg, prev_summary, prof):
 
 def render_player_playoff_story_hub(team_name, profile):
     """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
+    inject_team_brand_css(team_name)
     st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
     st.subheader("Player Playoff Story · the run, the pressure, the memory")
     st.caption(
@@ -6618,12 +6702,14 @@ def render_player_playoff_story_hub(team_name, profile):
     team_section_header("2 · Series-by-series breakdown", "📊")
     st.caption("Series 1 is the **first** playoff matchup in this log (earliest games), then Series 2 for the next opponent, and so on.")
     chunks = _series_chunks_playoff_order(df, team_tri)
+    rnd_names = ["First Round", "Second Round", "Conference Finals", "NBA Finals"]
     if not chunks:
         st.info("Could not split series from matchups.")
     else:
         for idx, (opp_tri, seg) in enumerate(chunks, start=1):
             opp_name = ALIAS_TO_TEAM.get(opp_tri, opp_tri)
-            label = f"Series {idx} · vs {opp_name}"
+            round_label = rnd_names[idx - 1] if idx <= len(rnd_names) else f"Round {idx}"
+            label = f"{round_label} · vs {opp_name}"
             w = int((seg["WL"].astype(str).str.upper().str.startswith("W")).sum()) if "WL" in seg.columns else 0
             el = int((seg["WL"].astype(str).str.upper().str.startswith("L")).sum()) if "WL" in seg.columns else 0
             sm = summarize_playoff_logs(seg)
@@ -7075,7 +7161,10 @@ def _lineup_badge_for_matchup(team_player, opp_player, pos, team, opp):
     t_reb, o_reb = _lineup_stat_num(t, "REB"), _lineup_stat_num(o, "REB")
     t_ast, o_ast = _lineup_stat_num(t, "AST"), _lineup_stat_num(o, "AST")
     t_def, o_def = _lineup_stat_num(t, "STL") + _lineup_stat_num(t, "BLK"), _lineup_stat_num(o, "STL") + _lineup_stat_num(o, "BLK")
-    star_names = ["Brunson", "Maxey", "LeBron", "Davis", "Edwards", "Towns", "Embiid", "Mitchell", "Shai", "Gilgeous", "Wembanyama", "Cunningham", "Tatum", "Brown"]
+    star_names = [
+        "Brunson", "Maxey", "LeBron", "Davis", "Edwards", "Towns", "Embiid", "Mitchell",
+        "Shai", "Gilgeous", "Wembanyama", "Castle", "Cunningham", "Tatum", "Brown", "Anunoby", "Hart",
+    ]
     pair = f"{team_player} {opp_player}"
     if any(x in pair for x in star_names):
         label = "Star Matchup"
@@ -7148,6 +7237,13 @@ def _inject_matchup_lineups_css(team, opp):
   border-radius:20px; padding:14px; background:linear-gradient(180deg,#ffffff,#f8fafc);
   border:1px solid rgba(148,163,184,.35); box-shadow:0 10px 28px rgba(15,23,42,.10);
 }}
+.ml-card--team-edge {{ box-shadow:0 0 0 2px {t['primary']}33, 0 12px 28px rgba(15,23,42,.12); }}
+.ml-card--opp-edge {{ box-shadow:0 0 0 2px {o['primary']}33, 0 12px 28px rgba(15,23,42,.12); }}
+.ml-bench-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:8px 0 18px; }}
+.ml-bench-col {{ border-radius:18px; padding:12px; background:rgba(15,23,42,.92); border:1px solid rgba(148,163,184,.28); }}
+.ml-bench-col h4 {{ margin:0 0 10px; font-size:13px; color:{t['accent']}; letter-spacing:.08em; text-transform:uppercase; }}
+.ml-bench-card {{ border-radius:14px; padding:10px; margin-bottom:8px; background:#0f172a; border:1px solid rgba(148,163,184,.22); display:flex; gap:10px; align-items:center; }}
+.ml-xf-badge {{ background:linear-gradient(135deg,#f59e0b,#ea580c); color:#0f172a; }}
 .ml-card-top {{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }}
 .ml-position {{ font-size:11px; font-weight:950; letter-spacing:.12em; text-transform:uppercase; color:#64748b; }}
 .ml-badge {{ padding:5px 10px; border-radius:999px; font-size:10px; font-weight:950; letter-spacing:.06em; text-transform:uppercase; color:#0f172a; background:{t['accent']}; }}
@@ -7194,7 +7290,31 @@ def _matchup_edge_tiles(team, opp):
     ]
 
 
+def _lineup_xfactor_candidates(team_name, opp):
+    """Curated rotation names most likely to swing a playoff game."""
+    out = []
+    for tm in (team_name, opp):
+        curated = CURRENT_PLAYOFF_LINEUPS.get(tm) or {}
+        for slot in ("SG", "SF", "PF"):
+            name = curated.get(slot)
+            if name and not _is_outdated_playoff_player(name, tm):
+                out.append((tm, name, slot))
+        for name in (curated.get("bench") or [])[:2]:
+            if name and not _is_outdated_playoff_player(name, tm):
+                out.append((tm, name, "bench"))
+    return out[:6]
+
+
 def render_matchup_lineups_page(team_name, profile):
+    inject_team_brand_css(team_name)
+    mx = get_display_matchup(team_name)
+    render_fan_page_hero(
+        team_name,
+        "Matchup Lineups",
+        f"{mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — position-by-position playoff boards.",
+        "MATCHUP BOARD",
+    )
+    render_playoff_matchup_ribbon(team_name)
     hctx = resolve_home_matchup_context_fast(team_name)
     possible = hctx.get("opponents") or []
     default_opp = hctx.get("opponent") or hctx.get("opponent_display") or profile.get("current_opponent")
@@ -7316,23 +7436,24 @@ def render_matchup_lineups_page(team_name, profile):
         )
 
     st.markdown("### Bench Battle")
-    bench_rows = []
+    bench_cols_html = []
     for tm in (team_name, opp):
+        cards_b = []
         for p in estimated_bench_from_api(tm)[:4]:
             stats = season_averages(p)
             badge = "Bench Spark" if _lineup_stat_num(stats, "PTS") >= 8 else "Rotation Trust"
-            bench_rows.append(
-                f"""
-<div class="ml-tile">
-  <div class="ml-tile-k">{html.escape(badge)} · {html.escape(fan_nick(tm))}</div>
-  <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
-    <img class="ml-headshot" style="width:64px;height:52px" src="{html.escape(headshot(p))}" alt=""/>
-    <div><div class="ml-tile-v">{html.escape(p)}</div><div class="ml-tile-s">{_lineup_stat_num(stats, 'PTS'):.1f} PTS · {_lineup_stat_num(stats, 'REB'):.1f} REB · {_lineup_stat_num(stats, 'AST'):.1f} AST</div></div>
-  </div>
-</div>
-"""
+            cards_b.append(
+                f"""<div class="ml-bench-card">
+  <img class="ml-headshot" style="width:58px;height:48px" src="{html.escape(headshot(p))}" alt=""/>
+  <div><div style="font-size:10px;font-weight:900;color:#94a3b8">{html.escape(badge)}</div>
+  <div style="font-size:14px;font-weight:900;color:#f8fafc">{html.escape(p)}</div>
+  <div style="font-size:11px;color:#cbd5e1">{_lineup_stat_num(stats, 'PTS'):.1f} PTS · {_lineup_stat_num(stats, 'REB'):.1f} REB · {_lineup_stat_num(stats, 'AST'):.1f} AST</div></div>
+</div>"""
             )
-    st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(bench_rows) + "</div></div>", unsafe_allow_html=True)
+        bench_cols_html.append(
+            f"""<div class="ml-bench-col"><h4>{html.escape(fan_nick(tm))} bench</h4>{"".join(cards_b) or "<div style='color:#94a3b8;font-size:12px'>Rotation TBD</div>"}</div>"""
+        )
+    st.markdown('<div class="ml-shell"><div class="ml-bench-grid">' + "".join(bench_cols_html) + "</div></div>", unsafe_allow_html=True)
 
     st.markdown("### Key Tactical Edges")
     edge_html = []
@@ -7343,14 +7464,15 @@ def render_matchup_lineups_page(team_name, profile):
     st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(edge_html) + "</div></div>", unsafe_allow_html=True)
 
     st.markdown("### X-Factor Players")
-    x_names = []
-    for arr in (TEAM_PROFILES.get(team_name, {}).get("starters", [])[2:5], TEAM_PROFILES.get(opp, {}).get("starters", [])[2:5]):
-        x_names.extend(arr[:2])
     x_html = []
-    for p in x_names[:4]:
-        tm = team_name if p in TEAM_PROFILES.get(team_name, {}).get("starters", []) else opp
+    for tm, p, slot in _lineup_xfactor_candidates(team_name, opp):
+        stats = season_averages(p)
         x_html.append(
-            f"""<div class="ml-tile"><div class="ml-tile-k">X-Factor · {html.escape(fan_nick(tm))}</div><div class="ml-tile-v">{html.escape(p)}</div><div class="ml-tile-s">If this player wins his role, the star matchup gets easier and the rotation can stay balanced.</div></div>"""
+            f"""<div class="ml-tile"><div class="ml-tile-k ml-xf-badge">X-Factor · {html.escape(slot)} · {html.escape(fan_nick(tm))}</div>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+            <img class="ml-headshot" style="width:58px;height:48px" src="{html.escape(headshot(p))}" alt=""/>
+            <div><div class="ml-tile-v">{html.escape(p)}</div>
+            <div class="ml-tile-s">{_lineup_stat_num(stats, 'PTS'):.1f} PTS · {_lineup_stat_num(stats, 'REB'):.1f} REB — swing role if the starters trade blows.</div></div></div></div>"""
         )
     st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(x_html) + "</div></div>", unsafe_allow_html=True)
 
@@ -13754,11 +13876,21 @@ def _history_card_html(team_name, p, current=False):
 
 def _history_sort_col(label):
     return {
-        "Total playoff points": "Playoff PTS (est.)", "Playoff points per game": "Playoff PPG (est.)",
-        "Rebounds": "REB (est.)", "Assists": "AST (est.)", "Steals": "STL (est.)",
-        "Blocks": "BLK (est.)", "Three-pointers": "3PM (est.)",
-        "40-point playoff games": "40-pt games (est.)", "30-point playoff games": "30-pt games (est.)",
-        "Playoff games played": "Playoff GP (est.)", "Finals appearances": "Finals", "Championships": "Titles",
+        "Total playoff points": "Playoff PTS (est.)",
+        "Playoff scoring leaders (total PTS)": "Playoff PTS (est.)",
+        "Playoff points per game": "Playoff PPG (est.)",
+        "Rebounds": "REB (est.)",
+        "Rebound leaders": "REB (est.)",
+        "Assists": "AST (est.)",
+        "Assist leaders": "AST (est.)",
+        "Steals": "STL (est.)",
+        "Blocks": "BLK (est.)",
+        "Three-pointers": "3PM (est.)",
+        "40-point playoff games": "40-pt games (est.)",
+        "30-point playoff games": "30-pt games (est.)",
+        "Playoff games played": "Playoff GP (est.)",
+        "Finals appearances": "Finals",
+        "Championships": "Titles",
     }.get(label, "Playoff PTS (est.)")
 
 
@@ -13856,6 +13988,7 @@ def _inject_history_leaders_css():
 
 
 def render_team_history_leaders_page(team_name):
+    inject_team_brand_css(team_name)
     data = franchise_history_data(team_name)
     legends = sorted(data.get("legends", []), key=lambda x: int(x.get("rank", 999)))
     current_names = _history_current_names(team_name)
@@ -13884,7 +14017,24 @@ def render_team_history_leaders_page(team_name):
     if render_fan_section("Franchise playoff leaders", "📊", caption="Sortable leaderboard from curated history data.", tone="default"):
         render_fan_section_open()
     df = _history_table_df(legends, current_names)
-    sort_label = st.selectbox("Sort leaderboard by", ["Total playoff points", "Playoff points per game", "Rebounds", "Assists", "Steals", "Blocks", "Three-pointers", "40-point playoff games", "30-point playoff games", "Playoff games played", "Finals appearances", "Championships"], key=f"history_sort_{team_name}")
+    sort_label = st.selectbox(
+        "Leaderboard view",
+        [
+            "Playoff scoring leaders (total PTS)",
+            "30-point playoff games",
+            "40-point playoff games",
+            "Playoff points per game",
+            "Rebound leaders",
+            "Assist leaders",
+            "Steals",
+            "Blocks",
+            "Three-pointers",
+            "Playoff games played",
+            "Finals appearances",
+            "Championships",
+        ],
+        key=f"history_sort_{team_name}",
+    )
     show_df = df.sort_values(_history_sort_col(sort_label), ascending=False).reset_index(drop=True)
     render_fan_stat_table(show_df, team_name)
     render_fan_section_close()

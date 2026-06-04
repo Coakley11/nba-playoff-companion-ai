@@ -1,6 +1,6 @@
 # Pages & UX — fan-facing surfaces
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-05
 
 Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is optional (`DEV_MODE` or sidebar toggle).
 
@@ -59,11 +59,12 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Matchup Lineups` · **Renderer:** `render_matchup_lineups_page`
 
-**Purpose:** Position-by-position starters and bench for favorite team vs current opponent.
+**Purpose:** TV-style playoff matchup board — PG vs PG through C vs C with headshots, team colors, and bench/X-factor cards.
 
 **UX goals:**
 - Curated playoff rotation overrides outdated API players.
 - Resolution source caption (curated / playoff minutes / profile).
+- Starter matchup cards with position advantage badges; bench columns by team; raw rotation in expander only.
 
 ---
 
@@ -86,8 +87,9 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **Purpose:** Per-player playoff story—logs, trends, milestones for selected player.
 
 **UX goals:**
-- Player picker, season selector, chart overlays.
-- Tie-in to playoff game logs cache.
+- Newest games first in timeline and game log; series cards labeled First Round → Finals.
+- Current-run stats, milestone meters, franchise-history comparison lines.
+- Team-branded hero with headshot and playoff badges.
 
 ---
 
@@ -95,7 +97,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Legacy Tracker` · **Renderer:** `render_legacy_tracker_page`
 
-**Purpose:** Career playoff legacy chase—rankings, milestones, "what if" framing for active stars.
+**Purpose:** Career playoff legacy chase with **specific franchise names** (Ewing, Frazier, Duncan, Parker, etc.) — not generic greatness copy.
 
 **See:** [LEGACY_TRACKER.md](./LEGACY_TRACKER.md)
 
@@ -105,7 +107,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Team History Leaders` · **Renderer:** `render_team_history_leaders_page`
 
-**Purpose:** Franchise playoff legends board + current-player chase vs history.
+**Purpose:** Franchise playoff legends board + sortable leaderboards (30/40-pt games, scoring, rebounds, assists) + current-player chase cards with progress bars.
 
 **See:** [TEAM_HISTORY.md](./TEAM_HISTORY.md)
 
@@ -129,7 +131,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Renderer:** `render_offseason_future_outlook_sections`, `get_offseason_outlook`
 
-**Purpose:** Structured post-elimination analysis—priorities, cap/roster, players out, direction label.
+**Purpose:** Playoff recap banner plus structured post-elimination analysis—what went right, why they lost, priorities, cap/roster, draft assets, players out, direction label.
 
 ---
 

@@ -22,7 +22,9 @@
 | Layer 1 proven stable on Cloud | No timeout; refresh ≤60s; no fake 0–0 over live feed |
 | No new L2/L3 features | Until Layer 1 sign-off |
 
-**Freeze:** No new Live GC tabs, charts, or analysis widgets.
+**Freeze:** No new Live GC tabs, charts, or analysis widgets. Validation-only fixes allowed until game-night sign-off.
+
+**Parallel track (allowed):** Matchup Lineups, Player Playoff Tracker, eliminated-team offseason, Team History, and Legacy Tracker polish — no Live GC feature expansion.
 
 ---
 

@@ -1,19 +1,18 @@
 # Legacy Tracker
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-05
 
 ## Purpose
 
-**Legacy Tracker** frames playoff career achievement—where active stars sit on franchise and league playoff leaderboards, chase milestones, and "legacy points" narratives.
+**Legacy Tracker** frames playoff career achievement with **named franchise comparisons** (Patrick Ewing, Walt Frazier, Tim Duncan, Tony Parker, etc.) and realistic tiers (top 5, top 10, Finals-stage bar).
 
 **Renderer:** `render_legacy_tracker_page(team_name)`
 
 ## UX goals
 
-- Fan-forward copy (not spreadsheet-only).
-- Clear separation between **active chase** vs **historical franchise greats**.
-- Offseason implications section for eliminated-team context on player pages.
-- Tie to playoff game logs and curated player pool.
+- **Active teams:** locked actuals + forward simulator; `specific_legacy_comparison()` for ladder copy.
+- **Eliminated teams:** postmortem only — game log **newest first**, round splits, `specific_legacy_comparison` in section 7.
+- No generic “franchise changing” / “one of the greats” language in the comparison engine.
 
 ## Data behavior
 
@@ -24,6 +23,7 @@
 
 - Page must load when team is active or eliminated (legacy story continues in offseason).
 - Do not contradict Team History leaders board without documenting difference in [TEAM_HISTORY.md](./TEAM_HISTORY.md).
+- **Live Game Center frozen** until P1 game-night sign-off — no changes to Layer 1 from this page.
 
 ## Planned improvements
 
