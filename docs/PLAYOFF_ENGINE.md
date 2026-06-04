@@ -1,6 +1,6 @@
 # Playoff engine — source of truth
 
-**Last updated:** 2026-06-04  
+**Last updated:** 2026-06-05  
 **Code entry:** `get_playoff_state_cached` · `get_merged_playoff_state` · `_playoff_status_from_state` · `get_team_playoff_status`
 
 > If this doc and code disagree, reconcile in the **same change**. See [WORKFLOW.md](./WORKFLOW.md).
@@ -120,7 +120,14 @@ Consumers **must** prefer `get_team_playoff_status(team, stt)` over raw `TEAM_PR
 2. Series scores match counted completed games.  
 3. Eliminated teams never get active-series "Go live" as primary Home CTA.  
 4. `scripts/qa_bracket_logic.py` passes after engine edits.  
-5. Headless `get_playoff_state_snapshot()` stays stable for tests.
+5. Headless `get_playoff_state_snapshot()` stays stable for tests.  
+6. `scripts/audit_factual_accuracy.py` passes after score/roster/standout edits (`validate_playoff_factual_accuracy` in app).
+
+### Factual accuracy guards (2026-06-05)
+
+- **East CF:** Knicks defeat Cavaliers **4-0** (`CONFERENCE_FINALS_DEMO_BACKUP["CLE-NYK"]` when API empty).  
+- **Finals:** Knicks vs Spurs only.  
+- **Game standouts:** `mvp_for_game` credits only active rotation players on the **winning** team; outdated names (e.g. Trae Young on Atlanta) blocked via `OUTDATED_PLAYOFF_PLAYERS`. Unverified → blank / “not assigned”, not invented MVPs.
 
 ---
 

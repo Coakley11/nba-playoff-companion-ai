@@ -1,6 +1,6 @@
 # Completed features
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-05
 
 ## Completed Features
 
@@ -19,6 +19,7 @@
 
 ### Playoff engine & data
 
+- [x] Factual accuracy audit (2026-06-05) — Knicks 4-0 Cavaliers CF, standout/MVP roster guards, `scripts/audit_factual_accuracy.py`
 - [x] Unified `get_merged_playoff_state` with cached builders per round
 - [x] Team playoff status vs static profiles (`get_effective_team_profile`)
 - [x] Sidebar API auto-sync and demo fallback toggles

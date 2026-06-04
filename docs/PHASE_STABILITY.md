@@ -64,6 +64,9 @@
 | Active teams agree: bracket, engine, Home ribbon, Live GC context | `qa_bracket_logic.py` + manual Knicks/Spurs check |
 | Eliminated teams always offseason on Home | `_is_home_eliminated` + engine status agree |
 | Effective profile matches display matchup | Dev Lab team status table clean |
+| Factual accuracy pass (scores, standouts, rosters) | `python scripts/audit_factual_accuracy.py` exits 0 |
+
+**Checklist:** East CF Knicks 4-0 Cavaliers; Finals Knicks vs Spurs; game standouts only from active series rosters (`OUTDATED_PLAYOFF_PLAYERS` respected).
 
 ---
 

@@ -6,6 +6,7 @@
 
 | Issue | Area | Notes |
 |-------|------|-------|
+| Factual accuracy drift (bracket/MVP copy) | Data | **Mitigated 2026-06-05:** unified engine + `validate_playoff_factual_accuracy()` + `scripts/audit_factual_accuracy.py`. Re-run after any playoff result or roster edit. |
 | Monolithic `streamlit_app.py` | Maintainability | ~14k lines; page split planned—update `docs/PAGES.md` when splitting |
 | Live GC game-night sign-off pending | Live GC | Trust strip + 0–0 guard shipped; manual 2–3 refresh cycles during real game still required |
 | Live GC weight on Cloud | Performance | Full page can timeout; safe mode exists; monitor Layer 3 |
@@ -27,3 +28,4 @@
 - Streamlit Cloud branch should be **`dev`** for daily work.
 - Reboot app after `[suite_activity]` secrets changes.
 - Run `python scripts/qa_bracket_logic.py` after bracket logic edits.
+- Run `python scripts/audit_factual_accuracy.py` after playoff scores, standouts, or roster overrides change.

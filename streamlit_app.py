@@ -492,7 +492,7 @@ TEAM_PROFILES = {
 }
 # Eliminated teams
 ELIMINATED_INFO = [
-    ("Atlanta Hawks",6,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-2",["Trae Young","Dyson Daniels","Zaccharie Risacher","Jalen Johnson","Onyeka Okongwu"],["Bogdan Bogdanovic","De'Andre Hunter","Clint Capela","Vit Krejci","Kobe Bufkin"]),
+    ("Atlanta Hawks",6,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-2",["Jalen Johnson","Dyson Daniels","Zaccharie Risacher","Onyeka Okongwu","De'Andre Hunter"],["Bogdan Bogdanovic","Clint Capela","Vit Krejci","Kobe Bufkin","Larry Nance Jr."]),
     ("Boston Celtics",2,"Eastern Conference","Philadelphia 76ers","Lost to Philadelphia 76ers, 4-3",["Jrue Holiday","Derrick White","Jaylen Brown","Jayson Tatum","Kristaps Porzingis"],["Payton Pritchard","Sam Hauser","Al Horford","Luke Kornet","Neemias Queta"]),
     ("Orlando Magic",8,"Eastern Conference","Detroit Pistons","Lost to Detroit Pistons, 4-3",["Jalen Suggs","Kentavious Caldwell-Pope","Franz Wagner","Paolo Banchero","Wendell Carter Jr."],["Cole Anthony","Jonathan Isaac","Anthony Black","Moritz Wagner","Gary Harris"]),
     ("Toronto Raptors",5,"Eastern Conference","Cleveland Cavaliers","Lost to Cleveland Cavaliers, 4-3",["Immanuel Quickley","RJ Barrett","Gradey Dick","Scottie Barnes","Jakob Poeltl"],["Bruce Brown","Kelly Olynyk","Ochai Agbaji","Chris Boucher","Davion Mitchell"]),
@@ -504,7 +504,7 @@ ELIMINATED_INFO = [
     ("Houston Rockets",5,"Western Conference","Los Angeles Lakers","Lost to Los Angeles Lakers, 4-2",["Fred VanVleet","Jalen Green","Amen Thompson","Jabari Smith Jr.","Alperen Sengun"],["Dillon Brooks","Tari Eason","Cam Whitmore","Steven Adams","Reed Sheppard"]),
     ("Los Angeles Lakers",4,"Western Conference","Oklahoma City Thunder","Lost to Oklahoma City Thunder, 4-1",["D'Angelo Russell","Austin Reaves","LeBron James","Rui Hachimura","Anthony Davis"],["Gabe Vincent","Jarred Vanderbilt","Max Christie","Christian Wood","Jaxson Hayes"]),
     ("Minnesota Timberwolves",6,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-2",["Mike Conley","Anthony Edwards","Jaden McDaniels","Naz Reid","Rudy Gobert"],["Nickeil Alexander-Walker","Donte DiVincenzo","Rob Dillingham","Josh Minott","Luka Garza"]),
-    ("Cleveland Cavaliers",4,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-2",["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"]),
+    ("Cleveland Cavaliers",4,"Eastern Conference","New York Knicks","Lost to New York Knicks, 4-0",["James Harden","Donovan Mitchell","Max Strus","Evan Mobley","Jarrett Allen"],["Caris LeVert","Isaac Okoro","Georges Niang","Sam Merrill","Dean Wade"]),
     ("Oklahoma City Thunder",1,"Western Conference","San Antonio Spurs","Lost to San Antonio Spurs, 4-2",["Shai Gilgeous-Alexander","Lu Dort","Jalen Williams","Chet Holmgren","Isaiah Hartenstein"],["Cason Wallace","Aaron Wiggins","Isaiah Joe","Jaylin Williams","Kenrich Williams"]),
 ]
 for name, seed, conf, opp, result, starters, subs in ELIMINATED_INFO:
@@ -648,6 +648,7 @@ CURRENT_PLAYOFF_LINEUPS = {
 
 # Players removed from active playoff rotation in this app universe (still on API rosters).
 OUTDATED_PLAYOFF_PLAYERS = {
+    "Atlanta Hawks": ["Trae Young"],
     "Cleveland Cavaliers": ["Darius Garland"],
     "New York Knicks": ["Precious Achiuwa"],
     "Detroit Pistons": [],
@@ -1097,10 +1098,10 @@ def _generic_offseason_outlook(team_name):
 OFFSEASON_OUTLOOK_BY_TEAM = {
     "Atlanta Hawks": {
         "reflection": {
-            "went_right": "Atlanta still played meaningful playoff minutes with a younger supporting cast around Trae Young — there were stretches where pace, screening, and shot-making looked like a modern offense.",
-            "elimination_cause": "New York controlled the glass and physicality in too many fourth quarters; when the Knicks shrank the floor to Young, Atlanta did not generate enough clean secondary shots or enough stops in succession to extend the series.",
+            "went_right": "Atlanta still played meaningful playoff minutes with a younger supporting cast around Jalen Johnson — there were stretches where pace, screening, and shot-making looked like a modern offense.",
+            "elimination_cause": "New York controlled the glass and physicality in too many fourth quarters; when the Knicks shrank the floor to Johnson, Atlanta did not generate enough clean secondary shots or enough stops in succession to extend the series.",
             "playoff_strengths": [
-                "Young’s pull-up gravity and passing still bent defenses even when blitzed.",
+                "Johnson’s downhill pressure and passing still bent defenses even when blitzed.",
                 "Okongwu’s minutes often stabilized the paint on both ends when he could stay on the floor.",
                 "Transition opportunities when turnovers turned into early offense.",
             ],
@@ -1334,7 +1335,7 @@ OFFSEASON_OUTLOOK_BY_TEAM = {
     "Cleveland Cavaliers": {
         "reflection": {
             "went_right": "Cleveland reached the Eastern Conference Finals with a balanced attack — Mitchell's shot-making, Harden's playmaking, and Mobley/Allen's rim protection kept them competitive in a physical East bracket.",
-            "elimination_cause": "New York won the possession war in the closeout game: offensive rebounding, wing defense on Mitchell, and late-clock execution when the margin stayed within one or two possessions decided the 4-2 series.",
+            "elimination_cause": "New York controlled every game of the Eastern Conference Finals — offensive rebounding, wing defense on Mitchell, and late-clock execution never let Cleveland build a closeout path in the 4-0 sweep.",
             "playoff_strengths": [
                 "Mitchell's ability to create efficient looks against set defenses.",
                 "Mobley and Allen as a switchable, rim-protecting frontcourt pairing.",
@@ -1780,11 +1781,9 @@ SECOND_ROUND_DEMO_BACKUP = {
 CONFERENCE_FINALS_DEMO_BACKUP = {
     "CLE-NYK": {"games":[
         {"Game":"Game 1","Date":"May 22","Score":"Knicks 108, Cavaliers 102","Winner":"New York Knicks","GameID":"demo-nyk-cle-g1"},
-        {"Game":"Game 2","Date":"May 24","Score":"Cavaliers 115, Knicks 110","Winner":"Cleveland Cavaliers","GameID":"demo-nyk-cle-g2"},
+        {"Game":"Game 2","Date":"May 24","Score":"Knicks 115, Cavaliers 110","Winner":"New York Knicks","GameID":"demo-nyk-cle-g2"},
         {"Game":"Game 3","Date":"May 26","Score":"Knicks 104, Cavaliers 99","Winner":"New York Knicks","GameID":"demo-nyk-cle-g3"},
         {"Game":"Game 4","Date":"May 28","Score":"Knicks 112, Cavaliers 105","Winner":"New York Knicks","GameID":"demo-nyk-cle-g4"},
-        {"Game":"Game 5","Date":"May 30","Score":"Cavaliers 118, Knicks 114","Winner":"Cleveland Cavaliers","GameID":"demo-nyk-cle-g5"},
-        {"Game":"Game 6","Date":"Jun 1","Score":"Knicks 103, Cavaliers 98","Winner":"New York Knicks","GameID":"demo-nyk-cle-g6"},
     ]},
     "OKC-SAS": {"games":[
         {"Game":"Game 1","Date":"May 21","Score":"Thunder 112, Spurs 105","Winner":"Oklahoma City Thunder","GameID":"demo-okc-sas-g1"},
@@ -1905,7 +1904,7 @@ for mirror, source in [("Orlando Magic","Detroit Pistons"),("Toronto Raptors","C
 FALLBACK_TOP_PLAYS = {
     "New York Knicks": [
         {"Game":"Game 1 vs Spurs","Top Play":"Brunson and Towns carried the opening-night offense in a tight Finals Game 1 win.","Why it mattered":"The series opens 1-0 — home court and first-possession tone belong to New York."},
-        {"Game":"Game 6 vs Cavaliers","Top Play":"New York closed the East on the road to punch the Finals ticket.","Why it mattered":"The conference finals ended 4-2 — the bracket now reads Knicks vs Spurs for the title."},
+        {"Game":"Game 4 vs Cavaliers","Top Play":"New York closed the East at home to punch the Finals ticket.","Why it mattered":"The conference finals ended 4-0 — the bracket now reads Knicks vs Spurs for the title."},
     ],
     "San Antonio Spurs": [
         {"Game":"Game 6 vs Thunder","Top Play":"Wembanyama's rim protection flipped the West finals on San Antonio's home floor.","Why it mattered":"The Spurs advanced 4-2 — OKC's pace could not survive the length in the closeout game."},
@@ -2789,6 +2788,82 @@ def _count_series_wins_for_team(team_name, stt=None):
     except Exception:
         return 0
     return n
+
+
+def validate_playoff_factual_accuracy(stt=None):
+    """
+    Data validation guard for playoff results and game standouts.
+    Returns a list of human-readable error strings (empty when clean).
+    """
+    errors = []
+    if stt is None:
+        stt = get_playoff_state_snapshot(use_demo_backup=True, api_refresh=False)
+
+    active_static = [t for t, p in TEAM_PROFILES.items() if p.get("status") == "Active"]
+    if set(active_static) != {"New York Knicks", "San Antonio Spurs"}:
+        errors.append(f"static Active teams expected Knicks+Spurs, got {active_static}")
+
+    finals = stt.get("finals") or {}
+    if not finals:
+        errors.append("NBA Finals shell missing from merged playoff state")
+    else:
+        for _k, s in finals.items():
+            teams = {s.get("a"), s.get("b")}
+            if teams != {"New York Knicks", "San Antonio Spurs"}:
+                errors.append(f"Finals matchup must be Knicks vs Spurs, got {teams}")
+
+    cf = stt.get("cf") or {}
+    cle_nyk = cf.get("CLE-NYK")
+    if cle_nyk:
+        nyk = "New York Knicks"
+        cle = "Cleveland Cavaliers"
+        if cle_nyk.get("winner") != nyk:
+            errors.append(f"East CF winner must be Knicks, got {cle_nyk.get('winner')}")
+        tw, ow, _opp = _team_series_record(nyk, cle_nyk)
+        if not (tw == 4 and ow == 0):
+            errors.append(f"Knicks vs Cavaliers CF must be 4-0, engine shows {tw}-{ow}")
+
+    for s in _iter_playoff_series_shells_merged(stt):
+        a, b = s.get("a"), s.get("b")
+        games = s.get("games") or []
+        calc_a = sum(1 for g in games if g.get("Winner") == a)
+        calc_b = sum(1 for g in games if g.get("Winner") == b)
+        if int(s.get("a_wins", 0) or 0) != calc_a:
+            errors.append(f"{a} vs {b}: a_wins {s.get('a_wins')} != game-log wins {calc_a}")
+        if int(s.get("b_wins", 0) or 0) != calc_b:
+            errors.append(f"{a} vs {b}: b_wins {s.get('b_wins')} != game-log wins {calc_b}")
+        if _series_has_confirmed_winner(s):
+            w = s.get("winner")
+            ww = calc_a if w == a else calc_b if w == b else 0
+            if ww != 4:
+                errors.append(f"{a} vs {b}: winner {w} must have 4 game-log wins, has {ww}")
+
+        for idx, g in enumerate(games, start=1):
+            winner = g.get("Winner")
+            win_side = winner if winner in (a, b) else None
+            for name in (g.get("Game MVP"),):
+                if name and not _validate_game_standout_candidate(name, a, b, win_side):
+                    errors.append(
+                        f"{a} vs {b} game {idx}: standout {name!r} not valid for winner/participating roster"
+                    )
+            mvp, _why = mvp_for_game(a, b, idx, winner)
+            if mvp and not _validate_game_standout_candidate(mvp, a, b, win_side):
+                errors.append(f"{a} vs {b} game {idx}: resolved standout {mvp!r} failed validation")
+
+    team_status = stt.get("team_status") or {}
+    for team_name, prof in TEAM_PROFILES.items():
+        pst = team_status.get(team_name) or {}
+        engine_elim = str(pst.get("status", "")).lower() == "eliminated"
+        static_elim = prof.get("status") == "Eliminated"
+        if engine_elim != static_elim:
+            errors.append(f"{team_name}: engine eliminated={engine_elim} vs static Eliminated={static_elim}")
+    for elim in ELIMINATED_INFO:
+        if elim[0] == "Cleveland Cavaliers" and "4-2" in str(elim[4]):
+            errors.append("Cleveland static elimination text still says 4-2")
+        if elim[0] == "Atlanta Hawks" and "Trae Young" in (elim[5] or []):
+            errors.append("Atlanta static roster still lists Trae Young as active")
+
+    return errors
 
 
 def infer_next_round_series(round_name, conf=None):
@@ -10048,10 +10123,13 @@ def render_playoff_command_center(team_name):
             except Exception:
                 gn_i = len(history_series["games"])
             mvp, why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
-            st.success(f"**{mvp}** — _{why}_")
+            if mvp:
+                st.success(f"**Game standout: {mvp}** — _{why}_")
+            else:
+                st.caption("Standout player not assigned for the latest game row yet.")
             st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
         else:
-            st.caption("MVP tag unlocks when the most recent game row hits the log for this matchup.")
+            st.caption("Standout tag unlocks when the most recent game row hits the log for this matchup.")
 
     def sec_outlook_full():
         render_team_outlook(team_name, compact_home=False, series_obj=current_series_obj)
@@ -12207,8 +12285,12 @@ def _render_live_game_center_previous(favorite_team, profile):
 # ==========================================================
 FALLBACK_GAME_MVPS = {
     ("New York Knicks", "Atlanta Hawks", 1): ("Jalen Brunson", "Controlled the half court and gave New York the Game 1 tone."),
-    ("New York Knicks", "Atlanta Hawks", 2): ("Trae Young", "Late-shot creation and pressure helped Atlanta steal a road game."),
-    ("New York Knicks", "Atlanta Hawks", 3): ("Trae Young", "Carried Atlanta's offense in a one-possession finish."),
+    ("New York Knicks", "Atlanta Hawks", 2): ("Jalen Johnson", "Late-game shot creation and pressure helped Atlanta steal a road game."),
+    ("New York Knicks", "Atlanta Hawks", 3): ("Jalen Johnson", "Carried Atlanta's offense in a one-possession finish."),
+    ("New York Knicks", "Cleveland Cavaliers", 1): ("Jalen Brunson", "Set the tone with half-court control in the East finals opener."),
+    ("New York Knicks", "Cleveland Cavaliers", 2): ("Jalen Brunson", "Extended the Knicks' control on the road in Game 2."),
+    ("New York Knicks", "Cleveland Cavaliers", 3): ("Karl-Anthony Towns", "Spacing and interior scoring broke Cleveland's help rules."),
+    ("New York Knicks", "Cleveland Cavaliers", 4): ("Jalen Brunson", "Closed the East with late-clock poise in the sweep."),
     ("New York Knicks", "Atlanta Hawks", 4): ("Jalen Brunson", "Reset the series for New York with stronger offensive control."),
     ("New York Knicks", "Atlanta Hawks", 5): ("Karl-Anthony Towns", "Spacing and scoring changed the geometry of the Knicks offense."),
     ("New York Knicks", "Atlanta Hawks", 6): ("Jalen Brunson", "Closed the series with lead-guard control and playoff poise."),
@@ -12238,15 +12320,71 @@ def infer_opponent_from_matchup(matchup, team_name):
         return left
     return left if right == team_short else right
 
+def _eligible_standout_players_for_team(team_name):
+    """Active rotation names eligible for game standout credit on ``team_name``."""
+    pool, seen = [], set()
+    curated = CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}
+    for slot in LINEUP_SLOTS:
+        name = curated.get(slot)
+        if name and not _is_outdated_playoff_player(name, team_name):
+            k = _player_name_key(name)
+            if k not in seen:
+                seen.add(k)
+                pool.append(name)
+    for name in curated.get("bench") or []:
+        if name and not _is_outdated_playoff_player(name, team_name):
+            k = _player_name_key(name)
+            if k not in seen:
+                seen.add(k)
+                pool.append(name)
+    prof = TEAM_PROFILES.get(team_name) or {}
+    for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+        if name and not _is_outdated_playoff_player(name, team_name):
+            k = _player_name_key(name)
+            if k not in seen:
+                seen.add(k)
+                pool.append(name)
+    return pool
+
+
+def _standout_player_team(name, team_a, team_b):
+    if _player_name_key(name) in {_player_name_key(p) for p in _eligible_standout_players_for_team(team_a)}:
+        return team_a
+    if _player_name_key(name) in {_player_name_key(p) for p in _eligible_standout_players_for_team(team_b)}:
+        return team_b
+    return None
+
+
+def _validate_game_standout_candidate(name, team_a, team_b, winner=None):
+    """Game standout must be active on a participating team; prefer the winning side."""
+    credited = _standout_player_team(name, team_a, team_b)
+    if not credited:
+        return False
+    if winner in (team_a, team_b) and credited != winner:
+        return False
+    return True
+
+
 def mvp_for_game(team_a, team_b, game_num, winner=None):
+    win_team = winner if winner in (team_a, team_b) else None
     for key in [(team_a, team_b, game_num), (team_b, team_a, game_num)]:
         if key in FALLBACK_GAME_MVPS:
-            return FALLBACK_GAME_MVPS[key]
-    # Generic but still concrete: use the main creator/anchor from winner if known.
-    chosen_team = winner if winner in TEAM_PROFILES else team_a
-    candidates = TEAM_PROFILES.get(chosen_team, {}).get("starters", [])
-    name = candidates[0] if candidates else "Top performer"
-    return name, f"Best estimated standout for {chosen_team} based on the game result and team role hierarchy."
+            name, why = FALLBACK_GAME_MVPS[key]
+            if _validate_game_standout_candidate(name, team_a, team_b, win_team):
+                return name, why
+    if win_team:
+        pool = _eligible_standout_players_for_team(win_team)
+        if pool:
+            return pool[0], f"Rotation leader credited for {win_team} in this result."
+    return "", ""
+
+
+def _sanitize_standout_fields(team_a, team_b, game_num, winner, mvp, why):
+    """Drop invented standouts; keep only roster-valid names on the winning team."""
+    if mvp and _validate_game_standout_candidate(mvp, team_a, team_b, winner if winner in (team_a, team_b) else None):
+        return mvp, why or ""
+    fresh_mvp, fresh_why = mvp_for_game(team_a, team_b, game_num, winner)
+    return fresh_mvp, fresh_why
 
 def get_current_series_games_for_previous_rounds(team_name):
     _, s = second_round_series_for_team(team_name)
@@ -12264,9 +12402,11 @@ def _series_games_for_history(team_name, series_dict):
         row = dict(g)
         row["Game"] = row.get("Game") or f"Game {idx}"
         row["Matchup"] = row.get("Matchup") or f"{team_name} vs {opp}"
-        mvp, why = mvp_for_game(team_name, opp, idx, row.get("Winner"))
-        row["Game MVP"] = row.get("Game MVP") or mvp
-        row["MVP Note"] = row.get("MVP Note") or why
+        mvp, why = _sanitize_standout_fields(a, b, idx, row.get("Winner"), row.get("Game MVP"), row.get("MVP Note"))
+        if not mvp:
+            mvp, why = mvp_for_game(team_name, opp, idx, row.get("Winner"))
+        row["Game MVP"] = mvp
+        row["MVP Note"] = why
         games.append(row)
     return games
 
@@ -12295,11 +12435,18 @@ def render_series_history_card(team_a, team_b, games, round_label, result_text=N
             n = int(str(game_num).replace("Game", "").strip())
         except Exception:
             n = idx
-        if "Game MVP" not in g:
+        mvp, why = _sanitize_standout_fields(
+            team_a, team_b, n, g.get("Winner"), g.get("Game MVP"), g.get("MVP Note")
+        )
+        if not mvp:
             mvp, why = mvp_for_game(team_a, team_b, n, g.get("Winner"))
-        else:
-            mvp, why = g.get("Game MVP"), g.get("MVP Note", "Standout performer for this game.")
-        st.markdown(f"<div class='game-row'><b>{game_num}</b> · {g.get('Date','Date TBD')} · {g.get('Matchup', team_a+' vs '+team_b)}<br><b>Score:</b> {g.get('Score','Score TBD')}<br><span class='mvp-pill'>Game MVP: {mvp}</span><br><span style='color:#475569'>{why}</span></div>", unsafe_allow_html=True)
+        standout_line = f"Game standout: {mvp}" if mvp else "Game standout: not assigned"
+        why_line = f"<br><span style='color:#475569'>{why}</span>" if why else ""
+        st.markdown(
+            f"<div class='game-row'><b>{game_num}</b> · {g.get('Date','Date TBD')} · {g.get('Matchup', team_a+' vs '+team_b)}"
+            f"<br><b>Score:</b> {g.get('Score','Score TBD')}<br><span class='mvp-pill'>{standout_line}</span>{why_line}</div>",
+            unsafe_allow_html=True,
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_previous_rounds_history(team_name):
