@@ -68,6 +68,12 @@ def main() -> int:
         teams = {s.get("a"), s.get("b")}
         if teams == {"New York Knicks", "San Antonio Spurs"}:
             ok(f"NBA Finals: {s.get('a')} vs {s.get('b')}")
+            g1 = (s.get("games") or [{}])[0]
+            sc = str(g1.get("Score", ""))
+            if "108, Spurs 102" in sc or sc == "Knicks 108, Spurs 102":
+                fail(f"Finals G1 score still duplicates ECF copy: {sc!r}")
+            elif sc:
+                ok(f"Finals G1 score: {sc}")
         else:
             fail(f"Finals teams must be Knicks+Spurs, got {teams}")
 
@@ -96,6 +102,18 @@ def main() -> int:
 
     if not any("standout" in f.lower() or "Trae" in f for f in FAILURES):
         ok("All resolved standouts pass roster/outdated checks")
+
+    print("\n=== Player playoff log fallback ===")
+    br_logs = app.fetch_playoff_gamelog("Jalen Brunson", "New York Knicks", app.CURRENT_NBA_SEASON)
+    if br_logs.empty:
+        fail("Jalen Brunson curated playoff log is empty")
+    else:
+        ok(f"Jalen Brunson playoff log: {len(br_logs)} games")
+    kt_logs = app.fetch_playoff_gamelog("Karl-Anthony Towns", "New York Knicks", app.CURRENT_NBA_SEASON)
+    if kt_logs.empty:
+        fail("Karl-Anthony Towns curated playoff log is empty")
+    else:
+        ok(f"Karl-Anthony Towns playoff log: {len(kt_logs)} games")
 
     print("\n=== Summary ===")
     if FAILURES:

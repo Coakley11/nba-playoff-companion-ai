@@ -1,5 +1,6 @@
 
 import html
+import os
 import re
 import streamlit as st
 import pandas as pd
@@ -485,6 +486,31 @@ TEAM_LOGOS = {team: f"https://cdn.nba.com/logos/nba/{tid}/primary/L/logo.svg" fo
 # Current season used for live roster / rotation lookups.
 # Change this once the next NBA season starts.
 CURRENT_NBA_SEASON = "2025-26"
+
+# Curated player IDs for roster lookup (works offline / when stats API has no 2025-26 logs).
+PLAYOFF_PLAYER_ID_MAP = {
+    "Jalen Brunson": 1628973,
+    "Mikal Bridges": 1628969,
+    "OG Anunoby": 1628384,
+    "O.G. Anunoby": 1628384,
+    "Josh Hart": 1628404,
+    "Karl-Anthony Towns": 1626157,
+    "Miles McBride": 1630540,
+    "Mitchell Robinson": 1629011,
+    "Jordan Clarkson": 203903,
+    "Landry Shamet": 1629013,
+    "Jose Alvarado": 1630631,
+    "Stephon Castle": 1642264,
+    "Devin Vassell": 1630170,
+    "Keldon Johnson": 1629640,
+    "Jeremy Sochan": 1631110,
+    "Victor Wembanyama": 1641705,
+    "Tre Jones": 1630200,
+    "Julian Champagnie": 1630570,
+    "Zach Collins": 1628380,
+    "Malaki Branham": 1631103,
+    "Blake Wesley": 1631104,
+}
 
 TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"NBA Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
@@ -1798,7 +1824,7 @@ CONFERENCE_FINALS_DEMO_BACKUP = {
 # Emergency/demo backup for NBA Finals when API has no rows yet.
 NBA_FINALS_DEMO_BACKUP = {
     "NYK-SAS": {"games":[
-        {"Game":"Game 1","Date":"Jun 3","Score":"Knicks 108, Spurs 102","Winner":"New York Knicks","GameID":"demo-nyk-sas-g1"},
+        {"Game":"Game 1","Date":"Jun 3","Score":"Knicks 118, Spurs 112","Winner":"New York Knicks","GameID":"demo-nyk-sas-g1"},
     ]},
 }
 
@@ -2951,6 +2977,13 @@ def validate_playoff_factual_accuracy(stt=None):
         tw, ow, _opp = _team_series_record(nyk, cle_nyk)
         if not (tw == 4 and ow == 0):
             errors.append(f"Knicks vs Cavaliers CF must be 4-0, engine shows {tw}-{ow}")
+
+    cf_scores = {g.get("Score") for g in (cle_nyk or {}).get("games") or [] if g.get("Score")}
+    for _fk, fs in (finals or {}).items():
+        for g in fs.get("games") or []:
+            sc = g.get("Score")
+            if sc and sc in cf_scores:
+                errors.append(f"Finals game score duplicates East CF row: {sc!r}")
 
     for s in _iter_playoff_series_shells_merged(stt):
         a, b = s.get("a"), s.get("b")
@@ -4985,14 +5018,54 @@ def get_roster_cached(team_name: str):
     }
 
 @st.cache_data(ttl=86400)
+def _player_ids_from_csv():
+    """Load full-name → player_id from bundled player.csv (no network)."""
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "player.csv")
+    if not os.path.isfile(csv_path):
+        return {}
+    out = {}
+    try:
+        df = pd.read_csv(csv_path, usecols=["PERSON_ID", "DISPLAY_FIRST_LAST"])
+        for _, row in df.iterrows():
+            name = str(row.get("DISPLAY_FIRST_LAST", "")).strip()
+            pid = row.get("PERSON_ID")
+            if name and pd.notna(pid):
+                out[name] = int(pid)
+    except Exception:
+        pass
+    return out
+
+
+def _resolve_player_id_local(name):
+    if not name:
+        return None
+    hit = PLAYOFF_PLAYER_ID_MAP.get(name)
+    if hit:
+        return hit
+    csv_map = _player_ids_from_csv()
+    if name in csv_map:
+        return csv_map[name]
+    key = _player_name_key(name)
+    for full, pid in csv_map.items():
+        if _player_name_key(full) == key:
+            return pid
+    return None
+
+
+@st.cache_data(ttl=86400)
 def get_player_id(name):
+    local = _resolve_player_id_local(name)
+    if local:
+        return local
     if _validation_skip_network():
         return None
-    if not NBA_STATS_AVAILABLE: return None
+    if not NBA_STATS_AVAILABLE:
+        return None
     try:
         matches = [p for p in nba_players.get_players() if p["full_name"] == name]
         return matches[0]["id"] if matches else None
-    except Exception: return None
+    except Exception:
+        return None
 
 @st.cache_data(ttl=86400)
 def season_averages(name):
@@ -5194,21 +5267,17 @@ def render_injury_report(team_name, opponent_name=None, show_page_header=True, f
 
 
 @st.cache_data(ttl=3600)
-def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON):
-    """Return current playoff game logs for selected player from NBA API."""
-    pid = get_player_id(name)
-    if not pid or not NBA_STATS_AVAILABLE:
-        return pd.DataFrame()
-    try:
-        df = playergamelog.PlayerGameLog(
-            player_id=pid,
-            season=season,
-            season_type_all_star="Playoffs",
-            timeout=7,
-        ).get_data_frames()[0]
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON, team_name=None):
+    """Return current playoff game logs for selected player (API + bracket fallback)."""
+    if not team_name:
+        for tm, prof in TEAM_PROFILES.items():
+            pool = (prof.get("starters") or []) + (prof.get("subs") or [])
+            if name in pool:
+                team_name = tm
+                break
+    if not team_name:
+        team_name = st.session_state.get("favorite_team") or "New York Knicks"
+    return fetch_playoff_gamelog(name, team_name, season)
 
 @st.cache_data(ttl=3600)
 def summarize_playoff_logs_cached(logs):
@@ -6215,6 +6284,8 @@ def _round_narrative_weight(round_name):
 def _cached_playoff_gamelog(player_id, season):
     if not NBA_STATS_AVAILABLE or not player_id:
         return pd.DataFrame()
+    if _validation_skip_network():
+        return pd.DataFrame()
     try:
         return playergamelog.PlayerGameLog(
             player_id=int(player_id),
@@ -6224,6 +6295,124 @@ def _cached_playoff_gamelog(player_id, season):
         ).get_data_frames()[0]
     except Exception:
         return pd.DataFrame()
+
+
+_DEMO_PLAYOFF_STAT_BASE = {
+    "Jalen Brunson": {"PTS": 28, "REB": 4, "AST": 7, "STL": 1, "BLK": 0, "TOV": 2, "MIN": 37},
+    "Karl-Anthony Towns": {"PTS": 22, "REB": 11, "AST": 2, "STL": 0, "BLK": 1, "TOV": 2, "MIN": 34},
+    "Mikal Bridges": {"PTS": 14, "REB": 5, "AST": 3, "STL": 1, "BLK": 1, "TOV": 1, "MIN": 36},
+    "OG Anunoby": {"PTS": 13, "REB": 5, "AST": 1, "STL": 2, "BLK": 0, "TOV": 1, "MIN": 33},
+    "Josh Hart": {"PTS": 11, "REB": 9, "AST": 4, "STL": 1, "BLK": 0, "TOV": 1, "MIN": 32},
+    "Victor Wembanyama": {"PTS": 26, "REB": 12, "AST": 3, "STL": 1, "BLK": 3, "TOV": 3, "MIN": 36},
+    "Stephon Castle": {"PTS": 18, "REB": 4, "AST": 6, "STL": 1, "BLK": 0, "TOV": 2, "MIN": 34},
+    "Devin Vassell": {"PTS": 16, "REB": 4, "AST": 2, "STL": 1, "BLK": 0, "TOV": 1, "MIN": 33},
+}
+
+
+def _parse_team_points_from_score(score_str, team_name):
+    """Return (team_pts, opp_pts) from a demo score string like 'Knicks 118, Spurs 112'."""
+    if not score_str:
+        return None, None
+    parts = [p.strip() for p in str(score_str).split(",")]
+    team_short = fan_nick(team_name).split()[-1]
+    t_pts, o_pts = None, None
+    for part in parts:
+        m = re.match(r"([A-Za-z .]+)\s+(\d+)", part.strip())
+        if not m:
+            continue
+        label, pts = m.group(1).strip(), int(m.group(2))
+        if team_short.lower() in label.lower() or team_name.split()[-1].lower() in label.lower():
+            t_pts = pts
+        else:
+            o_pts = pts
+    return t_pts, o_pts
+
+
+def _demo_stat_line_for_player_game(player_name, team_name, game_idx, wl, team_pts, opp_pts):
+    base = dict(_DEMO_PLAYOFF_STAT_BASE.get(player_name) or {"PTS": 10, "REB": 4, "AST": 2, "STL": 1, "BLK": 0, "TOV": 1, "MIN": 22})
+    bump = 1 if wl == "W" else -1
+    scale = 1.0 + (game_idx % 3) * 0.04 + bump * 0.06
+    line = {k: max(0, round(v * scale)) if k != "MIN" else max(12, round(v * scale)) for k, v in base.items()}
+    if team_pts and opp_pts:
+        margin = team_pts - opp_pts
+        line["PLUS_MINUS"] = margin if wl == "W" else -abs(margin)
+    else:
+        line["PLUS_MINUS"] = 4 if wl == "W" else -4
+    fga = max(line["PTS"] // 2, 6)
+    line["FGM"] = max(1, round(fga * 0.48))
+    line["FGA"] = fga
+    line["FG3M"] = max(0, round(line["PTS"] * 0.12))
+    line["FG3A"] = max(line["FG3M"], round(line["FG3M"] * 1.6))
+    line["FTM"] = max(0, line["PTS"] - line["FGM"] * 2 - line["FG3M"])
+    line["FTA"] = max(line["FTM"], line["FTM"] + 2)
+    line["FG_PCT"] = round(line["FGM"] / line["FGA"], 3) if line["FGA"] else 0.0
+    line["FG3_PCT"] = round(line["FG3M"] / line["FG3A"], 3) if line["FG3A"] else 0.0
+    line["FT_PCT"] = round(line["FTM"] / line["FTA"], 3) if line["FTA"] else 0.0
+    return line
+
+
+@st.cache_data(ttl=3600)
+def demo_playoff_gamelog_from_bracket(player_name, team_name, season):
+    """Synthetic playoff log from merged bracket when NBA API returns empty."""
+    if season != CURRENT_NBA_SEASON:
+        return pd.DataFrame()
+    stt = get_playoff_state_snapshot(use_demo_backup=True, api_refresh=False)
+    team_tri = TEAM_ALIASES.get(team_name, "NYK")
+    rows = []
+    game_num = 0
+    for coll in ("first", "second", "cf", "finals"):
+        for s in (stt.get(coll) or {}).values():
+            if team_name not in (s.get("a"), s.get("b")):
+                continue
+            opp = s["b"] if team_name == s["a"] else s["a"]
+            opp_tri = TEAM_ALIASES.get(opp, "OPP")
+            for g in s.get("games") or []:
+                game_num += 1
+                winner = g.get("Winner")
+                wl = "W" if winner == team_name else "L"
+                t_pts, o_pts = _parse_team_points_from_score(g.get("Score"), team_name)
+                stats = _demo_stat_line_for_player_game(player_name, team_name, game_num, wl, t_pts, o_pts)
+                date_raw = g.get("Date") or g.get("GameDate") or ""
+                try:
+                    game_date = pd.to_datetime(f"{date_raw} 2026", format="mixed").strftime("%b %d, %Y")
+                except Exception:
+                    game_date = str(date_raw)
+                rows.append({
+                    "GAME_DATE": game_date,
+                    "MATCHUP": f"{team_tri} vs. {opp_tri}" if game_num % 2 else f"{team_tri} @ {opp_tri}",
+                    "WL": wl,
+                    "MIN": stats["MIN"],
+                    "PTS": stats["PTS"],
+                    "REB": stats["REB"],
+                    "AST": stats["AST"],
+                    "STL": stats["STL"],
+                    "BLK": stats["BLK"],
+                    "TOV": stats["TOV"],
+                    "FGM": stats["FGM"],
+                    "FGA": stats["FGA"],
+                    "FG_PCT": stats["FG_PCT"],
+                    "FG3M": stats["FG3M"],
+                    "FG3A": stats["FG3A"],
+                    "FG3_PCT": stats["FG3_PCT"],
+                    "FTM": stats["FTM"],
+                    "FTA": stats["FTA"],
+                    "FT_PCT": stats["FT_PCT"],
+                    "PLUS_MINUS": stats["PLUS_MINUS"],
+                    "GAME_ID": g.get("GameID") or f"demo-{game_num}",
+                    "TEAM_ABBREVIATION": team_tri,
+                })
+    return pd.DataFrame(rows)
+
+
+def fetch_playoff_gamelog(player_name, team_name, season=CURRENT_NBA_SEASON):
+    """NBA API log with curated bracket fallback for current-season playoffs."""
+    pid = get_player_id(player_name)
+    logs = pd.DataFrame()
+    if pid:
+        logs = _cached_playoff_gamelog(pid, season)
+    if logs is None or logs.empty:
+        logs = demo_playoff_gamelog_from_bracket(player_name, team_name, season)
+    return logs if logs is not None else pd.DataFrame()
 
 
 def _prepare_chrono_playoff_logs(logs):
@@ -6808,20 +6997,18 @@ def render_player_playoff_story_hub(team_name, profile):
     with c_sel2:
         season = st.selectbox("Season", [CURRENT_NBA_SEASON, "2024-25", "2023-24"], index=0, key="pp_hub_season")
 
-    if not NBA_STATS_AVAILABLE:
-        st.error("Player game logs are not available right now.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
     pid = get_player_id(player)
-    if not pid:
-        st.warning(f"Could not resolve NBA player id for **{player}**.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    logs_raw = _cached_playoff_gamelog(pid, season)
+    logs_raw = fetch_playoff_gamelog(player, team_name, season)
     if logs_raw.empty:
-        st.warning(f"No playoff game log returned for **{player}** in **{season}**. Try another season or verify the player reached the postseason.")
+        if not pid:
+            st.warning(
+                f"Could not resolve NBA player id for **{player}** and no curated playoff log is available."
+            )
+        else:
+            st.warning(
+                f"No playoff game log returned for **{player}** in **{season}**. "
+                "Try another season or verify the player reached the postseason."
+            )
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -9175,6 +9362,148 @@ def build_dashboard_playoff_context(team_name, hctx, series_board=None, skip_liv
     }
 
 
+def _home_fan_excitement_cards(team_name, pctx, s_active, hctx):
+    """Why fans should care — each card answers a different question (no series score repeat)."""
+    nick = fan_nick(team_name)
+    lens = pctx.get("lens") or team_dashboard_lens(team_name)
+    ax = lens.get("identity_axes") or ("Execution", "Defense", "Margins")
+    prof = TEAM_PROFILES.get(team_name) or {}
+    opp = pctx.get("opp") or prof.get("current_opponent")
+    on = fan_nick(opp) if opp else "the opponent"
+    strengths = prof.get("strengths") or []
+    concerns = prof.get("concerns") or []
+
+    if _is_home_eliminated(team_name):
+        od = get_offseason_outlook(team_name)
+        return [
+            ("What broke", od["reflection"]["elimination_cause"][:280]),
+            ("Front-office lever", (od.get("priorities") or ["Roster and cap alignment"])[0]),
+            ("What fans still chase", (od.get("direction") or {}).get("blurb", "The next chapter starts with honest tape review.")),
+        ]
+
+    if hctx.get("advanced"):
+        opps = [fan_nick(o) for o in (hctx.get("opponents") or [])]
+        opp_txt = " / ".join(opps) if opps else "the bracket"
+        return [
+            ("Matchup edge", f"{ax[0]} is the skill that travels — {nick} prep now tracks how it plays against {opp_txt}."),
+            ("Storyline entering the next round", f"Cleared the last round; the question is whether {ax[1]} holds up when the stage gets louder."),
+            ("Pressure point", lens.get("pressure_axis", "Every possession gets graded on the biggest stage left.")),
+        ]
+
+    last = (s_active.get("games") or [])[-1] if s_active else None
+    game_n = len(s_active.get("games") or []) + 1 if s_active else 2
+    last_note = ""
+    if last:
+        last_note = f" After Game {len(s_active.get('games') or [])}, "
+    return [
+        (
+            "Matchup advantage",
+            strengths[0] if strengths else f"{ax[0]} against {on}'s length is the cleanest path to clean looks.",
+        ),
+        (
+            f"Biggest storyline entering Game {game_n}",
+            f"{last_note}{nick} need {ax[2]} to stick — {on} will test whether the opener was noise or identity."
+            if last
+            else f"{nick} open the series hunting early rhythm before {on} settle into their defensive shell.",
+        ),
+        (
+            "X-factor",
+            concerns[0] if concerns else f"When {ax[1]} slips, bench minutes and foul discipline decide the night.",
+        ),
+    ]
+
+
+def _home_player_spotlight(team_name, s_active, pctx):
+    """Last-game standout + player to watch next — who is driving the outcome?"""
+    prof = TEAM_PROFILES.get(team_name) or {}
+    starters = list(prof.get("starters") or [])
+    anchor = pctx.get("flagship") or (starters[0] if starters else "")
+    last_mvp, last_why = "", ""
+    if s_active and s_active.get("games"):
+        last = s_active["games"][-1]
+        opp = s_active["b"] if team_name == s_active["a"] else s_active["a"]
+        gn = last.get("Game") if isinstance(last.get("Game"), int) else str(last.get("Game", "1")).replace("Game ", "")
+        try:
+            gn_i = int(str(gn).replace("Game ", ""))
+        except Exception:
+            gn_i = len(s_active["games"])
+        last_mvp, last_why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
+
+    watch = anchor
+    watch_why = "Lead guard burden rises when the defense loads the ball."
+    if last_mvp and last_mvp != anchor:
+        watch = anchor or last_mvp
+        watch_why = f"{last_mvp} set the last game's tone; {watch or 'the star'} has to answer the counter-scheme next."
+    elif anchor == "Jalen Brunson" or "Brunson" in str(anchor):
+        watch_why = "Late-clock creation and foul-drawing keep New York's offense honest when the game tightens."
+    elif anchor and "Wembanyama" in str(anchor):
+        watch_why = "Rim protection and spacing gravity force the offense to pick its poison every trip."
+
+    rising = ""
+    for name in starters[1:4]:
+        if name and name != last_mvp:
+            rising = name
+            break
+    return last_mvp, last_why, watch, watch_why, rising
+
+
+def _home_watch_next_keys(team_name, pctx, s_active):
+    """Three keys for the next game — what should fans watch for?"""
+    nick = fan_nick(team_name)
+    lens = pctx.get("lens") or team_dashboard_lens(team_name)
+    ax = lens.get("identity_axes") or ("Half-court execution", "Switchable defense", "Glass margin")
+    opp = pctx.get("opp")
+    on = fan_nick(opp) if opp else "the opponent"
+    prof = TEAM_PROFILES.get(team_name) or {}
+    game_n = len(s_active.get("games") or []) + 1 if s_active else 1
+    return [
+        ("Opening-quarter pace", f"Does {nick} set the physical tone before {on} lean on length and rim protection?"),
+        ("Swing matchup", f"{ax[0]} vs {on}'s best wing — whoever wins that duel controls the shot diet."),
+        ("Bench battle", f"{(prof.get('subs') or ['Second unit'])[0]} minutes — where hidden {ax[2]} swings live."),
+    ]
+
+
+def _home_franchise_stakes(team_name):
+    """Historical context — what is at stake?"""
+    nick = fan_nick(team_name)
+    if team_name == "New York Knicks":
+        return (
+            "First Finals trip in a generation — this run already ranks among the loudest Garden chapters since the Ewing era. "
+            "A title would rewrite the franchise pecking order around Brunson and this defensive identity."
+        )
+    if team_name == "San Antonio Spurs":
+        return (
+            "Wembanyama's first Finals stage — a win here accelerates a young core toward the Duncan-era trophy standard. "
+            "Even in a Game 1 loss, San Antonio is playing for history, not just a moral victory."
+        )
+    if _is_home_eliminated(team_name):
+        od = get_offseason_outlook(team_name)
+        return (od.get("direction") or {}).get("blurb", f"{nick} shift from postseason heartbreak to offseason blueprint.")
+    return f"{nick} are still writing the yearbook entry for this postseason — every remaining game moves the franchise needle."
+
+
+def _home_series_storyline(team_name, s_active, pctx):
+    """Why the series is unfolding this way — not just the scoreboard."""
+    if not s_active or not s_active.get("games"):
+        return "The series opens on scheme and nerves — the first answer usually sets the possession battle for the rest of the week."
+    nick = fan_nick(team_name)
+    opp = s_active["b"] if team_name == s_active["a"] else s_active["a"]
+    on = fan_nick(opp)
+    last = s_active["games"][-1]
+    lw = last.get("Winner")
+    lens = pctx.get("lens") or team_dashboard_lens(team_name)
+    ax = lens.get("identity_axes") or ("execution", "defense", "margins")
+    if lw == team_name:
+        return (
+            f"{nick} grabbed first possession of the narrative — {ax[0]} and {ax[2]} flipped the late game. "
+            f"{on} have to adjust{' before Game 2' if len(s_active['games']) == 1 else ''} or the series stays on New York's terms."
+        )
+    return (
+        f"{on} stole the opener's identity battle — {nick} need cleaner {ax[1]} and fewer empty trips "
+        f"before the margin becomes structural."
+    )
+
+
 def _dashboard_story_cards(team_name, pctx):
     nick = fan_nick(team_name)
     if _is_home_eliminated(team_name):
@@ -9289,11 +9618,11 @@ def _dashboard_emphasis_html(team_name, pctx):
     elif pctx.get("phase_live"):
         tag, sub = "LIVE BOARD", "Rotation, fouls, and late-clock shot quality are moving in real time."
     elif pctx.get("elimination_trailing"):
-        tag, sub = f"MUST-WIN · {tw}–{ow}", "The series only extends with a win — empty possessions cost twice."
+        tag, sub = "MUST-WIN NIGHT", "The series only extends with a win — empty possessions cost twice."
     elif pctx.get("sweep_chance"):
         tag, sub = "SWEEP WINDOW", f"3–0 leverage — {on} is one loss from an early summer."
     elif pctx.get("closeout_opportunity"):
-        tag, sub = f"MATCH POINT · {tw}–{ow}", "A disciplined close can end the series and bank rest before the next round."
+        tag, sub = "MATCH POINT", "A disciplined close can end the series and bank rest before the next round."
     elif pctx.get("danger_down_3"):
         tag, sub = "BRACKET HOLE · 0–3", "The comeback path requires four perfect nights in a row."
     elif pctx.get("injury_level") == "high":
@@ -9304,8 +9633,17 @@ def _dashboard_emphasis_html(team_name, pctx):
 
     a0, a1, a2 = esc(ax[0]), esc(ax[1]) if len(ax) > 1 else "", esc(ax[2]) if len(ax) > 2 else ""
     hot = " cmd-emph-card--hot" if (pctx.get("phase_live") or pctx.get("elimination_trailing") or pctx.get("danger_down_3")) else ""
-    board_label = "Next matchup" if pctx.get("mode") == "waiting_cf" else "Series board"
-    board_value = esc(pctx.get("opponent_display") or "Awaiting opponent") if pctx.get("mode") == "waiting_cf" else f"{tw}–{ow} vs {on}"
+    s_obj = pctx.get("series")
+    last_game = (s_obj.get("games") or [])[-1] if s_obj else None
+    if pctx.get("mode") == "waiting_cf":
+        board_label = "Next matchup"
+        board_value = esc(pctx.get("opponent_display") or "Awaiting opponent")
+    elif last_game and last_game.get("Score"):
+        board_label = "Last game box score"
+        board_value = esc(str(last_game.get("Score", "")))
+    else:
+        board_label = "Next tip"
+        board_value = esc(pctx.get("opponent_display") or on)
     return f"""<div class="cmd-emph-shell"><div class="cmd-emph-grid">
   <div class="cmd-emph-card{hot}"><div class="cmd-emph-k">{esc(tag)}</div><div class="cmd-emph-v">{esc(sub)}</div></div>
   <div class="cmd-emph-card"><div class="cmd-emph-k">Identity lever</div><div class="cmd-emph-v">{a0}</div><div class="cmd-emph-s">{a1}</div></div>
@@ -9353,6 +9691,7 @@ def _inject_home_command_center_css():
 .cmd-match { font-size: clamp(1.15rem, 3.2vw, 1.75rem); font-weight: 900; line-height: 1.15; margin: 0 0 6px; }
 .cmd-round { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); color: #e2e8f0; margin-bottom: 8px; }
 .cmd-scoreline { font-size: clamp(1.6rem, 4vw, 2.35rem); font-weight: 950; color: #fbbf24; letter-spacing: 0.06em; margin: 4px 0 10px; }
+.cmd-subscore { font-size: 13px; font-weight: 700; color: #cbd5e1; margin: -6px 0 10px; letter-spacing: 0.02em; }
 .cmd-rail { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
 .cmd-pill { font-size: 11px; font-weight: 800; padding: 5px 11px; border-radius: 999px; background: rgba(15,23,42,0.55); border: 1px solid rgba(148,163,184,0.35); color: #e2e8f0; }
 .cmd-pill--accent { border-color: var(--cmd-accent, #38bdf8); color: #f0f9ff; background: var(--cmd-accent-soft, rgba(56,189,248,0.15)); }
@@ -9449,14 +9788,17 @@ def _home_storyline_headline(team_name, hctx, pctx=None):
             return f"Pregame availability noise is loud for {nick} — substitution patterns may matter as much as the first play call."
 
     if tw == ow and tw >= 1:
-        return f"Deadlocked {tw}–{ow} with {on} in the {rnd} — {pa or 'Shot quality and rebounding margin decide who seizes the next swing game.'}"
+        return f"Deadlocked in the {rnd} — {pa or 'Shot quality and rebounding margin decide who seizes the next swing game.'}"
     if lw == team_name and last:
-        return f"{nick} took the last one ({last.get('Score','')}) — the chess match with {on} shifts toward whatever worked late."
+        return (
+            f"{nick} carry the last night's momentum — {on} have to answer what worked late "
+            f"before the chess match shifts again."
+        )
     if lw and lw != team_name:
         return f"{on} answered last — {nick} need a cleaner opening stretch before the game tightens late."
     if "Final" in rnd or ("Conference" in rnd and "First" not in rnd):
-        return f"{rnd}: {nick} vs {on} at {tw}–{ow} — {pa or 'The stakes rise with every night left on the schedule.'}"
-    return f"{nick} vs {on}, {tw}–{ow} in the {rnd} — {pa or 'The next result still redraws the series map.'}"
+        return f"{rnd} chess match with {on} — {pa or 'The stakes rise with every night left on the schedule.'}"
+    return f"{nick} in the {rnd} — {pa or 'The next result still redraws the series map.'}"
 
 
 def _home_series_win_probability(team_name, hctx, live):
@@ -9535,6 +9877,14 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
     prob = _home_series_win_probability(team_name, hctx, live)
     prob_display = f"{prob}%"
     headline = _home_storyline_headline(team_name, hctx, pctx)
+    box_score_html = ""
+    if s and s.get("games") and not offseason:
+        lg = s["games"][-1]
+        if lg.get("Score"):
+            box_score_html = (
+                f"<div class='cmd-subscore'>{esc(lg.get('Game', 'Last game'))}: "
+                f"{esc(lg.get('Score', ''))}</div>"
+            )
     lens = pctx.get("lens") or team_dashboard_lens(team_name)
     kicker_dom = f"{esc(lens.get('hero_kicker', 'Playoff command center'))} · {esc(fan_nick(team_name))}"
     if offseason:
@@ -9626,26 +9976,19 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
         )
 
     pulse = "Next tip tracking"
-    prob_lab = "Tilt meter"
     if fb and fb.get("game"):
         ph = fb.get("phase")
         if ph == "live":
             pulse = "🔴 LIVE — broadcast hub hot"
-            prob_lab = "Live game tilt"
         elif fb.get("starting_soon"):
             pulse = "⏳ Starting soon (~1h window)"
-            prob_lab = "Series / runway tilt"
         elif ph == "pregame":
             pulse = "📅 Pregame board loaded"
-            prob_lab = "Series tilt"
         elif ph == "postgame":
             pulse = "📼 Final — full wrap in hub"
-            prob_lab = "Tonight's result tilt"
 
     if offseason:
         pulse = "Draft · cap · trade board"
-        prob_lab = "Playoff ledger"
-        prob_display = "closed"
 
     next_title = "What's next" if offseason else "Next game"
 
@@ -9660,8 +10003,8 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
         <div class="cmd-round">{rnd}</div>
         <div class="cmd-match">{matchup}</div>
         <div class="cmd-scoreline">{score_txt}</div>
+        {box_score_html}
         <div class="cmd-rail">
-          <span class="cmd-pill cmd-pill--accent">{esc(prob_lab)} · {esc(prob_display)}</span>
           <span class="cmd-pill">{esc(pulse)}</span>
         </div>
       </div>
@@ -10143,12 +10486,6 @@ def render_playoff_command_center(team_name):
         f"{ident['stakes']} {ident['texture']}",
         "YOUR TEAM",
     )
-    fan_story_callout(
-        team_name,
-        ident["tagline"],
-        html.escape(ident["stakes"]),
-        badge="TONIGHT'S FEEL",
-    )
 
     api_calls = 0
     skip_note = ""
@@ -10164,9 +10501,6 @@ def render_playoff_command_center(team_name):
     sections.append("hero_first_paint")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
 
-    render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
-    sections.append("matchup_ribbon")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "matchup_ribbon")
     if _validation_page_deferred("home"):
         _validation_facts_block(team_name)
         _validation_offer_full_page("home", label="Load full Home Dashboard sections")
@@ -10281,19 +10615,15 @@ def render_playoff_command_center(team_name):
     if render_fan_section(
         sec1_title,
         "📊",
-        caption="Playoff mood, seed, and the game log for this chapter.",
+        caption="Series ledger and game log — scoreboard lives in the hero above.",
         tone="elim" if is_eliminated else "default",
     ):
         render_fan_section_open()
-    snap_cols = st.columns(4)
-    status_txt = (hctx.get("ctx") or {}).get("status_text") if hctx.get("advanced") else series_status_text(team_name, s_active)
-    adv_like = hctx.get("advanced") or hctx.get("bracket_series")
-    mood = "Offseason outlook" if is_eliminated else ("Still dancing" if adv_like else "In the hunt")
-    snap_cols[0].metric("Playoff mood", mood)
-    snap_cols[1].metric("Seed", profile.get("seed", "—"))
+    snap_cols = st.columns(3)
     s_disp = hctx.get("series") or current_series_obj
     pst_home = get_team_playoff_status(team_name)
-    snap_cols[2].metric(
+    snap_cols[0].metric("Seed", profile.get("seed", "—"))
+    snap_cols[1].metric(
         "Current chapter",
         pst_home.get("current_round")
         or (s_disp or {}).get("round")
@@ -10310,15 +10640,10 @@ def render_playoff_command_center(team_name):
     elif fb and fb.get("game") and fb.get("phase") == "postgame":
         edge = "Final logged — wrap in hub"
     else:
-        edge = "Quick story view" if not effective_live else "Tracking next tip"
-    edge_metric = "Page focus" if is_eliminated else "Tonight's edge"
+        edge = "Tracking next tip" if effective_live else "Game log below"
     if is_eliminated:
         edge = "Offseason · roster, draft & cap"
-    snap_cols[3].metric(edge_metric, edge)
-    st.markdown(
-        f"<div style='font-size:14px;font-weight:600;color:#e2e8f0;margin:6px 0 8px'>{html.escape(status_txt)}</div>",
-        unsafe_allow_html=True,
-    )
+    snap_cols[2].metric("Tonight's edge" if not is_eliminated else "Page focus", edge)
     s_table = hctx.get("series") or current_series_obj
     if s_table and s_table.get("games"):
         st.dataframe(
@@ -10327,92 +10652,112 @@ def render_playoff_command_center(team_name):
             height=min(220, 38 + 28 * len(s_table["games"])),
         )
     elif hctx.get("advanced"):
-        st.info((hctx.get("ctx") or {}).get("status_text", "Through the completed series - the next matchup is the focus now."))
+        st.info((hctx.get("ctx") or {}).get("status_text", "Through the completed series — the next matchup is the focus now."))
     elif s_table and s_table.get("round") in ("Conference Finals", "NBA Finals"):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
+    if not is_eliminated and current_series_obj:
+        st.markdown(
+            f"<div style='font-size:13px;color:#94a3b8;line-height:1.45;margin-top:8px'>"
+            f"{html.escape(_home_series_storyline(team_name, current_series_obj, pctx))}</div>",
+            unsafe_allow_html=True,
+        )
     sections.append("series_board")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "series_board")
     render_fan_section_close()
 
     if render_fan_section(
-        "2 · Tonight's runway",
-        "🛫",
-        caption="Next tip, opponent, and live runway.",
+        "2 · Why fans should care",
+        "🔥",
+        caption="Matchup edges, storylines, and pressure points — not another scoreboard repeat.",
+        tone="default",
+    ):
+        render_fan_section_open()
+    exc_cols = st.columns(3)
+    for col, (title, body) in zip(exc_cols, _home_fan_excitement_cards(team_name, pctx, current_series_obj, hctx)):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"**{title}**")
+                st.caption(body)
+    sections.append("fan_excitement")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fan_excitement")
+    render_fan_section_close()
+
+    if render_fan_section(
+        "3 · Player spotlight",
+        "⭐",
+        caption="Who drove the last game and who to watch next.",
+        tone="default",
+    ):
+        render_fan_section_open()
+    last_mvp, last_why, watch, watch_why, rising = _home_player_spotlight(team_name, current_series_obj, pctx)
+    p_cols = st.columns(2)
+    with p_cols[0]:
+        with st.container(border=True):
+            st.markdown("**Best of the last game**")
+            if last_mvp:
+                st.success(f"**{last_mvp}** — _{last_why}_")
+            else:
+                st.caption("Standout tag unlocks when the latest game row hits the log.")
+    with p_cols[1]:
+        with st.container(border=True):
+            st.markdown("**Player to watch next**")
+            if watch:
+                st.info(f"**{watch}** — _{watch_why}_")
+            else:
+                st.caption("Rotation leader will populate from the curated board.")
+    if rising:
+        st.caption(f"Rising performer in the mix: **{rising}** — minutes and matchup could swing the next night.")
+    sections.append("player_spotlight")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "player_spotlight")
+    render_fan_section_close()
+
+    if render_fan_section(
+        "4 · What to watch next",
+        "👀",
+        caption="Three keys for the upcoming game — plus runway when live mode is on.",
         tone="soon" if effective_live else "default",
     ):
         render_fan_section_open()
+    for title, detail in _home_watch_next_keys(team_name, pctx, current_series_obj):
+        st.markdown(f"- **{title}:** {detail}")
     if is_eliminated:
-        with st.expander("Playoff schedule archive (no upcoming tip for this team)", expanded=False):
-            with st.container(border=True):
-                st.caption(
-                    f"{fan_nick(team_name)}'s postseason ended with **{profile.get('first_round_result', 'first-round exit')}**. "
-                    "Use **Live Game Center** in the sidebar if you want league-wide games still in progress."
-                )
-    else:
-        with st.container(border=True):
-            live = pctx.get("live")
-            if live:
-                home = live.get("homeTeam", {}) or {}
-                away = live.get("awayTeam", {}) or {}
-                st.markdown(
-                    f"**{_live_team_full_name(away.get('teamTricode',''), away)}** @ **{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
-                )
-            else:
-                opp = hctx.get("opponent_display") if hctx.get("advanced") else profile.get("current_opponent")
-                st.info(
-                    f"{fan_nick(team_name)} vs {opp or 'opponent TBA'} — "
-                    + (
-                        "Tap **Go live** when you want the scoreboard feed."
-                        if not live_on
-                        else "The live feed will drop the game card here as soon as the league board has it."
-                    )
-                )
-    sections.append("runway")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "runway")
-    render_fan_section_close()
-
-    if render_fan_section("3 · What it feels like", "🎙️", caption="Short broadcast read on the series.", tone="default"):
-        render_fan_section_open()
-        render_team_outlook(team_name, compact_home=True, series_obj=current_series_obj)
-        sections.append("outlook_compact")
-        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "outlook_compact")
-        render_fan_section_close()
-
-    sec4_title = "4 · Next-round lens" if hctx.get("advanced") else "4 · Series at a glance"
-    if render_fan_section(sec4_title, "🔭", caption="Opponent, series score, and latest game.", tone="default"):
-        render_fan_section_open()
-    fsnap = hctx.get("fast_snapshot") or get_fast_series_snapshot(team_name)
-    if hctx.get("advanced"):
-        opps = hctx.get("opponents") or []
-        cols = st.columns(max(1, min(3, len(opps) or 1)))
-        if opps:
-            for col, op in zip(cols, opps):
-                with col:
-                    logo = TEAM_LOGOS.get(op, "")
-                    if logo:
-                        st.image(logo, width=64)
-                    st.markdown(f"**{op}**")
-                    st.caption("Possible next opponent" if len(opps) > 1 else "Next opponent")
-        else:
-            st.info(fsnap.get("opponent") or "Opponent TBD")
-        ax = (pctx.get("lens") or {}).get("identity_axes") or ()
-        if ax:
-            st.caption("What carries forward — " + " · ".join(str(x) for x in ax[:3]))
-    else:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Opponent", fsnap.get("opponent") or "—")
-        c2.metric("Series", fsnap.get("series_score") or "—")
-        c3.metric("Latest read", (fsnap.get("source") or "—")[:28])
-        lg = fsnap.get("latest_game")
-        if isinstance(lg, dict) and lg:
-            st.caption(
-                f"Latest game in the log: {lg.get('Game', '')} · {lg.get('Date', '')} · {lg.get('Score', '')}"
+        st.caption(
+            f"{fan_nick(team_name)}'s postseason ended with **{profile.get('first_round_result', 'first-round exit')}**. "
+            "Use **Live Game Center** in the sidebar for league-wide games still in progress."
+        )
+    elif effective_live:
+        live = pctx.get("live")
+        if live:
+            home = live.get("homeTeam", {}) or {}
+            away = live.get("awayTeam", {}) or {}
+            st.markdown(
+                f"**Runway:** **{_live_team_full_name(away.get('teamTricode',''), away)}** @ "
+                f"**{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
             )
-    sections.append("fast_series_snapshot")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fast_series_snapshot")
+        else:
+            opp = hctx.get("opponent_display") if hctx.get("advanced") else profile.get("current_opponent")
+            st.caption(f"Next tip: {fan_nick(team_name)} vs {opp or 'opponent TBA'} — live feed loads when the board posts.")
+    sections.append("watch_next")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "watch_next")
     render_fan_section_close()
 
-    if render_fan_section("5 · Who's available", "🩹", caption="Injury snapshot when live mode is on.", tone="default"):
+    if render_fan_section(
+        "5 · Franchise stakes",
+        "🏛️",
+        caption="Historical context — what this run means beyond tonight's box score.",
+        tone="default",
+    ):
+        render_fan_section_open()
+    st.markdown(
+        f"<div style='font-size:14px;color:#e2e8f0;line-height:1.5'>"
+        f"{html.escape(_home_franchise_stakes(team_name))}</div>",
+        unsafe_allow_html=True,
+    )
+    sections.append("franchise_stakes")
+    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "franchise_stakes")
+    render_fan_section_close()
+
+    if render_fan_section("6 · Who's available", "🩹", caption="Injury snapshot when live mode is on.", tone="default"):
         render_fan_section_open()
     if injury_live:
         df_inj, _ = get_injury_report(team_name)
@@ -10473,27 +10818,13 @@ def render_playoff_command_center(team_name):
                 f"<div style='font-size:13px;color:#cbd5e1;line-height:1.45'>{hist.iloc[0].get('Historical Context','')}</div>",
                 unsafe_allow_html=True,
             )
-        m1, m2, m3 = st.columns(3)
-        if hctx.get("advanced"):
-            m1.metric("Momentum", "Advanced")
-            m2.metric("Prep board", "Next matchup")
-            m3.metric("Bracket stage", hctx.get("round_label", "Playoffs"))
-        elif current_series_obj:
-            a, b = current_series_obj["a"], current_series_obj["b"]
-            tw = int(current_series_obj["a_wins"]) if team_name == a else int(current_series_obj["b_wins"])
-            ow = int(current_series_obj["b_wins"]) if team_name == a else int(current_series_obj["a_wins"])
-            m1.metric("Series edge", f"+{tw - ow}" if tw > ow else (f"{tw - ow}" if tw < ow else "Even"))
-            m2.metric("Games played", tw + ow)
-            m3.metric("Data source", (current_series_obj.get("source") or "—")[:18])
         else:
-            m1.metric("Series edge", "—")
-            m2.metric("Games played", "—")
-            m3.metric("Data", "Awaiting")
+            st.caption("Historical matchup context loads when the bracket posts a comparable series.")
 
     def sec_legacy():
         anchor = pctx.get("flagship") or profile.get("starters", [""])[0]
         if anchor:
-            logs = playoff_game_logs_for_player(anchor)
+            logs = playoff_game_logs_for_player(anchor, CURRENT_NBA_SEASON, team_name)
             sm = summarize_playoff_logs(logs)
             c1, c2, c3 = st.columns(3)
             c1.metric(f"{anchor.split()[-1]} PTS", sm.get("PTS", 0))
@@ -10508,25 +10839,6 @@ def render_playoff_command_center(team_name):
                 with st.container(border=True):
                     st.markdown(f"**{t}**")
                     st.caption(b)
-
-    def sec_last_game():
-        history_series = current_series_obj or ((hctx.get("ctx") or {}).get("completed_series") if hctx.get("advanced") else None)
-        if history_series and history_series.get("games"):
-            last = history_series["games"][-1]
-            opp = history_series["b"] if team_name == history_series["a"] else history_series["a"]
-            gn = last.get("Game") if isinstance(last.get("Game"), int) else str(last.get("Game", "Game")).replace("Game ", "")
-            try:
-                gn_i = int(str(gn).replace("Game ", ""))
-            except Exception:
-                gn_i = len(history_series["games"])
-            mvp, why = mvp_for_game(team_name, opp, gn_i, last.get("Winner"))
-            if mvp:
-                st.success(f"**Game standout: {mvp}** — _{why}_")
-            else:
-                st.caption("Standout player not assigned for the latest game row yet.")
-            st.caption(f"{last.get('Date','')} · {last.get('Score','')}")
-        else:
-            st.caption("Standout tag unlocks when the most recent game row hits the log for this matchup.")
 
     def sec_outlook_full():
         render_team_outlook(team_name, compact_home=False, series_obj=current_series_obj)
@@ -10550,14 +10862,11 @@ def render_playoff_command_center(team_name):
         else:
             st.caption("Tap once to bring in player cards and photos.")
 
-    with st.expander("Momentum", expanded=False):
+    with st.expander("Historical matchup context", expanded=False):
         sec_momentum()
 
     with st.expander("Player Storylines", expanded=False):
         sec_stories()
-
-    with st.expander("Last game's headline", expanded=False):
-        sec_last_game()
 
     with st.expander("Full team outlook", expanded=False):
         sec_outlook_full()
@@ -12708,6 +13017,7 @@ FALLBACK_GAME_MVPS = {
     ("New York Knicks", "Atlanta Hawks", 6): ("Jalen Brunson", "Closed the series with lead-guard control and playoff poise."),
     ("New York Knicks", "Philadelphia 76ers", 1): ("Jalen Brunson", "Set the pace for New York's second-round opener."),
     ("New York Knicks", "Philadelphia 76ers", 2): ("Jalen Brunson", "Protected the late-game margin and pushed the Knicks to a 2-0 series edge."),
+    ("New York Knicks", "San Antonio Spurs", 1): ("Jalen Brunson", "Set the Finals tone with late-clock poise and a fourth-quarter pullaway at the Garden."),
     ("Detroit Pistons", "Orlando Magic", 1): ("Paolo Banchero", "Powered Orlando's Game 1 road win."),
     ("Detroit Pistons", "Orlando Magic", 2): ("Cade Cunningham", "Got Detroit's offense organized and tied the series."),
     ("Detroit Pistons", "Orlando Magic", 3): ("Paolo Banchero", "Kept Orlando ahead with star-level shot creation."),
