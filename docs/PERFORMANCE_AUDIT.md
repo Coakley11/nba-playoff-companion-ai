@@ -1,6 +1,6 @@
 # Performance audit
 
-**Last updated:** 2026-06-05 · **Branch:** `dev` · **Build:** `premium-fan-2026-06-05`
+**Last updated:** 2026-06-05 · **Branch:** `dev` · **Build:** `final-refine-2026-06-05`
 
 Speed is part of stability: factual QA (P5) is impractical when every page takes 10–30+ seconds on Cloud.
 
@@ -63,8 +63,9 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 | Home Dashboard | Live bundle on **Go live**; injury/star pulls | Keep quick view default; 8s timeout guard |
 | Playoff Bracket | `get_playoff_state` API refresh loop | Session cache TTL; sidebar auto-sync toggle |
 | Matchup Lineups | `season_averages` per card + headshots | Curated board for Finals teams (`_lineups_use_curated_board`) |
-| Player Playoff Tracker | `_cached_playoff_gamelog` + Plotly on expander | Game log cards first; charts in **Load progression charts** expander; YoY checkbox only |
-| Legacy Tracker | Full game log table on load | Meters/badges first; Plotly path in collapsed expander |
+| Player Playoff Tracker | Series tabs + comparison models | Journey strip first; tabs + compare cards in expanders |
+| Team History | Full leaderboard + compare grid on load | Countdown/movement first; sortable table + deep-dive in expanders |
+| Legacy Tracker | Compare faces + Plotly | Faces + chart in expanders; unlocks/swing on first paint |
 | Matchup Lineups | `season_averages` per bench/X-factor card | PG–C grid first; bench/tactical/X-factor in one collapsed expander |
 
 Headless script (`scripts/audit_page_performance.py`) shows playoff engine & validation &lt;20 ms; browser cost is Streamlit render + network.

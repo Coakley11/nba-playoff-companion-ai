@@ -355,6 +355,63 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .pp-race-ladder-k { font-size: 9px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: #64748b; }
 .pp-race-ladder-v { font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 4px; line-height: 1.35; }
 .pp-race-ladder-sub { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 4px; }
+.pp-journey-panel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 4px 0 8px; }
+.pp-journey-stat {
+  border-radius: 14px; padding: 12px 14px; background: #fff; border: 1px solid var(--team-border);
+  border-top: 3px solid var(--team-primary);
+}
+.pp-journey-stat--hot { border-top-color: #dc2626; background: linear-gradient(180deg, #fef2f2, #fff); }
+.pp-journey-stat--up { border-top-color: #16a34a; }
+.pp-journey-stat--down { border-top-color: #64748b; }
+.pp-journey-stat-k { font-size: 9px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: #64748b; }
+.pp-journey-stat-v { font-size: 1.15rem; font-weight: 950; color: #0f172a; margin-top: 4px; line-height: 1.2; }
+.pp-journey-stat-s { font-size: 11px; font-weight: 800; color: #475569; margin-top: 4px; line-height: 1.35; }
+.pp-pulse-strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 0 0 8px; }
+.pp-pulse-card { border-radius: 14px; padding: 12px; background: linear-gradient(135deg, var(--team-bg1, #1e293b), var(--team-bg0, #0f172a)); color: #f8fafc; border: 1px solid var(--team-border); }
+.pp-pulse-k { font-size: 9px; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; }
+.pp-pulse-v { font-size: 14px; font-weight: 900; margin-top: 4px; line-height: 1.35; }
+.pp-pulse-s { font-size: 11px; font-weight: 700; color: #cbd5e1; margin-top: 4px; }
+.pp-stock-up { color: #4ade80; }
+.pp-stock-down { color: #f87171; }
+.lt-achieve-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.lt-achieve {
+  border-radius: 14px; padding: 12px; border: 1px solid var(--team-border); background: #fff;
+  opacity: .55; filter: grayscale(.35);
+}
+.lt-achieve--unlocked { opacity: 1; filter: none; border-left: 4px solid #16a34a; background: linear-gradient(145deg, #f0fdf4, #fff); }
+.lt-achieve--locked { border-left: 4px solid #94a3b8; }
+.lt-achieve-k { font-size: 9px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.lt-achieve-v { font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 4px; }
+.lt-achieve-s { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 4px; }
+.lt-rank-move {
+  border-radius: 16px; padding: 14px; margin: 10px 0 14px; background: #fff;
+  border: 1px solid var(--team-border); overflow: hidden;
+}
+.lt-rank-track { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-top: 10px; }
+.lt-rank-node { text-align: center; padding: 10px; border-radius: 12px; background: var(--team-card-tint); border: 1px solid var(--team-border); }
+.lt-rank-node--win { background: linear-gradient(145deg, #fef3c7, #fff); border-color: #fbbf24; animation: lt-rank-glow 1.4s ease-in-out infinite alternate; }
+.lt-rank-arrow { font-size: 1.4rem; font-weight: 950; color: var(--team-primary); animation: lt-rank-slide 1.1s ease-in-out infinite alternate; }
+@keyframes lt-rank-slide { from { transform: translateX(-3px); } to { transform: translateX(6px); } }
+@keyframes lt-rank-glow { from { box-shadow: 0 0 0 rgba(251,191,36,0); } to { box-shadow: 0 0 16px rgba(251,191,36,.35); } }
+.lt-swing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.lt-swing { border-radius: 14px; padding: 12px 14px; border: 1px solid var(--team-border); background: #fff; }
+.lt-swing--gain { border-left: 5px solid #16a34a; }
+.lt-swing--flat { border-left: 5px solid #64748b; }
+.lt-swing--loss { border-left: 5px solid #dc2626; }
+.lt-swing-v { font-size: 1.45rem; font-weight: 950; color: #0f172a; margin: 4px 0; }
+.lt-swing-s { font-size: 11px; font-weight: 800; color: #64748b; line-height: 1.35; }
+.lt-defining {
+  border-radius: 14px; padding: 12px 14px; margin: 8px 0 12px;
+  background: linear-gradient(90deg, rgba(127,29,29,.08), transparent);
+  border: 1px solid rgba(248,113,113,.35); font-size: 13px; font-weight: 800; color: #334155; line-height: 1.45;
+}
+.hist-week-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.hist-week-card {
+  border-radius: 14px; padding: 12px 14px; background: #fff;
+  border: 2px dashed var(--team-accent); box-shadow: 0 4px 14px rgba(15,23,42,.06);
+}
+.hist-week-name { font-size: 13px; font-weight: 950; color: var(--team-primary); margin-bottom: 6px; }
+.hist-week-line { font-size: 12px; font-weight: 800; color: #334155; line-height: 1.4; margin-bottom: 4px; }
 .pp-chase-pill-hero {
   display: inline-block; margin-top: 8px; padding: 5px 10px; border-radius: 999px;
   font-size: 11px; font-weight: 800; background: rgba(234,179,8,.2); border: 1px solid rgba(253,224,71,.45); color: #fef9c3;
@@ -2202,7 +2259,7 @@ ULTRA_FAST_VALIDATION_MODE = False
 
 # Visible on Cloud (sidebar) — bump when shipping fan UI or deploy wiring fixes.
 APP_DEPLOY_BRANCH = "dev"
-APP_BUILD_COMMIT = "premium-fan-2026-06-05"
+APP_BUILD_COMMIT = "final-refine-2026-06-05"
 
 VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
 VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
@@ -6405,10 +6462,8 @@ def render_legacy_tracker_page(team_name):
     st.markdown(_lt_today_read_card(player, team_name, pts0, fg0, th0, pm0, series_wins_bracket, locked_score), unsafe_allow_html=True)
     render_fan_section_close()
 
-    if render_fan_section("Franchise bar — who sets the tier", "🏛️", caption="Named comparisons fans actually cite.", tone="default"):
-        render_fan_section_open()
-    st.markdown(_lt_franchise_compare_faces(player, team_name), unsafe_allow_html=True)
-    render_fan_section_close()
+    with st.expander("Franchise bar — who sets the tier", expanded=False):
+        st.markdown(_lt_franchise_compare_faces(player, team_name), unsafe_allow_html=True)
 
     if _qa_skip_heavy_ui():
         st.info("QA mode: legacy simulator sliders and path charts are skipped.")
@@ -6456,10 +6511,37 @@ def render_legacy_tracker_page(team_name):
     x3.metric("Banner jump", round(title_score - sim_now, 1))
     x4.metric("Personal ceiling", player_legacy_ceiling(player, team_name))
 
-    if render_fan_section("Legacy impact — title & franchise ladder", "🏆", caption="Move sliders above — badges and ranks update with your story.", tone="broadcast"):
+    if render_fan_section("Legacy impact — title & franchise ladder", "🏆", caption="Move sliders above — badges, unlocks, and rank movement update live.", tone="broadcast"):
         render_fan_section_open()
+    entry = next(
+        (x for x in franchise_history_data(team_name).get("legends", []) if str(x.get("name", "")).lower() == player.lower()),
+        {},
+    )
+    chrono = _prepare_chrono_playoff_logs(logs) if logs is not None and not logs.empty else pd.DataFrame()
+    title_pts_proj = _pp_projected_title_pts(entry, chrono, team_name)
+    lose_pts_proj = float(entry.get("pts", 0) or 0) + pts * max(2, min(5, _pp_chase_games_left_est(team_name)))
+    lose_finals_score = legacy_score_from_inputs(
+        pts, reb, ast, stl, blk, fg, three, plus_minus, series_wins_bracket, False, player, team_name
+    )
+    lose_finals_score = round(lose_finals_score + max(1.0, (title_score - sim_now) * 0.15), 1)
+    next_game_score = legacy_score_from_inputs(
+        pts, reb, ast, stl, blk, fg, three, plus_minus + 0.8, series_wins_bracket, False, player, team_name
+    )
     st.markdown(
         _lt_impact_panel_html(player, team_name, locked_score, ceiling, sim_now, title_score, pts, series_wins_bracket),
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        _lt_achievements_html(
+            _lt_achievement_unlocks(player, team_name, sim_now, title_score, series_wins_bracket, pts, locked_score)
+        ),
+        unsafe_allow_html=True,
+    )
+    if logs is not None and not logs.empty:
+        st.markdown(_lt_career_defining_game_html(player, logs, team_tri), unsafe_allow_html=True)
+    st.markdown(_lt_rank_movement_html(player, team_name, entry, title_pts_proj, lose_pts_proj), unsafe_allow_html=True)
+    st.markdown(
+        _lt_legacy_swing_html(sim_now, title_score, lose_finals_score, next_game_score),
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -7376,6 +7458,120 @@ def _pp_chase_projected_label(gap, pace, games_left):
     return f"~{est_games} games at current pace · longer chase"
 
 
+    return f"~{est_games} games at current pace · longer chase"
+
+
+def _pp_chase_est_games(gap, pace):
+    if not pace or pace <= 0 or gap <= 0:
+        return None
+    return max(1, int((gap + pace - 0.01) // pace))
+
+
+def _pp_finals_pass_probability(gap, pace, games_left):
+    """Fan-model probability of passing target before the run ends (curated estimate)."""
+    if not pace or gap <= 0 or games_left <= 0:
+        return 0
+    est = _pp_chase_est_games(gap, pace) or 99
+    if est <= games_left:
+        return min(94, int(58 + min(36, (games_left - est + 1) * 9)))
+    ratio = games_left / max(est, 1)
+    return max(8, min(48, int(ratio * 52)))
+
+
+def _pp_franchise_pts_rank(team_name, pts_total, player_name=""):
+    legends = sorted(franchise_history_data(team_name).get("legends", []), key=lambda x: -float(x.get("pts", 0) or 0))
+    for i, leg in enumerate(legends, start=1):
+        if str(leg.get("name", "")).lower() == str(player_name).lower():
+            return i
+    for i, leg in enumerate(legends, start=1):
+        if float(pts_total) >= float(leg.get("pts", 0) or 0):
+            return i
+    return len(legends) + 1
+
+
+def _pp_projected_title_pts(entry, df, team_name):
+    ppg = float(df["PTS"].mean()) if df is not None and not df.empty and "PTS" in df.columns else float(entry.get("ppg", 0) or 0)
+    games_left = max(3, min(8, _pp_chase_games_left_est(team_name) + 2))
+    return float(entry.get("pts", 0) or 0) + ppg * games_left
+
+
+def _pp_playoff_stock_label(actual_ppg, board_ppg, pm):
+    delta = float(actual_ppg or 0) - float(board_ppg or 0)
+    if delta >= 2 or float(pm or 0) >= 3:
+        return "up", f"Stock UP · +{delta:.1f} PPG vs board pace"
+    if delta <= -2 or float(pm or 0) <= -2:
+        return "down", f"Stock DOWN · {delta:.1f} PPG vs board pace"
+    return "flat", "Stock STEADY · holding playoff line"
+
+
+def _pp_team_playoff_pulse_html(team_name, player, df, cur_summary):
+    e = html.escape
+    data = franchise_history_data(team_name)
+    watch = [p for p in data.get("legends", []) if p.get("current_watch")]
+    if not watch:
+        return ""
+    hottest = max(watch, key=lambda x: float(x.get("ppg", 0) or 0))
+    riser = max(watch, key=lambda x: float(x.get("g30", 0) or 0) + float(x.get("ppg", 0) or 0) * 0.05)
+    entry = next((x for x in watch if str(x.get("name", "")).lower() == player.lower()), None)
+    actual_ppg = float(cur_summary.get("PTS") or 0)
+    board_ppg = float((entry or {}).get("ppg", actual_ppg) or actual_ppg)
+    pm = float(cur_summary.get("PLUS_MINUS") or 0)
+    stock_cls, stock_txt = _pp_playoff_stock_label(actual_ppg, board_ppg, pm)
+    stock_mod = f" pp-stock-{stock_cls}" if stock_cls in ("up", "down") else ""
+    you = " (you)" if str(hottest.get("name", "")).lower() == player.lower() else ""
+    riser_you = " (you)" if str(riser.get("name", "")).lower() == player.lower() else ""
+    return (
+        f"<div class='pp-pulse-strip'>"
+        f"<div class='pp-pulse-card'><div class='pp-pulse-k'>Hottest on {e(fan_nick(team_name))}</div>"
+        f"<div class='pp-pulse-v'>{e(hottest['name'])}{you}</div>"
+        f"<div class='pp-pulse-s'>{hottest.get('ppg', 0):.1f} PPG est. · playoff engine</div></div>"
+        f"<div class='pp-pulse-card'><div class='pp-pulse-k'>Biggest riser this run</div>"
+        f"<div class='pp-pulse-v'>{e(riser['name'])}{riser_you}</div>"
+        f"<div class='pp-pulse-s'>{int(riser.get('g30', 0))}× 30-pt est. · climbing the board</div></div>"
+        f"<div class='pp-pulse-card'><div class='pp-pulse-k'>Your playoff stock</div>"
+        f"<div class='pp-pulse-v{stock_mod}'>{e(stock_txt.split(' · ')[0])}</div>"
+        f"<div class='pp-pulse-s'>{e(stock_txt)}</div></div></div>"
+    )
+
+
+def _pp_chase_journey_panel_html(player, team_name, df, primary, gaps, rank):
+    if not primary:
+        return ""
+    e = html.escape
+    gap = primary["gap"]
+    pace = _pp_chase_pace_for_stat(df, primary["stat"])
+    games_left = _pp_chase_games_left_est(team_name)
+    est_games = _pp_chase_est_games(gap, pace)
+    gp = int(len(df)) if df is not None and not df.empty else 0
+    pass_prob = _pp_finals_pass_probability(gap, pace, games_left)
+    pass_date = f"Playoff game ~{gp + est_games}" if est_games and gp else "Need more games logged"
+    if games_left and est_games and est_games <= games_left:
+        pass_date += f" · Finals window (≤{games_left} games left)"
+    entry = next((x for x in franchise_history_data(team_name).get("legends", []) if str(x.get("name", "")).lower() == player.lower()), {})
+    title_pts = _pp_projected_title_pts(entry, df, team_name)
+    title_rank = _pp_franchise_pts_rank(team_name, title_pts, player)
+    rank_now = rank or _pp_franchise_pts_rank(team_name, float(entry.get("pts", 0) or 0), player)
+    sorted_gaps = sorted(gaps, key=lambda x: x["gap"])
+    milestone = sorted_gaps[0]
+    m_prob = _pp_finals_pass_probability(milestone["gap"], _pp_chase_pace_for_stat(df, milestone["stat"]), games_left)
+    return (
+        f"<div class='pp-journey-panel'>"
+        f"<div class='pp-journey-stat'><div class='pp-journey-stat-k'>Projected pass date</div>"
+        f"<div class='pp-journey-stat-v'>{e(pass_date)}</div>"
+        f"<div class='pp-journey-stat-s'>Pass {e(primary['target_name'].split()[-1])} at current pace</div></div>"
+        f"<div class='pp-journey-stat pp-journey-stat--hot'><div class='pp-journey-stat-k'>Finals pass probability</div>"
+        f"<div class='pp-journey-stat-v'>{pass_prob}%</div>"
+        f"<div class='pp-journey-stat-s'>Fan model · {gap} {e(primary['short'])} left · curated board</div></div>"
+        f"<div class='pp-journey-stat pp-journey-stat--up'><div class='pp-journey-stat-k'>If {e(fan_nick(team_name))} win the title</div>"
+        f"<div class='pp-journey-stat-v'>#{title_rank} franchise</div>"
+        f"<div class='pp-journey-stat-s'>Projected ~{int(title_pts)} PTS · now #{rank_now}</div></div>"
+        f"<div class='pp-journey-stat'><div class='pp-journey-stat-k'>Most likely next milestone</div>"
+        f"<div class='pp-journey-stat-v'>{milestone['gap']} {e(milestone['short'])}</div>"
+        f"<div class='pp-journey-stat-s'>{e(milestone['target_name'])} · {m_prob}% this run</div></div>"
+        f"</div>"
+    )
+
+
 def _pp_chase_race_graphic_html(player, team_name, df, primary):
     if not primary:
         return ""
@@ -7486,6 +7682,7 @@ def _pp_franchise_chase_cards_html(player, team_name, df):
     rank, gaps, hero = _pp_chase_board_data(player, team_name, df)
     if rank is None and not gaps:
         return ""
+    cur_summary = summarize_playoff_logs(df) if df is not None and not df.empty else {}
     parts = []
     if rank:
         parts.append(
@@ -7499,7 +7696,11 @@ def _pp_franchise_chase_cards_html(player, team_name, df):
     primary = gaps[0] if gaps else None
     if primary:
         parts.append(_pp_chase_race_graphic_html(player, team_name, df, primary))
+        parts.append(_pp_chase_journey_panel_html(player, team_name, df, primary, gaps, rank))
         parts.append(_pp_chase_ladder_html(player, team_name, df, gaps))
+        pulse = _pp_team_playoff_pulse_html(team_name, player, df, cur_summary)
+        if pulse:
+            parts.append(pulse)
     for g in gaps[1:4]:
         parts.append(
             f"<div class='pp-chase-card pp-chase-card--hero-stat'>"
@@ -7830,6 +8031,116 @@ FRANCHISE_GREAT_RUNS = {
     ],
 }
 
+FRANCHISE_GREAT_GAMES = {
+    "New York Knicks": [
+        ("1970 Finals G7", "Reed's limp-out — Garden mythology"),
+        ("1999 ECF G6", "Allan Houston finger roll sends New York to the Finals"),
+        (FINALS_GAME1_CANONICAL_SCORE, "2025 Finals G1 — Brunson steals San Antonio home court"),
+    ],
+    "San Antonio Spurs": [
+        ("2014 Finals G5", "Beautiful ball movement closes the Heat era"),
+        ("2007 Finals G4", "Tony Parker Finals MVP seal"),
+        (FINALS_GAME1_CANONICAL_SCORE, "2025 Finals G1 — Wembanyama's debut stage (Spurs trail 0–1)"),
+    ],
+}
+
+
+def _lt_franchise_rank_from_pts(team_name, pts_total):
+    legends = sorted(franchise_history_data(team_name).get("legends", []), key=lambda x: -float(x.get("pts", 0) or 0))
+    for i, leg in enumerate(legends, start=1):
+        if float(pts_total) >= float(leg.get("pts", 0) or 0):
+            return i
+    return len(legends) + 1
+
+
+def _lt_rank_spots_delta(team_name, pts_now, pts_after):
+    r0 = _lt_franchise_rank_from_pts(team_name, pts_now)
+    r1 = _lt_franchise_rank_from_pts(team_name, pts_after)
+    return max(0, r0 - r1)
+
+
+def _lt_achievement_unlocks(player, team_name, sim_now, title_score, series_wins, pts, locked_score):
+    ceiling = float(player_legacy_ceiling(player, team_name))
+    ach = [
+        ("Deep Run Badge", series_wins >= 2, "Two series wins logged on the bracket"),
+        ("Finals Stage", series_wins >= 3, "Reached the championship round in the fan model"),
+        ("30-PT Author", pts >= 28, "Scoring line looks like a lead-option Finals profile"),
+        ("Banner Path", title_score - sim_now >= 15, "Title run unlocks a major legacy jump"),
+        ("Franchise Icon", sim_now / max(ceiling, 1) >= 0.78, "Crossed franchise icon tier on the meter"),
+        ("Ceiling Hunter", sim_now >= locked_score + 8, "Simulator pushed the story past today's lock"),
+    ]
+    return ach
+
+
+def _lt_achievements_html(achievements):
+    e = html.escape
+    cards = []
+    for label, unlocked, hint in achievements:
+        cls = "lt-achieve lt-achieve--unlocked" if unlocked else "lt-achieve lt-achieve--locked"
+        status = "UNLOCKED" if unlocked else "LOCKED"
+        cards.append(
+            f"<div class='{cls}'><div class='lt-achieve-k'>{status}</div>"
+            f"<div class='lt-achieve-v'>{e(label)}</div>"
+            f"<div class='lt-achieve-s'>{e(hint)}</div></div>"
+        )
+    return "<div class='lt-achieve-grid'>" + "".join(cards) + "</div>"
+
+
+def _lt_career_defining_game_html(player, logs, team_tri):
+    e = html.escape
+    if logs is None or logs.empty or "PTS" not in logs.columns:
+        return ""
+    df = logs.copy()
+    if "_impact" not in df.columns:
+        df["_impact"] = df.apply(_game_impact_score, axis=1)
+    row = df.loc[int(df["_impact"].idxmax())]
+    pts = safe_float(row.get("PTS"))
+    opp = _matchup_opponent_tri(row.get("MATCHUP"), team_tri)
+    return (
+        f"<div class='lt-defining'><b>Career-defining game alert:</b> "
+        f"{e(str(row.get('GAME_DATE', '')))} · {pts:.0f} PTS vs {e(opp)} "
+        f"(+/- {safe_float(row.get('PLUS_MINUS')):+.0f}) — the night fans will cite if this run becomes legend.</div>"
+    )
+
+
+def _lt_rank_movement_html(player, team_name, entry, title_pts, lose_pts):
+    e = html.escape
+    now_pts = float(entry.get("pts", 0) or 0)
+    r_now = _lt_franchise_rank_from_pts(team_name, now_pts)
+    r_win = _lt_franchise_rank_from_pts(team_name, title_pts)
+    r_lose = _lt_franchise_rank_from_pts(team_name, lose_pts)
+    win_spots = max(0, r_now - r_win)
+    lose_spots = max(0, r_now - r_lose)
+    return (
+        f"<div class='lt-rank-move'><div class='lt-meter-k'>Franchise ranking movement (curated PTS board)</div>"
+        f"<div class='lt-rank-track'>"
+        f"<div class='lt-rank-node'><div class='lt-goat-rank'>#{r_now}</div><div class='lt-goat-tier'>Today</div></div>"
+        f"<div class='lt-rank-arrow'>→</div>"
+        f"<div class='lt-rank-node lt-rank-node--win'><div class='lt-goat-rank'>#{r_win}</div>"
+        f"<div class='lt-goat-tier'>Win title · +{win_spots} spot(s)</div></div>"
+        f"</div>"
+        f"<div class='lt-impact-sub' style='margin-top:8px'>Lose Finals: #{r_lose} · "
+        f"{'no rank movement' if lose_spots == 0 else f'+{lose_spots} spot(s)'} · fan-model estimate</div></div>"
+    )
+
+
+def _lt_legacy_swing_html(sim_now, title_score, lose_finals_score, next_game_score):
+    swings = [
+        ("Win the NBA Finals", title_score - sim_now, title_score, "gain"),
+        ("Lose the Finals", lose_finals_score - sim_now, lose_finals_score, "flat" if abs(lose_finals_score - sim_now) < 8 else "loss"),
+        ("Win next game only", next_game_score - sim_now, next_game_score, "gain" if next_game_score > sim_now else "flat"),
+    ]
+    cards = []
+    for label, delta, score, kind in swings:
+        cls = f"lt-swing lt-swing--{kind}"
+        sign = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
+        cards.append(
+            f"<div class='{cls}'><div class='lt-scenario-k'>{html.escape(label)}</div>"
+            f"<div class='lt-swing-v'>{sign} legacy</div>"
+            f"<div class='lt-swing-s'>Story lands at {score:.1f} on the fan model</div></div>"
+        )
+    return "<div class='lt-swing-grid'>" + "".join(cards) + "</div>"
+
 
 def render_player_playoff_story_hub(team_name, profile):
     """Narrative + impact hub for a player's postseason (stats + story + legacy texture)."""
@@ -7952,33 +8263,27 @@ def render_player_playoff_story_hub(team_name, profile):
     # --- 2 · Series ---
     chunks = _series_chunks_playoff_order(df, team_tri)
     rnd_names = ["First Round", "Second Round", "Conference Finals", "NBA Finals"]
-    if render_fan_section(
-        "Playoff journey & series tabs",
-        "📊",
-        caption="Round-by-round path — each tab is a matchup in playoff order.",
-        tone="broadcast",
-    ):
-        render_fan_section_open()
-    if not chunks:
-        st.info("Could not split series from matchups.")
-    else:
+    if chunks:
         st.markdown(_pp_journey_strip_html(chunks, rnd_names), unsafe_allow_html=True)
-        tab_labels = []
-        for idx, (opp_tri, seg) in enumerate(chunks, start=1):
-            opp_name = ALIAS_TO_TEAM.get(opp_tri, opp_tri)
-            round_label = rnd_names[idx - 1] if idx <= len(rnd_names) else f"Round {idx}"
-            tab_labels.append(f"{round_label} vs {opp_name}")
-        tabs = st.tabs(tab_labels)
-        for tab, ((opp_tri, seg), label) in zip(tabs, zip(chunks, tab_labels)):
-            with tab:
-                w = int((seg["WL"].astype(str).str.upper().str.startswith("W")).sum()) if "WL" in seg.columns else 0
-                el = int((seg["WL"].astype(str).str.upper().str.startswith("L")).sum()) if "WL" in seg.columns else 0
-                sm = summarize_playoff_logs(seg)
-                sm["TS_PCT"] = _true_shooting_pct(seg)
-                st.markdown(_pp_series_tab_banner_html(label, w, el, sm), unsafe_allow_html=True)
-                st.markdown(_pp_stat_pills_html(sm, hot_keys={"PTS", "PLUS_MINUS"}), unsafe_allow_html=True)
-                st.markdown(_pp_game_log_cards_html(seg, team_tri, limit=8), unsafe_allow_html=True)
-    render_fan_section_close()
+    with st.expander("Round-by-round series tabs & game logs", expanded=False):
+        if not chunks:
+            st.info("Could not split series from matchups.")
+        else:
+            tab_labels = []
+            for idx, (opp_tri, seg) in enumerate(chunks, start=1):
+                opp_name = ALIAS_TO_TEAM.get(opp_tri, opp_tri)
+                round_label = rnd_names[idx - 1] if idx <= len(rnd_names) else f"Round {idx}"
+                tab_labels.append(f"{round_label} vs {opp_name}")
+            tabs = st.tabs(tab_labels)
+            for tab, ((opp_tri, seg), label) in zip(tabs, zip(chunks, tab_labels)):
+                with tab:
+                    w = int((seg["WL"].astype(str).str.upper().str.startswith("W")).sum()) if "WL" in seg.columns else 0
+                    el = int((seg["WL"].astype(str).str.upper().str.startswith("L")).sum()) if "WL" in seg.columns else 0
+                    sm = summarize_playoff_logs(seg)
+                    sm["TS_PCT"] = _true_shooting_pct(seg)
+                    st.markdown(_pp_series_tab_banner_html(label, w, el, sm), unsafe_allow_html=True)
+                    st.markdown(_pp_stat_pills_html(sm, hot_keys={"PTS", "PLUS_MINUS"}), unsafe_allow_html=True)
+                    st.markdown(_pp_game_log_cards_html(seg, team_tri, limit=8), unsafe_allow_html=True)
 
     with st.expander("Pressure meters & legacy texture", expanded=False):
         pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
@@ -8007,26 +8312,19 @@ def render_player_playoff_story_hub(team_name, profile):
             st.markdown(meter_bar("Stakes", stakes, "ember", nar["stakes"]), unsafe_allow_html=True)
             st.markdown(meter_bar("Elimination pressure", elim_pressure, "gold", nar["elimination"]), unsafe_allow_html=True)
 
-    if render_fan_section(
-        "Franchise comparison cards",
-        "📚",
-        caption="Named bar talk — Ewing, Frazier, Duncan, Parker tier references.",
-        tone="default",
-    ):
-        render_fan_section_open()
-    if prev_season and not _qa_skip_expensive_apis() and st.checkbox(
-        f"Compare to {prev_season} postseason (loads extra API call)",
-        value=False,
-        key=f"pp_prev_yoy_{player}",
-    ):
-        prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
-        if not prev_df.empty:
-            prev_summary = summarize_playoff_logs(prev_df)
-            prev_summary["TS_PCT"] = _true_shooting_pct(prev_df)
-            prev_summary["GP"] = int(len(prev_df))
-    comp_lines = _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower)
-    st.markdown(_pp_compare_cards_html(comp_lines), unsafe_allow_html=True)
-    render_fan_section_close()
+    with st.expander("Franchise comparison cards (named bar talk)", expanded=False):
+        if prev_season and not _qa_skip_expensive_apis() and st.checkbox(
+            f"Compare to {prev_season} postseason (loads extra API call)",
+            value=False,
+            key=f"pp_prev_yoy_{player}",
+        ):
+            prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
+            if not prev_df.empty:
+                prev_summary = summarize_playoff_logs(prev_df)
+                prev_summary["TS_PCT"] = _true_shooting_pct(prev_df)
+                prev_summary["GP"] = int(len(prev_df))
+        comp_lines = _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower)
+        st.markdown(_pp_compare_cards_html(comp_lines), unsafe_allow_html=True)
 
     with st.expander("Takeover games & bonus storylines", expanded=False):
         if reg_avg is None:
@@ -10232,13 +10530,13 @@ def _home_franchise_stakes(team_name):
     nick = fan_nick(team_name)
     if team_name == "New York Knicks":
         return (
-            "First Finals trip since 1999 — Brunson is already in the Ewing/Frazier conversation for Garden volume scoring. "
-            "Win the banner and this run jumps past the Melo-era what-ifs into Willis Reed territory; lose and it still rewrites the franchise pecking order."
+            "FRANCHISE STAKES: First Finals since '99 — Brunson is already in the Ewing/Frazier scoring conversation. "
+            "Win the banner and this run vaults past the Melo-era what-ifs; lose and it still rewrites Garden history."
         )
     if team_name == "San Antonio Spurs":
         return (
-            "Wembanyama's first Finals is the Duncan 1999 parallel everyone will cite — Game 1 (105–95 Knicks) stole home court, "
-            "but San Antonio is still playing for the Robinson-to-Duncan handoff narrative, not a moral victory tour."
+            "FRANCHISE STAKES: Wembanyama's Duncan-1999 parallel is live after a Game 1 loss (105–95) — "
+            "one title here accelerates a young core into the Robinson-to-Duncan handoff story fans have waited for."
         )
     if _is_home_eliminated(team_name):
         od = get_offseason_outlook(team_name)
@@ -10295,13 +10593,13 @@ def _home_matchup_swing_line(team_name, pctx, s_active):
     ax = lens.get("identity_axes") or ("Half-court engine", "Wing defense", "Glass margin")
     if team_name == "New York Knicks" and opp == "San Antonio Spurs":
         return (
-            f"Wembanyama's length vs {ax[1]} — if New York wins the paint-touch battle, "
-            f"Brunson's pull-up game stays efficient; if San Antonio shrinks the floor, the series turns into a turnover war."
+            "MATCHUP BOARD: Wembanyama's help vs Brunson's pull-up — "
+            "when New York wins the paint-touch war, the Knicks get 40+ corner threes; when San Antonio shrinks the floor, it's a turnover series."
         )
     if team_name == "San Antonio Spurs" and opp == "New York Knicks":
         return (
-            f"Towns spacing vs San Antonio's rim deterrence — when the Knicks get clean catch-and-shoot looks, "
-            f"Castle has to chase over screens all night; when the Spurs pack the paint, the game slows to a half-court exam."
+            "MATCHUP BOARD: Towns spacing vs Wemby deterrence — "
+            "clean Knicks catch-and-shoot looks mean Castle runs all night; packed paint turns it into a Castle vs Hart chess match."
         )
     return f"{ax[0]} against {on}'s best counter — whoever owns that duel controls the shot diet for Game 2."
 
@@ -10317,13 +10615,13 @@ def _home_series_tactical_why(team_name, s_active, pctx):
     on = fan_nick(opp)
     if team_name == "New York Knicks" and opp == "San Antonio Spurs":
         return (
-            f"Tactical hinge: {ax[1]} vs Wembanyama length — if {fan_nick(team_name)} win the paint-touch battle, "
-            f"Brunson's pull-ups stay efficient; if not, the game becomes a turnover war."
+            "STUDIO TAKE: Brunson-Towns PnR vs Wembanyama drop is the whole series — "
+            "Knicks win Game 1 (105–95) because the paint-touch battle flipped; San Antonio has to blitz or Brunson cooks on pull-ups."
         )
     if team_name == "San Antonio Spurs" and opp == "New York Knicks":
         return (
-            f"Tactical hinge: drop vs Towns spacing — when San Antonio packs the paint, Castle must punish "
-            f"closeouts; when New York stretches the floor, Wembanyama's deterrence sets the terms."
+            "STUDIO TAKE: Pop's drop vs Towns spacing is the lever — "
+            "Spurs trail 0–1 but Wembanyama deterrence still sets the terms; Castle must punish Brunson blitzes in transition."
         )
     return (
         f"Scheme question: does {ax[0]} travel against {on}'s length, or does {on} shrink the floor "
@@ -10338,13 +10636,13 @@ def _home_watch_next_brief(team_name, pctx, watch_keys):
     on = fan_nick(opp) if opp else "the opponent"
     if team_name == "New York Knicks" and opp == "San Antonio Spurs":
         return (
-            "Likely next beat: early Brunson-Towns PnR vs Wembanyama drop — if New York wins the first six minutes, "
-            "San Antonio has to abandon the paint pack and live with Hart/Bridges corner threes."
+            "WATCH LIST: First six minutes of Brunson-Towns PnR vs Wemby drop — "
+            "if New York sets the physical tone early, San Antonio has to abandon the paint pack and live with Hart corner threes."
         )
     if team_name == "San Antonio Spurs" and opp == "New York Knicks":
         return (
-            "Likely next beat: Castle push pace after misses — if San Antonio gets 8+ transition points in Q1, "
-            "the Knicks' half-court grind loses its grip before Thibs can shorten the rotation."
+            "WATCH LIST: Castle push pace after Knicks misses — "
+            "8+ transition points in Q1 means San Antonio stole the game's tempo before Thibs can shorten the rotation."
         )
     if len(watch_keys) > 1:
         return watch_keys[1][1]
@@ -10366,12 +10664,12 @@ def _home_game1_to_game2_shift(team_name, s_active, pctx):
     if team_name == "New York Knicks" and opp == "San Antonio Spurs":
         if won:
             return (
-                f"Game 1 validated {nick} {ax[0]} — Game 2 likely brings more Wembanyama blitzes and Castle ball-pressure. "
-                f"Thibs will counter with quicker Brunson-Towns actions and switching on the perimeter."
+                "INSIDE THE TAPE: Game 1 validated Thibs' switch plan — Hart/Bridges on Castle, Towns sealing Wemby. "
+                "Game 2 chess: expect San Antonio to load the ball on Brunson and force McBride/Robinson minutes to matter."
             )
         return (
-            f"San Antonio won the rim battle in Game 1 — {nick} need cleaner Towns touches and fewer late-clock isolations "
-            f"before the Spurs' length becomes the series default."
+            "INSIDE THE TAPE: San Antonio owned the rim in Game 1 — Knicks need cleaner Towns touches before "
+            "Wembanyama's length becomes the default coverage and Brunson sees three bodies every pull-up."
         )
     if won:
         return f"{nick} carried Game 1 identity — {on} adjust coverages on {ax[0]}; {nick} counter with pace and {ax[2]}."
@@ -10386,13 +10684,13 @@ def _home_coaching_adjustment_line(team_name, pctx, s_active):
     games = len((s_active or {}).get("games") or [])
     if team_name == "New York Knicks":
         return (
-            f"After {games} game(s): expect {on} to load the ball against Brunson and force Towns into foul-trouble sequences — "
-            f"New York's counter is switching Hart/Bridges onto Castle and living with contested pull-ups."
+            "WHITE BOARD: After Game 1, expect Pop to blitz Brunson and force Towns into foul-trouble sequences — "
+            "Thibs' counter is Hart/Bridges switching onto Castle and living with contested pull-ups over turnovers."
         )
     if team_name == "San Antonio Spurs":
         return (
-            f"Popovich-era discipline meets a young core — Game {games + 1} likely features more drop vs Towns "
-            f"and tag-and-switch on Brunson, with Castle's pace dictating when San Antonio can run."
+            "WHITE BOARD: Game 2 likely brings more drop vs Towns and tag-and-switch on Brunson — "
+            "Castle's pace when the Knicks miss long rebounds is San Antonio's cleanest path back into the series."
         )
     return f"Staff vs staff: {on} will test {(prof.get('concerns') or ['bench minutes'])[0]} — rotation length decides who owns the adjustment war."
 
@@ -10406,13 +10704,13 @@ def _home_pressure_players_line(team_name, pctx, s_active):
     games = len((s_active or {}).get("games") or [])
     if team_name == "New York Knicks":
         return (
-            f"Microscope board after Game {games}: Brunson (efficiency vs blitzes), Towns (foul discipline vs Wembanyama), "
-            f"Mikal Bridges (track Castle without fouling) — the Knicks only extend the series if all three pass."
+            "ON THE HOT SEAT: Brunson (efficiency vs blitzes), Towns (fouls vs Wemby), Bridges (track Castle clean) — "
+            "the Knicks stole Game 1; now every empty Brunson possession gets magnified on national TV."
         )
     if team_name == "San Antonio Spurs":
         return (
-            f"Microscope board after Game {games}: Wembanyama (stay upright vs Towns seals), Castle (turnovers vs Hart traps), "
-            f"Harrison Barnes (corner 3 volume) — Popovich's counter is only as good as Barnes making the Knicks pay."
+            "ON THE HOT SEAT: Wembanyama (stay upright vs Towns), Castle (turnovers vs Hart traps), Barnes (corner 3 volume) — "
+            "Pop's counter only works if Barnes makes the Knicks pay for loading up on Victor."
         )
     return f"Pressure board: {flagship} must answer the scouting report; {second} owns the swing matchup when the star sits."
 
@@ -15869,23 +16167,62 @@ def _hist_greatest_runs_html(team_name):
 
 def _hist_greatest_games_html(team_name):
     e = html.escape
-    mx = get_display_matchup(team_name)
-    s = mx.get("series") or {}
-    games = s.get("games") or []
     cards = []
-    for g in games[:4]:
-        score = str(g.get("Score", ""))
-        winner = g.get("Winner", "")
+    for score, copy in (FRANCHISE_GREAT_GAMES.get(team_name) or [])[:5]:
         cards.append(
             f"<div class='hist-game-card'><div class='hist-game-score'>{e(score)}</div>"
-            f"<div class='hist-game-copy'>{e(winner)} win · curated Finals log</div></div>"
+            f"<div class='hist-game-copy'>{e(copy)}</div></div>"
         )
-    if not cards and team_name in ("New York Knicks", "San Antonio Spurs"):
+    mx = get_display_matchup(team_name)
+    s = mx.get("series") or {}
+    for g in (s.get("games") or [])[:2]:
+        score = str(g.get("Score", ""))
+        if score and not any(score in c for c, _ in (FRANCHISE_GREAT_GAMES.get(team_name) or [])):
+            winner = g.get("Winner", "")
+            cards.append(
+                f"<div class='hist-game-card'><div class='hist-game-score'>{e(score)}</div>"
+                f"<div class='hist-game-copy'>{e(winner)} win · live Finals log</div></div>"
+            )
+    return "<div class='hist-games-grid'>" + "".join(cards[:6]) + "</div>" if cards else ""
+
+
+def _hist_player_week_lines(p, legends, team_name):
+    lines = []
+    name = p["name"]
+    val = float(p.get("pts", 0) or 0)
+    higher_pts = sorted(
+        [x for x in legends if x["name"] != name and float(x.get("pts", 0) or 0) > val],
+        key=lambda x: float(x.get("pts", 0) or 0),
+    )
+    if higher_pts:
+        gap = int(round(float(higher_pts[0].get("pts", 0) or 0) - val))
+        lines.append(f"{gap} points from {higher_pts[0]['name'].split()[-1]}")
+    reb_sorted = sorted(legends, key=lambda x: -float(x.get("reb", 0) or 0))
+    rank_reb = next((i + 1 for i, x in enumerate(reb_sorted) if x["name"] == name), None)
+    if rank_reb and rank_reb > 10:
+        target = reb_sorted[9]
+        gap = int(round(float(target.get("reb", 0) or 0) - float(p.get("reb", 0) or 0)))
+        if gap > 0:
+            lines.append(f"{gap} rebounds from top 10 playoff rebounders")
+    if "wembanyama" in name.lower() and team_name == "San Antonio Spurs":
+        lines.append("First Spurs playoff triple-double still on the franchise board")
+    if "brunson" in name.lower() and team_name == "New York Knicks" and higher_pts:
+        lines.append(f"Most likely pass: {higher_pts[0]['name']} on the scoring list this run")
+    return lines[:3]
+
+
+def _hist_active_milestones_week_html(team_name, current_entries, legends):
+    e = html.escape
+    cards = []
+    for p in current_entries[:5]:
+        week_lines = _hist_player_week_lines(p, legends, team_name)
+        if not week_lines:
+            continue
+        inner = "".join(f"<div class='hist-week-line'>{e(ln)}</div>" for ln in week_lines)
         cards.append(
-            f"<div class='hist-game-card'><div class='hist-game-score'>{e(FINALS_GAME1_CANONICAL_SCORE)}</div>"
-            f"<div class='hist-game-copy'>Finals Game 1 · Knicks steal home court in San Antonio</div></div>"
+            f"<div class='hist-week-card'><div class='hist-week-name'>{e(p['name'])} · this week</div>{inner}</div>"
         )
-    return "<div class='hist-games-grid'>" + "".join(cards) + "</div>" if cards else ""
+    return "<div class='hist-week-grid'>" + "".join(cards) + "</div>" if cards else ""
 
 
 def _comparison_card_html(cur, legend):
@@ -16019,6 +16356,13 @@ def render_team_history_leaders_page(team_name):
     )
 
     if current_entries:
+        if render_fan_section("Active milestones this week", "📅", caption="What current players can still rewrite on the franchise board — curated estimates.", tone="broadcast"):
+            render_fan_section_open()
+        week_html = _hist_active_milestones_week_html(team_name, current_entries, legends)
+        if week_html:
+            st.markdown(week_html, unsafe_allow_html=True)
+        render_fan_section_close()
+
         if render_fan_section("Milestone countdown", "⏱️", caption="How close current players are to the next franchise bar.", tone="broadcast"):
             render_fan_section_open()
         countdown = _hist_milestone_countdown_html(team_name, current_entries, legends)
@@ -16055,30 +16399,28 @@ def render_team_history_leaders_page(team_name):
     st.markdown("<div class='hist-grid'>" + "".join(_history_card_html(team_name, p, current=(_is_current_history_player(p["name"], current_names) or p.get("current_watch"))) for p in legends[:10]) + "</div>", unsafe_allow_html=True)
     render_fan_section_close()
 
-    if render_fan_section("Franchise playoff leaders", "📊", caption="Sortable leaderboard from curated history data.", tone="default"):
-        render_fan_section_open()
-    df = _history_table_df(legends, current_names)
-    sort_label = st.selectbox(
-        "Leaderboard view",
-        [
-            "Playoff scoring leaders (total PTS)",
-            "30-point playoff games",
-            "40-point playoff games",
-            "Playoff points per game",
-            "Rebound leaders",
-            "Assist leaders",
-            "Steals",
-            "Blocks",
-            "Three-pointers",
-            "Playoff games played",
-            "Finals appearances",
-            "Championships",
-        ],
-        key=f"history_sort_{team_name}",
-    )
-    show_df = df.sort_values(_history_sort_col(sort_label), ascending=False).reset_index(drop=True)
-    render_fan_stat_table(show_df, team_name)
-    render_fan_section_close()
+    with st.expander("Franchise playoff leaders (sortable table)", expanded=False):
+        df_hist = _history_table_df(legends, current_names)
+        sort_label = st.selectbox(
+            "Leaderboard view",
+            [
+                "Playoff scoring leaders (total PTS)",
+                "30-point playoff games",
+                "40-point playoff games",
+                "Playoff points per game",
+                "Rebound leaders",
+                "Assist leaders",
+                "Steals",
+                "Blocks",
+                "Three-pointers",
+                "Playoff games played",
+                "Finals appearances",
+                "Championships",
+            ],
+            key=f"history_sort_{team_name}",
+        )
+        show_df = df_hist.sort_values(_history_sort_col(sort_label), ascending=False).reset_index(drop=True)
+        render_fan_stat_table(show_df, team_name)
 
     if render_fan_section("Current players climbing the list", "📈", caption="Roster names chasing franchise milestones.", tone="default"):
         render_fan_section_open()
@@ -16088,44 +16430,33 @@ def render_team_history_leaders_page(team_name):
         st.info("No current roster player is on this curated top board yet. A deep run is how someone starts forcing their way onto it.")
     render_fan_section_close()
 
-    if render_fan_section("Chase / projection storylines", "🎯", caption="Milestone paths for active players.", tone="default"):
-        render_fan_section_open()
-    if current_entries:
-        for p in current_entries:
-            st.markdown(f"**{p['name']} history watch**")
-            milestone_html = []
-            for label, text, progress in _milestone_lines_for_player(p, legends):
-                milestone_html.append(f"<div class='hist-milestone'><b>{html.escape(label.title())}</b><br><span style='font-size:12px;color:#475569'>{html.escape(text)}</span><div class='hist-progress'><span style='width:{max(5, min(98, progress * 100)):.0f}%'></span></div></div>")
-            st.markdown("<div class='hist-milestone-grid'>" + "".join(milestone_html) + "</div>", unsafe_allow_html=True)
-    else:
-        st.caption("Milestone cards appear when a current player is on the franchise board.")
-    render_fan_section_close()
-
-    if render_fan_section("Player comparison cards", "⚖️", caption="Side-by-side legend vs current comparisons.", tone="default"):
-        render_fan_section_open()
-    cards = []
-    by_name = {p["name"]: p for p in legends}
-    for cur in current_entries[:3]:
-        targets = [by_name[n] for n in cur.get("compare_to", []) if n in by_name] or [p for p in legends[:4] if p["name"] != cur["name"]]
-        for target in targets[:2]:
-            cards.append(_comparison_card_html(cur, target))
-    if cards:
-        st.markdown("<div class='hist-compare-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
-    else:
-        st.caption("Comparison cards appear when a current player is part of the curated history board.")
-    render_fan_section_close()
-
-    if render_fan_section("Milestones within reach", "🏁", caption="What is still on the table this run.", tone="default"):
-        render_fan_section_open()
-    if current_entries:
-        rows = []
-        for cur in current_entries:
-            for label, text, _progress in _milestone_lines_for_player(cur, legends):
-                rows.append({"Player": cur["name"], "Milestone": label.title(), "What is within reach": text, "Data type": "Curated estimate"})
-        render_fan_stat_table(pd.DataFrame(rows), team_name)
-    else:
-        st.info("No current-player milestones yet for this team board.")
-    render_fan_section_close()
+    with st.expander("Deep dive: storylines, comparisons & milestone table", expanded=False):
+        if current_entries:
+            for p in current_entries:
+                st.markdown(f"**{p['name']} history watch**")
+                milestone_html = []
+                for label, text, progress in _milestone_lines_for_player(p, legends):
+                    milestone_html.append(
+                        f"<div class='hist-milestone'><b>{html.escape(label.title())}</b><br>"
+                        f"<span style='font-size:12px;color:#475569'>{html.escape(text)}</span>"
+                        f"<div class='hist-progress'><span style='width:{max(5, min(98, progress * 100)):.0f}%'></span></div></div>"
+                    )
+                st.markdown("<div class='hist-milestone-grid'>" + "".join(milestone_html) + "</div>", unsafe_allow_html=True)
+            rows = []
+            for cur in current_entries:
+                for label, text, _progress in _milestone_lines_for_player(cur, legends):
+                    rows.append({"Player": cur["name"], "Milestone": label.title(), "What is within reach": text, "Data type": "Curated estimate"})
+            render_fan_stat_table(pd.DataFrame(rows), team_name)
+            cards = []
+            by_name = {p["name"]: p for p in legends}
+            for cur in current_entries[:3]:
+                targets = [by_name[n] for n in cur.get("compare_to", []) if n in by_name] or [p for p in legends[:4] if p["name"] != cur["name"]]
+                for target in targets[:2]:
+                    cards.append(_comparison_card_html(cur, target))
+            if cards:
+                st.markdown("<div class='hist-compare-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+        else:
+            st.caption("Deep-dive milestone content appears when a current player is on the franchise board.")
 
 
 

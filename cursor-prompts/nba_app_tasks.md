@@ -19,6 +19,14 @@
 - [ ] Identify slowest sections; cache audit
 - [ ] Quick view &lt; 3s on Cloud
 
+### Final refinement pass (2026-06-05)
+
+- [x] P1 Player Tracker — journey panel, Finals pass %, title rank projection, team pulse/stock
+- [x] P2 Legacy — achievement unlocks, rank movement animation, defining game, legacy swing
+- [x] P3 Team History — active milestones this week, FRANCHISE_GREAT_GAMES
+- [x] P4 Home — broadcast-studio tile copy (TNT/ESPN tone)
+- [x] P5 Perf — more expanders (series tabs, compare, history deep-dive, legacy faces)
+
 ### Premium fan experience pass (2026-06-05)
 
 - [x] P1 Player Tracker — record race lane, next 3 / easiest / hardest / series milestones

@@ -1,6 +1,6 @@
 # Pages & UX — fan-facing surfaces
 
-**Last updated:** 2026-06-05 · **Build:** `premium-fan-2026-06-05`
+**Last updated:** 2026-06-05 · **Build:** `final-refine-2026-06-05`
 
 Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is optional (`DEV_MODE` or sidebar toggle).
 
@@ -91,11 +91,12 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - Premium player card hero (large headshot, inline PPG/GP/record tiles, playoff badges).
-- **Franchise chase hero** — visual **record race lane** (current vs target headshots), next record / next 3 / easiest / hardest / series-within-reach ladder, plus `#rank` banner and progress bars.
+- **Franchise chase hero** — visual **record race lane** plus **journey panel** (projected pass game, Finals pass %, title-rank projection, most likely milestone), team **playoff pulse** (hottest, riser, stock up/down).
 - **Standout award strip** — 30/40-pt nights, engine scorer, two-way pressure callouts.
 - Playoff average stat pills; **series journey strip** + **round tabs** with per-series game log cards.
 - Franchise comparison cards (named Ewing/Frazier/Duncan/Parker-style copy).
-- Game log cards first; **Plotly progression charts** in collapsed expander (QA/Ultra still skip charts).
+- Round journey strip on first paint; **series tabs** in collapsed expander.
+- Franchise comparison cards in expander; Plotly in expander.
 
 ---
 
@@ -105,14 +106,11 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Purpose:** Career playoff legacy chase with **specific franchise names** (Ewing, Frazier, Duncan, Parker, etc.) — not generic greatness copy.
 
-**UX goals (2026-06-05 premium pass):**
-- Legacy score / ceiling / bracket-climb **meters** + **earned badge chips** (Franchise Legend, Championship Hero, Finals MVP track, etc.).
-- **Title probability impact** + **Finals MVP impact** + franchise rank panel (updates with sliders).
-- **Franchise GOAT ladder** (top six curated legends; current player highlighted).
-- **Playoff run ranking** copy tied to franchise great runs.
-- Named franchise **comparison face cards** (headshots where network allows).
-- **What-if scenario cards** — next round, Conference Finals, title — with legacy score + named read.
-- Simulator sliders remain; Plotly path chart in collapsed expander only.
+**UX goals (2026-06-05 final refine):**
+- Legacy score / ceiling / bracket-climb **meters** + **achievement unlocks** (locked/unlocked chips).
+- **Career-defining game alert**, **legacy swing** cards (win Finals / lose Finals / next game), **franchise rank movement** animation.
+- Title probability + Finals MVP impact + GOAT ladder + badges (slider-reactive).
+- Plotly path chart in collapsed expander; franchise compare faces in expander.
 
 **See:** [LEGACY_TRACKER.md](./LEGACY_TRACKER.md)
 
@@ -122,7 +120,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Team History Leaders` · **Renderer:** `render_team_history_leaders_page`
 
-**UX goals (2026-06-05 premium pass):** Mount Rushmore (top four faces), milestone **countdown cards**, current-player **movement tracker**, greatest playoff runs/games, legend cards with headshots/logos, sortable leaderboard, named comparison cards.
+**UX goals (2026-06-05 final refine):** Active milestones **this week**, Mount Rushmore, countdown, movement tracker, greatest runs/games (`FRANCHISE_GREAT_GAMES`); sortable table + deep-dive storylines in expanders.
 
 **Purpose:** Franchise playoff legends board + sortable leaderboards (30/40-pt games, scoring, rebounds, assists) + current-player chase cards with progress bars.
 

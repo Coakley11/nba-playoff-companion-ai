@@ -1,6 +1,6 @@
 # Team history & leaders
 
-**Last updated:** 2026-06-05 · **Build:** `premium-fan-2026-06-05`
+**Last updated:** 2026-06-05 · **Build:** `final-refine-2026-06-05`
 
 ## Purpose
 
@@ -13,7 +13,8 @@
 - **Milestone countdown cards** — e.g. “Brunson passes Houston with 22 more points.”
 - **Current-player movement tracker** — progress bars on active chase lines.
 - **Greatest playoff runs** — curated franchise chapters (`FRANCHISE_GREAT_RUNS` + fallback from legends).
-- **Greatest playoff games** — Finals log when available (canonical G1 score preserved).
+- **Active milestones this week** — Brunson/Towns/Wembanyama-style chase lines tied to the current postseason.
+- **Greatest playoff games** — `FRANCHISE_GREAT_GAMES` curated catalog + live Finals log when available.
 - Sortable leaderboard (points, RPG, APG, steals, blocks, 40-pt games, Finals appearances, etc.).
 - Visual history cards (`hist-grid`, `_history_card_html`) for top legends.
 - Highlight current players on the board (`_is_current_history_player`).

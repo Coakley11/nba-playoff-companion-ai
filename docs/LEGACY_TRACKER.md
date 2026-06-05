@@ -1,6 +1,6 @@
 # Legacy Tracker
 
-**Last updated:** 2026-06-05 · **Build:** `premium-fan-2026-06-05`
+**Last updated:** 2026-06-05 · **Build:** `final-refine-2026-06-05`
 
 ## Purpose
 
@@ -14,15 +14,14 @@
 - **Eliminated teams:** postmortem only — game log **newest first**, round splits, `specific_legacy_comparison` in section 7.
 - No generic “franchise changing” / “one of the greats” language in the comparison engine.
 
-## Premium fan experience (2026-06-05)
+## Final refinement (2026-06-05)
 
-- **Earned badge chips** — Franchise Legend, Championship Hero, Finals MVP Track, Top 5 Franchise Player, Greatest Modern Run (fan model; updates with sliders).
-- **Impact panel** — title probability impact (% of remaining ceiling), Finals MVP impact bump, all-time franchise rank meter.
-- **Franchise GOAT ladder** — top six curated legends with current player highlighted.
-- **Playoff run ranking** — contextual copy vs franchise great runs (`FRANCHISE_GREAT_RUNS`).
-- Legacy score / ceiling / bracket **meters** + “If playoffs ended today” badge.
-- Franchise touchstone face cards + what-if scenario cards (next round / CF / title).
-- Plotly path chart moved to collapsed expander for normal-mode first paint.
+- **Achievement unlocks** — six locked/unlocked chips that react to sliders and bracket state.
+- **Career-defining game alert** — highest-impact playoff night from the log.
+- **Legacy swing panel** — win Finals / lose Finals / win next game delta cards.
+- **Franchise rank movement** — animated today → win-title rank shift; lose-Finals no-movement callout.
+- Prior premium pass: badges, GOAT ladder, title/MVP impact, scenario cards.
+- Franchise compare faces + Plotly path in collapsed expanders (first paint = meters + unlocks + swing).
 
 ## Data behavior
 
