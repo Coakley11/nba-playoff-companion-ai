@@ -1,6 +1,6 @@
 # Performance audit
 
-**Last updated:** 2026-06-04 · **Branch:** `dev`
+**Last updated:** 2026-06-05 · **Branch:** `dev`
 
 Speed is part of stability: factual QA (P5) is impractical when every page takes 10–30+ seconds on Cloud.
 
@@ -27,10 +27,10 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 | Sidebar team labels | Use cached snapshot (no N× rebuild) |
 | Live Game Center | Safe path; ultra skips CDN entirely |
 | Matchup Intelligence | Fast ribbon only — no full scouting board |
-| Legacy Tracker | No Plotly, no simulator sliders |
-| Player Playoff Tracker | No Plotly; no prior-season log fetch |
-| Matchup Lineups | Curated `CURRENT_PLAYOFF_LINEUPS` — no rotation API |
-| Fan pages (QA) | Hero + ribbon + facts; **Load full page** for body |
+| Legacy Tracker | No Plotly path chart; full meters + scenario cards still render |
+| Player Playoff Tracker | No Plotly; no prior-season log fetch; full fan UI still renders |
+| Matchup Lineups | Curated `CURRENT_PLAYOFF_LINEUPS` — no rotation API; full broadcast UI |
+| Home Dashboard | Full fan briefing UI (no deferred body) |
 
 ### Ultra-fast mode (additional)
 
@@ -56,7 +56,17 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 | Team History & Leaders | &lt; 1s | &lt; 4s |
 | Previous Rounds | &lt; 1.5s | &lt; 6s |
 
-**Normal mode** (API sync + live Home + full Live GC) will exceed these — use QA mode for validation passes.
+**Normal mode** (API sync + live Home + full Live GC) will exceed these — profiling focus (P5 polish phase):
+
+| Page | Likely bottleneck (normal mode) | Mitigation direction |
+|------|-----------------------------------|----------------------|
+| Home Dashboard | Live bundle on **Go live**; injury/star pulls | Keep quick view default; 8s timeout guard |
+| Playoff Bracket | `get_playoff_state` API refresh loop | Session cache TTL; sidebar auto-sync toggle |
+| Matchup Lineups | `estimated_starters_from_api` + `season_averages` per card | Curated path in validation; batch headshot cache |
+| Player Playoff Tracker | `fetch_playoff_gamelog` + prior-season compare + Plotly | QA skips Plotly; demo log fallback |
+| Legacy Tracker | `playoff_game_logs_for_player` + Plotly ladder | QA skips simulator chart only |
+
+Headless script (`scripts/audit_page_performance.py`) shows playoff engine & validation &lt;20 ms; browser cost is Streamlit render + network.
 
 ---
 

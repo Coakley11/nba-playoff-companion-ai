@@ -15,8 +15,16 @@
 ### P2 — Home Dashboard
 
 - [x] Section timing in perf footer (`SHOW_PERF_DEBUG`)
+- [x] Fan briefing board — 9-tile energy grid (Game 1→2, coaching, pressure)
 - [ ] Identify slowest sections; cache audit
 - [ ] Quick view &lt; 3s on Cloud
+
+### Polish phase (2026-06-05)
+
+- [x] P1 Player Playoff Tracker visual overhaul (chase board, awards, series tabs, game cards)
+- [x] P2 Legacy Tracker meters + scenario cards + franchise faces
+- [x] P4 Lineups audit (Harrison Barnes PF, no Jeremy Sochan)
+- [x] P5 Normal-mode bottleneck table in `docs/PERFORMANCE_AUDIT.md`
 
 ### P3–P6
 

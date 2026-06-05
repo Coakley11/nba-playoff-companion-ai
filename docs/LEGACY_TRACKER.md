@@ -25,7 +25,15 @@
 - Do not contradict Team History leaders board without documenting difference in [TEAM_HISTORY.md](./TEAM_HISTORY.md).
 - **Live Game Center frozen** until P1 game-night sign-off — no changes to Layer 1 from this page.
 
+## Shipped polish (2026-06-05)
+
+- Visual legacy score / ceiling / bracket meters (`.lt-meter-grid`).
+- “If playoffs ended today” badge with named `specific_legacy_comparison` text.
+- Franchise touchstone face cards (Ewing, Frazier, Duncan, Parker, etc.).
+- What-if scenario cards for next round / CF / title (replaces plain metric row).
+
 ## Planned improvements
 
 - Share milestone cards (image export).
 - Link Legacy Tracker rows → Player Playoff Tracker deep link.
+- Normal-mode perf: cache playoff log fetches on Legacy + Player Tracker.
