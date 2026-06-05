@@ -757,12 +757,16 @@ def _inject_global_app_css():
 
 def _configure_app_shell():
     """One-time Streamlit page shell (title, global CSS). Called from main() only."""
+    import portfolio_polish as pp
+
     st.set_page_config(page_title="Daniel Cohen — NBA Playoff Companion AI", page_icon="🏀", layout="wide")
-    st.title("Daniel Cohen — NBA Playoff Companion AI")
-    st.caption(
-        "2026 NBA Playoff companion app — live game center, automatic series tracking, "
-        "bracket, box scores, and fan-focused analysis"
-    )
+    if not pp.is_screenshot_mode(st):
+        st.title("Daniel Cohen — NBA Playoff Companion AI")
+        st.caption(
+            "2026 NBA Playoff companion app — live game center, automatic series tracking, "
+            "bracket, box scores, and fan-focused analysis"
+        )
+    pp.inject_polish_css(st, app_slug="nba")
     _inject_global_app_css()
 
 # ==========================================================
@@ -6271,6 +6275,10 @@ def legacy_takeaways_eliminated(player, team_name, pts, reb, ast, stl, blk, fg, 
 
 def render_legacy_tracker_page(team_name):
     """Legacy Tracker: frozen postmortem for eliminated teams; live forecast + sliders for active teams."""
+    import portfolio_polish as pp
+    import portfolio_demo as pdemo
+
+    pdemo.apply_page_demo(st, "Legacy Tracker")
     _page_perf_tick("legacy_start")
     if _validation_mode_active():
         _render_validation_mode_banner()
@@ -6314,8 +6322,10 @@ def render_legacy_tracker_page(team_name):
     render_fan_product_shell_open()
 
     player_pool = current_roster_names(team_name, limit=15)
-    player = st.selectbox("Choose player", player_pool)
-    if _qa_skip_expensive_apis():
+    if pp.is_demo_mode(st) and "Jalen Brunson" in player_pool:
+        st.session_state.setdefault("legacy_tracker_player", "Jalen Brunson")
+    player = st.selectbox("Choose player", player_pool, key="legacy_tracker_player")
+    if _qa_skip_expensive_apis() and not pp.is_demo_mode(st):
         logs = None
         current = {
             "GP": 0,
@@ -6333,7 +6343,10 @@ def render_legacy_tracker_page(team_name):
         logs = playoff_game_logs_for_player(player)
         current = summarize_playoff_logs(logs)
 
-    if logs is None or logs.empty:
+    if (logs is None or logs.empty) and pp.is_demo_mode(st) and player == "Jalen Brunson":
+        current = pdemo.brunson_demo_stats()
+        st.caption("Portfolio demo: showing realistic Brunson playoff snapshot for screenshot-ready legacy comparison.")
+    elif logs is None or logs.empty:
         st.warning(
             "NBA API did not return current playoff game logs for this player. "
             "Eliminated postmortems still work from safe averages; active-team sliders default to reasonable baselines."
@@ -6523,7 +6536,7 @@ def render_legacy_tracker_page(team_name):
     with st.expander("Franchise bar — who sets the tier", expanded=False):
         st.markdown(_lt_franchise_compare_faces(player, team_name), unsafe_allow_html=True)
 
-    if _qa_skip_heavy_ui():
+    if _qa_skip_heavy_ui() and not pp.is_demo_mode(st):
         st.info("QA mode: legacy simulator sliders and path charts are skipped.")
         return
 
@@ -6615,8 +6628,8 @@ def render_legacy_tracker_page(team_name):
     )
     render_fan_section_close()
 
-    with st.expander("Legacy path chart & full ladder", expanded=False):
-        if not _qa_skip_heavy_ui():
+    with st.expander("Legacy path chart & full ladder", expanded=pp.is_demo_mode(st) or pp.is_screenshot_mode(st)):
+        if not _qa_skip_heavy_ui() or pp.is_demo_mode(st):
             st.plotly_chart(
                 px.bar(
                     path,
@@ -11326,6 +11339,15 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
     fb = pctx.get("fb")
     prob = _home_series_win_probability(team_name, hctx, live)
     prob_display = f"{prob}%"
+    _show_prob = bool(
+        st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode")
+    )
+    prob_html = (
+        f'<div class="cmd-prob-pill">Series win probability: <strong>{esc(prob_display)}</strong>'
+        f" · Championship stage outlook active</div>"
+        if _show_prob
+        else ""
+    )
     headline = _home_storyline_headline(team_name, hctx, pctx)
     box_score_html = ""
     if s and s.get("games") and not offseason:
@@ -11478,6 +11500,7 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
       {right_html}
     </div>
     <div class="cmd-headline">{esc(headline)}</div>
+    {prob_html}
     <div class="cmd-inj">🩹 {inj}</div>
     <div class="cmd-next" style="margin-top:14px">
       <div class="cmd-next-title">{esc(next_title)}</div>
@@ -11927,10 +11950,26 @@ def _home_dashboard_perf_footer(
 
 
 def render_playoff_command_center(team_name):
+    import portfolio_polish as pp
+    import portfolio_demo as pdemo
+
+    pdemo.apply_page_demo(st, "Home Dashboard")
     t0 = pytime.perf_counter()
     sections = []
     section_ms = {}
     _t_tick = t0
+    if pp.is_screenshot_mode(st) or pp.is_demo_mode(st):
+        pp.render_hero_banner(
+            st,
+            f"{fan_nick(team_name)} Playoff Command Center",
+            "Live bracket context, matchup pulse, and fan-facing playoff intelligence.",
+        )
+    pp.render_executive_summary(
+        st,
+        "Central playoff dashboard for your team — scores, matchup context, and next actions.",
+        "Gives fans a single command center during the playoff run without hunting across pages.",
+        "Hero matchup tile, live scoreboard hooks, emphasis cards, and quick navigation to bracket and games.",
+    )
     if _validation_mode_active():
         _render_validation_mode_banner()
         st.session_state[HOME_DASH_LIVE_UPDATES] = False
@@ -11949,7 +11988,8 @@ def render_playoff_command_center(team_name):
         f"{ident['stakes']} {ident['texture']}",
         "YOUR TEAM",
     )
-    render_page_trust_strip("home", "Scores from the bracket engine · tiles are analyst-style briefing, not live play-by-play.")
+    if not pp.is_screenshot_mode(st) and not pp.is_demo_mode(st):
+        render_page_trust_strip("home", "Scores from the bracket engine · tiles are analyst-style briefing, not live play-by-play.")
     render_fan_product_shell_open()
 
     api_calls = 0
@@ -17220,6 +17260,10 @@ def main():
         render_command_center_sidebar_link(st)
     except Exception:
         pass
+
+    import portfolio_polish as pp
+
+    pp.render_sidebar_toggle(st)
 
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
     default_idx = team_keys_sorted.index("New York Knicks") if "New York Knicks" in team_keys_sorted else 0
