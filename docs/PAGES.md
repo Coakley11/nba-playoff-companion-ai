@@ -1,6 +1,6 @@
 # Pages & UX — fan-facing surfaces
 
-**Last updated:** 2026-06-05
+**Last updated:** 2026-06-04
 
 Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is optional (`DEV_MODE` or sidebar toggle).
 
@@ -13,11 +13,12 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **Purpose:** Playoff command center for the selected favorite team—tonight's feel, series context, and optional live refresh.
 
 **UX goals:**
-- Hero + fan identity (stakes, tagline).
-- Playoff matchup ribbon (round, opponent, series record).
+- **Finals broadcast hero** — dual Knicks/Spurs team colors, series score once, last game box score (canonical `FINALS_GAME1_CANONICAL_SCORE`).
+- **Fan energy board** — six distinct tiles (excitement, player to watch, matchup swing, Game 2 stakes, history, watch key) without repeating the ledger.
+- Series log + storyline bar in one section; keys for next tip in a follow-on section.
 - Current game watch card with jump to Live Game Center.
 - **Quick view** default; **Go live** pulls injury/star/legacy bundles (8s timeout guard).
-- **Eliminated teams:** offseason outlook sections at top; live toggle disabled.
+- **Eliminated teams:** playoff recap banner + card-based offseason modules (priorities, assets, turnover, archetypes); live toggle disabled.
 
 **Data:** Merged playoff state, `resolve_home_matchup_context_fast`, optional live bundle APIs.
 
@@ -62,9 +63,10 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **Purpose:** TV-style playoff matchup board — PG vs PG through C vs C with headshots, team colors, and bench/X-factor cards.
 
 **UX goals:**
-- Curated playoff rotation overrides outdated API players.
-- Resolution source caption (curated / playoff minutes / profile).
-- Starter matchup cards with position advantage badges; bench columns by team; raw rotation in expander only.
+- Broadcast matchup strip + dual-team color hero (logos, headshots).
+- Curated playoff rotation overrides outdated API players (e.g. Harrison Barnes PF, no Jeremy Sochan).
+- PG–C cards with team/opp edge highlighting, advantage badges, bench battle columns, X-factor tiles, edge summary.
+- Section headers match TV broadcast blocks; raw rotation in expander only.
 
 ---
 
@@ -107,6 +109,8 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Team History Leaders` · **Renderer:** `render_team_history_leaders_page`
 
+**UX goals (2026-06-04 polish):** Legend cards with headshots/logos and hover lift; current-player chase cards; sortable leaderboard; milestone progress bars; named comparison cards.
+
 **Purpose:** Franchise playoff legends board + sortable leaderboards (30/40-pt games, scoring, rebounds, assists) + current-player chase cards with progress bars.
 
 **See:** [TEAM_HISTORY.md](./TEAM_HISTORY.md)
@@ -131,7 +135,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Renderer:** `render_offseason_future_outlook_sections`, `get_offseason_outlook`
 
-**Purpose:** Playoff recap banner plus structured post-elimination analysis—what went right, why they lost, priorities, cap/roster, draft assets, players out, direction label.
+**Purpose:** Playoff recap banner plus card-grid offseason modules—season reflection, priorities, future direction, draft/assets, roster turnover, ideal additions (fan-section headers, less wall-of-text).
 
 ---
 

@@ -163,6 +163,36 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
   box-shadow: 0 2px 10px rgba(15,23,42,.06);
 }
 .fan-sec-body--empty { color: #64748b; font-size: 13px; line-height: 1.45; font-style: italic; }
+.fan-energy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 4px 0 8px; }
+.fan-energy-card {
+  border-radius: 16px; padding: 14px 15px; min-height: 118px;
+  background: linear-gradient(165deg, #fff 0%, var(--team-card-tint, #f8fafc) 100%);
+  border: 1px solid var(--team-border, rgba(148,163,184,.32));
+  box-shadow: 0 8px 22px rgba(15,23,42,.08);
+}
+.fan-energy-card--hot {
+  border-color: var(--team-primary, #38bdf8);
+  box-shadow: 0 0 0 1px var(--team-accent-soft, rgba(56,189,248,.2)), 0 10px 26px rgba(15,23,42,.12);
+}
+.fan-energy-card--spotlight { background: linear-gradient(145deg, var(--team-accent-soft), #fff 55%); }
+.fan-energy-k { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; color: var(--team-primary, #64748b); margin-bottom: 8px; }
+.fan-energy-icon { font-size: 1.05rem; line-height: 1; }
+.fan-energy-t { font-size: 14px; font-weight: 900; color: #0f172a; margin-bottom: 6px; line-height: 1.2; }
+.fan-energy-b { font-size: 13px; color: #475569; line-height: 1.45; }
+.fan-storyline-bar {
+  margin-top: 10px; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(90deg, var(--team-accent-soft), rgba(148,163,184,.08));
+  border: 1px solid var(--team-border); font-size: 13px; color: #334155; line-height: 1.45;
+}
+.os-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 10px 0 14px; }
+.os-card {
+  border-radius: 16px; padding: 14px; background: #fff;
+  border: 1px solid var(--team-border); box-shadow: 0 6px 18px rgba(15,23,42,.07);
+}
+.os-card-k { font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: var(--team-primary); margin-bottom: 6px; }
+.os-card-t { font-size: 14px; font-weight: 900; color: #0f172a; margin-bottom: 6px; }
+.os-card-b { font-size: 13px; color: #475569; line-height: 1.42; }
+.os-card-b ul { margin: 6px 0 0; padding-left: 18px; }
 .home-live-strip--soon { animation: homeSoonPulse 2.6s ease-in-out infinite; }
 @keyframes homeSoonPulse {
   0%, 100% { box-shadow: 0 12px 40px rgba(245,158,11,.2); }
@@ -1685,62 +1715,60 @@ margin:0 0 18px 0;box-shadow:0 12px 40px rgba(0,0,0,0.35);display:flex;gap:14px;
     )
     st.caption(f"**{exit_line}** · Analysis is team-specific and tied to this postseason run.")
 
+    def _os_list(lines):
+        return "<ul>" + "".join(f"<li>{html.escape(str(x))}</li>" for x in lines) + "</ul>"
+
     if render_fan_section("1 · Season reflection", "📋", caption="What worked and what ended the run.", tone="elim"):
         render_fan_section_open()
-    with st.container(border=True):
-        st.markdown(f"**What went right**\n\n{ref['went_right']}")
-        st.markdown(f"**What caused elimination**\n\n{ref['elimination_cause']}")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Playoff strengths (on tape)**")
-            for line in ref["playoff_strengths"]:
-                st.markdown(f"- {line}")
-        with c2:
-            st.markdown("**Playoff weaknesses exposed**")
-            for line in ref["playoff_weaknesses"]:
-                st.markdown(f"- {line}")
+    _render_offseason_card_grid([
+        ("Tape room", "What went right", ref["went_right"]),
+        ("Exit story", "Why the season ended", ref["elimination_cause"]),
+        ("Strengths", "Playoff strengths on tape", _os_list(ref["playoff_strengths"])),
+        ("Gaps", "Weaknesses exposed", _os_list(ref["playoff_weaknesses"])),
+    ])
+    render_fan_section_close()
 
-    st.markdown("### 2 · Offseason priorities & roster construction")
-    with st.container(border=True):
-        st.markdown("**What the roster needs next** (from how this series looked)")
-        for p in od["priorities"]:
-            st.markdown(f"- {p}")
-        ro = od["roster"]
-        st.markdown("**Roster construction snapshot**")
-        st.markdown(ro["summary"])
-        for b in ro["bullets"]:
-            st.markdown(f"- {b}")
+    if render_fan_section("2 · Offseason priorities", "🛠️", caption="Roster needs and construction levers.", tone="elim"):
+        render_fan_section_open()
+    ro = od["roster"]
+    _render_offseason_card_grid([
+        ("Priority board", "What the roster needs next", _os_list(od["priorities"])),
+        ("Construction", "Roster snapshot", f"{html.escape(ro['summary'])}{_os_list(ro['bullets'])}"),
+    ])
+    render_fan_section_close()
 
-    st.markdown("### 3 · Future outlook")
-    with st.container(border=True):
-        for para in od["future"]:
-            st.markdown(para)
-        d = od["direction"]
-        st.markdown(f"**Direction: {d['label']}**")
-        st.markdown(d["blurb"])
-        st.caption(
-            "Championship window, young core vs. aging curve, and whether the path is contender / retool / rebuild — summarized in the direction line above plus these paragraphs."
-        )
+    if render_fan_section("3 · Future direction", "🧭", caption="Window, timeline, and franchise compass.", tone="elim"):
+        render_fan_section_open()
+    d = od["direction"]
+    future_body = " ".join(od["future"][:2])
+    if len(od["future"]) > 2:
+        future_body += _os_list(od["future"][2:])
+    _render_offseason_card_grid([
+        ("Compass", d["label"], d["blurb"]),
+        ("Outlook", "What comes next", future_body),
+    ])
+    render_fan_section_close()
 
-    st.markdown("### 4 · Draft picks & asset outlook")
-    with st.container(border=True):
-        for line in od["draft_assets"]:
-            st.markdown(f"- {line}")
-        st.caption("Future picks, swaps, protections, and trade flexibility — how strong the war chest is for the next star chase or depth upgrade.")
+    if render_fan_section("4 · Draft & assets", "📦", caption="Picks, swaps, and trade flexibility.", tone="elim"):
+        render_fan_section_open()
+    _render_offseason_card_grid([
+        ("War chest", "Draft & asset outlook", _os_list(od["draft_assets"])),
+    ])
+    render_fan_section_close()
 
-    st.markdown("### 5 · Players who may not return (contracts & movement)")
-    with st.container(border=True):
-        for line in _offseason_players_out_bullets(od):
-            st.markdown(f"- {line}")
-        st.caption("Free agents, trade candidates, extension decisions, and cap pressure — not predictions, but the real questions the front office has to answer.")
+    if render_fan_section("5 · Roster turnover watch", "🔄", caption="Contracts, free agency, and movement questions.", tone="elim"):
+        render_fan_section_open()
+    _render_offseason_card_grid([
+        ("Movement", "Players who may not return", _os_list(_offseason_players_out_bullets(od))),
+    ])
+    render_fan_section_close()
 
-    st.markdown("### 6 · Ideal player types to add")
-    with st.container(border=True):
-        st.markdown(
-            "Archetypes that fit the holes above — **defensive wing**, **secondary scorer**, **rim protector**, **bench shooting**, **backup creator**, etc."
-        )
-        for a in od["archetypes"]:
-            st.markdown(f"- {a}")
+    if render_fan_section("6 · Ideal additions", "➕", caption="Archetypes that fit the holes above.", tone="elim"):
+        render_fan_section_open()
+    _render_offseason_card_grid([
+        ("Shopping list", "Player types to target", _os_list(od["archetypes"])),
+    ])
+    render_fan_section_close()
 
 
 FIRST_ROUND_SERIES = {
@@ -7725,7 +7753,13 @@ def _inject_matchup_lineups_css(team, opp):
 .ml-player--team {{ border-top:5px solid {t['primary']}; }}
 .ml-player--opp {{ border-top:5px solid {o['primary']}; }}
 .ml-player-top {{ position:relative; min-height:82px; }}
-.ml-headshot {{ width:92px; height:72px; object-fit:cover; object-position:top center; border-radius:14px; background:#e2e8f0; }}
+.ml-headshot {{ width:100px; height:78px; object-fit:cover; object-position:top center; border-radius:14px; background:#e2e8f0; border:2px solid rgba(255,255,255,.85); }}
+.ml-broadcast-strip {{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:0 0 14px; padding:10px 14px;
+  border-radius:14px; background:rgba(15,23,42,.92); border:1px solid rgba(148,163,184,.35); color:#e2e8f0;
+}}
+.ml-broadcast-strip span {{ font-size:10px; font-weight:950; letter-spacing:.14em; text-transform:uppercase; color:{t['accent']}; }}
+.ml-broadcast-tag {{ padding:4px 10px; border-radius:999px; font-size:10px; font-weight:900; background:{t['accent_soft']}; color:#0f172a; }}
 .ml-mini-logo {{ position:absolute; right:0; top:0; width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 3px 8px rgba(0,0,0,.25)); }}
 .ml-pos {{ font-size:10px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-top:6px; }}
 .ml-name {{ font-size:16px; line-height:1.05; font-weight:950; color:#0f172a; margin-top:3px; }}
@@ -7827,6 +7861,12 @@ def render_matchup_lineups_page(team_name, profile):
     st.markdown(
         f"""
 <div class="ml-shell">
+  <div class="ml-broadcast-strip">
+    <span>Broadcast matchup graphic</span>
+    <span class="ml-broadcast-tag">PG–C boards</span>
+    <span class="ml-broadcast-tag">Headshots + team colors</span>
+    <span class="ml-broadcast-tag">Curated playoff rotation</span>
+  </div>
   <div class="ml-hero">
     <div class="ml-hero-row">
       <div class="ml-hero-team">
@@ -7890,9 +7930,14 @@ def render_matchup_lineups_page(team_name, profile):
             if gap > swing_gap:
                 swing_gap = gap
                 swing = (pos, tp, op, badge, why)
+        card_mod = "ml-card"
+        if adv_team == team_name:
+            card_mod += " ml-card--team-edge"
+        elif adv_team == opp:
+            card_mod += " ml-card--opp-edge"
         cards.append(
             f"""
-<div class="ml-card">
+<div class="{card_mod}">
   <div class="ml-card-top"><div class="ml-position">{html.escape(pos)} vs {html.escape(pos)}</div><div class="ml-badge">{html.escape(badge)}</div></div>
   <div class="ml-match">
     {_lineup_player_html(tp, team_name, pos, "team")}
@@ -7907,7 +7952,7 @@ def render_matchup_lineups_page(team_name, profile):
 
     if swing:
         pos, tp, op, badge, why = swing
-        st.markdown("### Biggest Matchup Swing")
+        render_fan_section_header("Biggest matchup swing", "⚔️", caption="The position duel most likely to move the series.", tone="broadcast")
         st.markdown(
             f"""
 <div class="ml-shell"><div class="ml-tile">
@@ -7919,7 +7964,7 @@ def render_matchup_lineups_page(team_name, profile):
             unsafe_allow_html=True,
         )
 
-    st.markdown("### Bench Battle")
+    render_fan_section_header("Bench battle", "🪑", caption="Second-unit minutes that can flip a quarter.", tone="default")
     bench_cols_html = []
     for tm in (team_name, opp):
         cards_b = []
@@ -7939,7 +7984,7 @@ def render_matchup_lineups_page(team_name, profile):
         )
     st.markdown('<div class="ml-shell"><div class="ml-bench-grid">' + "".join(bench_cols_html) + "</div></div>", unsafe_allow_html=True)
 
-    st.markdown("### Key Tactical Edges")
+    render_fan_section_header("Key tactical edges", "📐", caption="Schematic advantages beyond the box score.", tone="default")
     edge_html = []
     for label, value, sub in _matchup_edge_tiles(team_name, opp):
         edge_html.append(
@@ -7947,7 +7992,7 @@ def render_matchup_lineups_page(team_name, profile):
         )
     st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(edge_html) + "</div></div>", unsafe_allow_html=True)
 
-    st.markdown("### X-Factor Players")
+    render_fan_section_header("X-factor players", "✨", caption="Rotation names who can swing a possession battle.", tone="default")
     x_html = []
     for tm, p, slot in _lineup_xfactor_candidates(team_name, opp):
         stats = season_averages(p)
@@ -7960,7 +8005,7 @@ def render_matchup_lineups_page(team_name, profile):
         )
     st.markdown('<div class="ml-shell"><div class="ml-tile-grid">' + "".join(x_html) + "</div></div>", unsafe_allow_html=True)
 
-    st.markdown("### Who Has the Edge?")
+    render_fan_section_header("Who has the edge?", "🏁", caption="Position-by-position lean and toss-ups.", tone="broadcast")
     adv_df = matchup_advantages(team_name, opp)
     team_edges = int((adv_df["Advantage"] == team_name).sum()) if not adv_df.empty else 0
     opp_edges = int((adv_df["Advantage"] == opp).sum()) if not adv_df.empty else 0
@@ -9529,6 +9574,97 @@ def _home_series_storyline(team_name, s_active, pctx):
     )
 
 
+def _home_finals_hero_palette(team_name, opponent):
+    """Dual-team Finals broadcast palette (Knicks blue/orange + Spurs silver/black)."""
+    nyk = get_team_theme("New York Knicks")
+    sas = get_team_theme("San Antonio Spurs")
+    home = nyk if team_name == "New York Knicks" else sas
+    away = sas if team_name == "New York Knicks" else nyk
+    return {
+        "bg0": home["bg0"],
+        "bg1": away["bg1"],
+        "accent": home["accent"],
+        "accent2": away["accent"],
+        "accent_soft": home["accent_soft"],
+        "accent_soft2": away["accent_soft"],
+        "primary": home["primary"],
+        "primary2": away["primary"],
+        "finals": True,
+    }
+
+
+def _home_matchup_swing_line(team_name, pctx, s_active):
+    """Biggest matchup swing — distinct from series score copy."""
+    opp = pctx.get("opp") or (TEAM_PROFILES.get(team_name) or {}).get("current_opponent")
+    on = fan_nick(opp) if opp else "the opponent"
+    lens = pctx.get("lens") or team_dashboard_lens(team_name)
+    ax = lens.get("identity_axes") or ("Half-court engine", "Wing defense", "Glass margin")
+    if team_name == "New York Knicks" and opp == "San Antonio Spurs":
+        return (
+            f"Wembanyama's length vs {ax[1]} — if New York wins the paint-touch battle, "
+            f"Brunson's pull-up game stays efficient; if San Antonio shrinks the floor, the series turns into a turnover war."
+        )
+    if team_name == "San Antonio Spurs" and opp == "New York Knicks":
+        return (
+            f"Towns spacing vs San Antonio's rim deterrence — when the Knicks get clean catch-and-shoot looks, "
+            f"Castle has to chase over screens all night; when the Spurs pack the paint, the game slows to a half-court exam."
+        )
+    return f"{ax[0]} against {on}'s best counter — whoever owns that duel controls the shot diet for Game 2."
+
+
+def _home_game2_change_line(team_name, pctx, s_active):
+    """What the next game could change — without repeating the series ledger."""
+    nick = fan_nick(team_name)
+    opp = pctx.get("opp")
+    on = fan_nick(opp) if opp else "the opponent"
+    games = len((s_active or {}).get("games") or [])
+    nxt = games + 1
+    prof = TEAM_PROFILES.get(team_name) or {}
+    if games == 1:
+        return (
+            f"Game {nxt} flips home-court math: a {nick} win forces {on} to answer on the road; "
+            f"a Spurs bounce-back steals the pressure Brunson carried in the opener. "
+            f"{(prof.get('concerns') or ['Bench minutes'])[0].capitalize()} will show up early."
+        )
+    return (
+        f"Game {nxt} rewrites the possession battle — adjustments to switching, rebounding, and "
+        f"who absorbs the star usage matter more than another standings-style recap."
+    )
+
+
+def _render_fan_energy_grid(cards):
+    """HTML grid of fan-energy cards: list of (icon, title, body, variant)."""
+    e = html.escape
+    parts = ['<div class="fan-energy-grid">']
+    for item in cards:
+        icon, title, body = item[0], item[1], item[2]
+        variant = item[3] if len(item) > 3 else ""
+        cls = "fan-energy-card"
+        if variant:
+            cls += f" fan-energy-card--{e(variant)}"
+        parts.append(
+            f'<div class="{cls}">'
+            f'<div class="fan-energy-k"><span class="fan-energy-icon">{e(icon)}</span>{e(title)}</div>'
+            f'<div class="fan-energy-b">{e(body)}</div></div>'
+        )
+    parts.append("</div>")
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+def _render_offseason_card_grid(items):
+    """Offseason module cards: list of (kicker, title, body_html_or_text)."""
+    e = html.escape
+    chunks = ['<div class="os-card-grid">']
+    for kicker, title, body in items:
+        body_e = body if "<" in str(body) else e(str(body))
+        chunks.append(
+            f'<div class="os-card"><div class="os-card-k">{e(kicker)}</div>'
+            f'<div class="os-card-t">{e(title)}</div><div class="os-card-b">{body_e}</div></div>'
+        )
+    chunks.append("</div>")
+    st.markdown("".join(chunks), unsafe_allow_html=True)
+
+
 def _dashboard_story_cards(team_name, pctx):
     nick = fan_nick(team_name)
     if _is_home_eliminated(team_name):
@@ -9702,6 +9838,25 @@ def _inject_home_command_center_css():
   background: radial-gradient(120% 80% at 10% 0%, rgba(255,255,255,0.07) 0%, transparent 55%),
     linear-gradient(145deg, var(--cmd-bg0,#0b1220) 0%, var(--cmd-bg1,#111827) 45%, #0f172a 100%);
 }
+.cmd-hero--finals {
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 22px 56px rgba(0,0,0,0.55), 0 0 40px var(--cmd-accent-soft, rgba(245,132,38,.15));
+  background:
+    radial-gradient(ellipse 55% 80% at 8% 20%, var(--cmd-accent-soft), transparent 55%),
+    radial-gradient(ellipse 50% 75% at 92% 25%, var(--cmd-accent-soft2, rgba(200,16,46,.12)), transparent 50%),
+    linear-gradient(135deg, var(--cmd-bg0) 0%, #0f172a 42%, var(--cmd-bg1) 100%);
+}
+.cmd-finals-badge {
+  display: inline-block; margin-bottom: 10px; padding: 5px 14px; border-radius: 999px;
+  font-size: 10px; font-weight: 950; letter-spacing: .16em; text-transform: uppercase;
+  color: #fff7ed; border: 1px solid rgba(255,255,255,.22);
+  background: linear-gradient(90deg, var(--cmd-primary, #006BB6), var(--cmd-primary2, #C4CED4));
+}
+.cmd-scoreline--finals {
+  background: linear-gradient(90deg, #fde68a, #fbbf24, #f59e0b);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.cmd-emph-card--finals { border-color: var(--cmd-accent, #f59e0b); }
 .cmd-hero::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 38%);
@@ -9892,7 +10047,11 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
         pctx = build_dashboard_playoff_context(
             team_name, hctx, None, skip_live_fetch=not injury_use_live
         )
-    pal = live_hero_palette(team_name)
+    profile_early = TEAM_PROFILES[team_name]
+    opp_early = hctx.get("opponent") or profile_early.get("current_opponent")
+    rnd_early = (hctx.get("series") or {}).get("round") or profile_early.get("round", "")
+    is_finals = "NBA Finals" in str(rnd_early) and opp_early in TEAM_PROFILES
+    pal = _home_finals_hero_palette(team_name, opp_early) if is_finals else live_hero_palette(team_name)
     esc = html.escape
     profile = TEAM_PROFILES[team_name]
     offseason = _is_home_eliminated(team_name)
@@ -10016,18 +10175,35 @@ def _home_command_center_hero_html(team_name, hctx, pctx=None, injury_use_live=T
         pulse = "Draft · cap · trade board"
 
     next_title = "What's next" if offseason else "Next game"
+    finals_badge = ""
+    hero_cls = "cmd-hero"
+    score_cls = "cmd-scoreline"
+    shell_vars = (
+        f"--cmd-bg0:{pal['bg0']};--cmd-bg1:{pal['bg1']};"
+        f"--cmd-accent:{pal['accent']};--cmd-accent-soft:{pal['accent_soft']};"
+    )
+    if is_finals:
+        hero_cls = "cmd-hero cmd-hero--finals"
+        score_cls = "cmd-scoreline cmd-scoreline--finals"
+        shell_vars += (
+            f"--cmd-accent-soft2:{pal.get('accent_soft2', pal['accent_soft'])};"
+            f"--cmd-primary:{pal.get('primary', pal['accent'])};"
+            f"--cmd-primary2:{pal.get('primary2', pal['accent'])};"
+        )
+        finals_badge = '<div class="cmd-finals-badge">NBA Finals · Championship Stage</div>'
 
     return f"""
-<div class="cmd-shell" style="--cmd-bg0:{pal['bg0']};--cmd-bg1:{pal['bg1']};--cmd-accent:{pal['accent']};--cmd-accent-soft:{pal['accent_soft']};">
-<div class="cmd-hero">
+<div class="cmd-shell" style="{shell_vars}">
+<div class="{hero_cls}">
   <div class="cmd-hero-inner">
     <div class="cmd-kicker">{kicker_dom}</div>
+    {finals_badge}
     <div class="cmd-row">
       <img class="cmd-logo" src="{esc(left_logo)}" alt=""/>
       <div class="cmd-center">
         <div class="cmd-round">{rnd}</div>
         <div class="cmd-match">{matchup}</div>
-        <div class="cmd-scoreline">{score_txt}</div>
+        <div class="{score_cls}">{score_txt}</div>
         {box_score_html}
         <div class="cmd-rail">
           <span class="cmd-pill">{esc(pulse)}</span>
@@ -10682,105 +10858,69 @@ def render_playoff_command_center(team_name):
         st.caption("Conference Finals / Finals shell is live — game rows fill in as results post.")
     if not is_eliminated and current_series_obj:
         st.markdown(
-            f"<div style='font-size:13px;color:#94a3b8;line-height:1.45;margin-top:8px'>"
-            f"{html.escape(_home_series_storyline(team_name, current_series_obj, pctx))}</div>",
+            f'<div class="fan-storyline-bar">{html.escape(_home_series_storyline(team_name, current_series_obj, pctx))}</div>',
             unsafe_allow_html=True,
         )
     sections.append("series_board")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "series_board")
     render_fan_section_close()
 
-    if render_fan_section(
-        "2 · Why fans should care",
-        "🔥",
-        caption="Matchup edges, storylines, and pressure points — not another scoreboard repeat.",
-        tone="default",
-    ):
-        render_fan_section_open()
-    exc_cols = st.columns(3)
-    for col, (title, body) in zip(exc_cols, _home_fan_excitement_cards(team_name, pctx, current_series_obj, hctx)):
-        with col:
-            with st.container(border=True):
-                st.markdown(f"**{title}**")
-                st.caption(body)
-    sections.append("fan_excitement")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fan_excitement")
-    render_fan_section_close()
-
-    if render_fan_section(
-        "3 · Player spotlight",
-        "⭐",
-        caption="Who drove the last game and who to watch next.",
-        tone="default",
-    ):
-        render_fan_section_open()
-    last_mvp, last_why, watch, watch_why, rising = _home_player_spotlight(team_name, current_series_obj, pctx)
-    p_cols = st.columns(2)
-    with p_cols[0]:
-        with st.container(border=True):
-            st.markdown("**Best of the last game**")
-            if last_mvp:
-                st.success(f"**{last_mvp}** — _{last_why}_")
-            else:
-                st.caption("Standout tag unlocks when the latest game row hits the log.")
-    with p_cols[1]:
-        with st.container(border=True):
-            st.markdown("**Player to watch next**")
-            if watch:
-                st.info(f"**{watch}** — _{watch_why}_")
-            else:
-                st.caption("Rotation leader will populate from the curated board.")
-    if rising:
-        st.caption(f"Rising performer in the mix: **{rising}** — minutes and matchup could swing the next night.")
-    sections.append("player_spotlight")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "player_spotlight")
-    render_fan_section_close()
-
-    if render_fan_section(
-        "4 · What to watch next",
-        "👀",
-        caption="Three keys for the upcoming game — plus runway when live mode is on.",
-        tone="soon" if effective_live else "default",
-    ):
-        render_fan_section_open()
-    for title, detail in _home_watch_next_keys(team_name, pctx, current_series_obj):
-        st.markdown(f"- **{title}:** {detail}")
-    if is_eliminated:
-        st.caption(
-            f"{fan_nick(team_name)}'s postseason ended with **{profile.get('first_round_result', 'first-round exit')}**. "
-            "Use **Live Game Center** in the sidebar for league-wide games still in progress."
+    if not is_eliminated:
+        last_mvp, last_why, watch, watch_why, rising = _home_player_spotlight(
+            team_name, current_series_obj, pctx
         )
-    elif effective_live:
-        live = pctx.get("live")
-        if live:
-            home = live.get("homeTeam", {}) or {}
-            away = live.get("awayTeam", {}) or {}
-            st.markdown(
-                f"**Runway:** **{_live_team_full_name(away.get('teamTricode',''), away)}** @ "
-                f"**{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
-            )
-        else:
-            opp = hctx.get("opponent_display") if hctx.get("advanced") else profile.get("current_opponent")
-            st.caption(f"Next tip: {fan_nick(team_name)} vs {opp or 'opponent TBA'} — live feed loads when the board posts.")
-    sections.append("watch_next")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "watch_next")
-    render_fan_section_close()
+        exc = _home_fan_excitement_cards(team_name, pctx, current_series_obj, hctx)
+        watch_keys = _home_watch_next_keys(team_name, pctx, current_series_obj)
 
-    if render_fan_section(
-        "5 · Franchise stakes",
-        "🏛️",
-        caption="Historical context — what this run means beyond tonight's box score.",
-        tone="default",
-    ):
-        render_fan_section_open()
-    st.markdown(
-        f"<div style='font-size:14px;color:#e2e8f0;line-height:1.5'>"
-        f"{html.escape(_home_franchise_stakes(team_name))}</div>",
-        unsafe_allow_html=True,
-    )
-    sections.append("franchise_stakes")
-    _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "franchise_stakes")
-    render_fan_section_close()
+        if render_fan_section(
+            "2 · Fan energy board",
+            "🔥",
+            caption="Why this series matters — each tile answers a different question (no scoreboard repeat).",
+            tone="broadcast",
+        ):
+            render_fan_section_open()
+        _render_fan_energy_grid([
+            ("🔥", "Why fans should be excited", exc[0][1] if exc else "", "hot"),
+            ("⭐", "Player to watch", f"{watch} — {watch_why}" if watch else "Rotation leader loads from curated board.", "spotlight"),
+            ("⚔️", "Biggest matchup swing", _home_matchup_swing_line(team_name, pctx, current_series_obj), ""),
+            ("🎯", f"What Game {len((current_series_obj or {}).get('games') or []) + 1} could change", _home_game2_change_line(team_name, pctx, current_series_obj), "hot"),
+            ("🏛️", "Historical stakes", _home_franchise_stakes(team_name), ""),
+            ("👀", watch_keys[0][0] if watch_keys else "Watch next", watch_keys[0][1] if watch_keys else "", ""),
+        ])
+        if last_mvp:
+            st.caption(f"**Last game standout:** {last_mvp} — _{last_why}_")
+        if rising:
+            st.caption(f"**Rising performer:** {rising}")
+        sections.append("fan_energy_board")
+        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fan_energy_board")
+        render_fan_section_close()
+
+        if render_fan_section(
+            "3 · Keys for the next tip",
+            "👀",
+            caption="Three possessions to track — plus live runway when Go live is on.",
+            tone="soon" if effective_live else "default",
+        ):
+            render_fan_section_open()
+        for title, detail in watch_keys[1:]:
+            st.markdown(f"- **{title}:** {detail}")
+        if effective_live:
+            live = pctx.get("live")
+            if live:
+                home = live.get("homeTeam", {}) or {}
+                away = live.get("awayTeam", {}) or {}
+                st.markdown(
+                    f"**Runway:** **{_live_team_full_name(away.get('teamTricode',''), away)}** @ "
+                    f"**{_live_team_full_name(home.get('teamTricode',''), home)}** · _{live.get('gameStatusText','')}_"
+                )
+            else:
+                opp = hctx.get("opponent_display") if hctx.get("advanced") else profile.get("current_opponent")
+                st.caption(
+                    f"Next tip: {fan_nick(team_name)} vs {opp or 'opponent TBA'} — live feed loads when the board posts."
+                )
+        sections.append("watch_next")
+        _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "watch_next")
+        render_fan_section_close()
 
     if render_fan_section("6 · Who's available", "🩹", caption="Injury snapshot when live mode is on.", tone="default"):
         render_fan_section_open()
@@ -14877,8 +15017,10 @@ def _inject_history_leaders_css():
 <style>
 .hist-note { color:#475569; font-size:12px; line-height:1.45; margin:4px 0 12px; }
 .hist-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:12px 0 16px; }
-.hist-card { position:relative; border:1px solid var(--team-border); border-radius:18px; padding:14px; background:linear-gradient(180deg,#fff,var(--team-card-tint)); box-shadow:0 10px 26px rgba(15,23,42,.10); overflow:hidden; min-height:270px; }
-.hist-card-current { border-width:2px; box-shadow:0 0 0 3px var(--team-accent-soft), 0 14px 32px rgba(15,23,42,.16); }
+.hist-card { position:relative; border:1px solid var(--team-border); border-radius:18px; padding:14px; background:linear-gradient(180deg,#fff,var(--team-card-tint)); box-shadow:0 10px 26px rgba(15,23,42,.10); overflow:hidden; min-height:280px; transition:transform .15s ease, box-shadow .15s ease; }
+.hist-card:hover { transform:translateY(-2px); box-shadow:0 14px 34px rgba(15,23,42,.14); }
+.hist-card-current { border-width:2px; box-shadow:0 0 0 3px var(--team-accent-soft), 0 14px 32px rgba(15,23,42,.16); background:linear-gradient(165deg,var(--team-accent-soft),#fff 48%); }
+.hist-leaders-hero { margin:0 0 12px; padding:12px 14px; border-radius:14px; background:linear-gradient(90deg,var(--team-accent-soft),transparent); border:1px solid var(--team-border); font-size:13px; color:#334155; line-height:1.45; }
 .hist-rank { position:absolute; top:10px; right:12px; font-weight:950; color:var(--team-primary); font-size:1.1rem; }
 .hist-img-wrap { position:relative; width:92px; height:78px; margin-bottom:8px; }
 .hist-head { width:92px; height:68px; object-fit:cover; object-position:top center; border-radius:14px; background:#e2e8f0; }
@@ -14949,6 +15091,11 @@ def render_team_history_leaders_page(team_name):
     c1.metric("Legends on board", len(legends))
     c2.metric("Current players highlighted", len(current_entries))
     c3.metric("History mode", "Curated estimates")
+    st.markdown(
+        f"<div class='hist-leaders-hero'><b>{html.escape(fan_nick(team_name))} playoff history</b> — "
+        f"legends set the bar; current roster names chase milestones on curated boards (estimates labeled).</div>",
+        unsafe_allow_html=True,
+    )
 
     if render_fan_section("Franchise legends overview", "🏆", caption="Top franchise playoff icons on the curated board.", tone="default"):
         render_fan_section_open()

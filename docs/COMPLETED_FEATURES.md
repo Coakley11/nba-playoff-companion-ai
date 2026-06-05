@@ -1,12 +1,13 @@
 # Completed features
 
-**Last updated:** 2026-06-05
+**Last updated:** 2026-06-04
 
 ## Completed Features
 
 ### Fan pages (production)
 
 - [x] Home Dashboard — playoff command center, quick/live modes, elimination offseason blocks
+- [x] UI polish pass (2026-06-04) — Finals broadcast hero, fan energy board, matchup TV graphics, history/offseason card layouts (no data changes)
 - [x] Live Game Center — Layer 1/2/3 architecture + safe mode path
 - [x] Live Game Center — always-visible trust strip (status, score, clock, source, last updated)
 - [x] Playoff Bracket — full bracket with API sync + demo fallback
