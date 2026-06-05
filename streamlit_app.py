@@ -2588,6 +2588,9 @@ def get_playoff_refresh_settings():
     if _validation_mode_active():
         use_demo = True
         api_refresh = False
+    elif st.session_state.get("portfolio_demo_mode"):
+        use_demo = True
+        api_refresh = False
     return use_demo, api_refresh
 
 
@@ -6307,16 +6310,17 @@ def render_legacy_tracker_page(team_name):
         )
     else:
         st.subheader(f"Legacy Tracker · {nick} — live forecast (future outcomes can still change the story)")
-        render_mode_banner(
-            team_name,
-            "LIVE FORECAST MODE",
-            f"<b>Section A</b> locks <b>current legacy impact</b> to real playoff logs plus "
-            f"<b>{series_wins_bracket}</b> series win(s) already on the bracket. "
-            f"<b>Section B</b> is a <b>fan simulator</b>: move sliders to stress-test scoring, efficiency, "
-            f"defense feel, clutch, turnovers, and bench lift — then read the ladder for what happens if "
-            f"{html.escape(nick)} keep climbing.",
-            variant="live",
-        )
+        if not pp.is_capture_mode(st):
+            render_mode_banner(
+                team_name,
+                "LIVE FORECAST MODE",
+                f"<b>Section A</b> locks <b>current legacy impact</b> to real playoff logs plus "
+                f"<b>{series_wins_bracket}</b> series win(s) already on the bracket. "
+                f"<b>Section B</b> is a <b>fan simulator</b>: move sliders to stress-test scoring, efficiency, "
+                f"defense feel, clutch, turnovers, and bench lift — then read the ladder for what happens if "
+                f"{html.escape(nick)} keep climbing.",
+                variant="live",
+            )
 
     render_page_trust_strip("legacy")
     render_fan_product_shell_open()
@@ -6340,19 +6344,25 @@ def render_legacy_tracker_page(team_name):
         }
         st.caption("QA mode: NBA game-log API skipped — metrics are placeholders for layout testing.")
     else:
-        logs = playoff_game_logs_for_player(player)
+        logs = playoff_game_logs_for_player(player, team_name=team_name)
         current = summarize_playoff_logs(logs)
 
     if (logs is None or logs.empty) and pp.is_demo_mode(st) and player == "Jalen Brunson":
-        current = pdemo.brunson_demo_stats()
-        st.caption("Portfolio demo: showing realistic Brunson playoff snapshot for screenshot-ready legacy comparison.")
+        logs = demo_playoff_gamelog_from_bracket(player, team_name, CURRENT_NBA_SEASON)
+        if logs is not None and not logs.empty:
+            current = summarize_playoff_logs(logs)
+        else:
+            current = pdemo.brunson_demo_stats()
+        if not pp.is_screenshot_mode(st):
+            st.caption("Portfolio demo: showing realistic Brunson playoff snapshot for screenshot-ready legacy comparison.")
     elif logs is None or logs.empty:
         st.warning(
             "NBA API did not return current playoff game logs for this player. "
             "Eliminated postmortems still work from safe averages; active-team sliders default to reasonable baselines."
         )
     else:
-        st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
+        if not pp.is_capture_mode(st):
+            st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
         with st.expander(f"Full playoff game log ({current['GP']} games)", expanded=False):
             show_cols = [
                 c
@@ -6543,9 +6553,10 @@ def render_legacy_tracker_page(team_name):
     if render_fan_section("B · Fan simulator — shape the playoff story", "🎮", caption="Career-mode sliders — if they average X the rest of the run.", tone="default"):
         render_fan_section_open()
     with st.container(border=True):
-        st.caption(
-            "Move the core stat sliders and watch the story change. The model starts from the series already won on the bracket, then asks what this profile would mean if the run keeps going."
-        )
+        if not pp.is_capture_mode(st):
+            st.caption(
+                "Move the core stat sliders and watch the story change. The model starts from the series already won on the bracket, then asks what this profile would mean if the run keeps going."
+            )
         c1, c2, c3 = st.columns(3)
         with c1:
             pts = st.slider("Scoring / points per game", 0.0, 45.0, pts0, 0.5)
@@ -9721,6 +9732,10 @@ def data_source_badge_html(kind, label=None):
 
 def render_page_trust_strip(page_key, extra_note=""):
     """Visible source labels so fans know what is official vs modeled."""
+    import portfolio_polish as pp
+
+    if not pp.show_trust_strip(st):
+        return
     profile = PAGE_TRUST_PROFILES.get(page_key, [("estimate", "Mixed sources")])
     badges = []
     for item in profile:
@@ -11925,6 +11940,10 @@ def _render_ultra_snapshot_previous(team_name):
 def _home_dashboard_perf_footer(
     t0, sections, fast_mode, api_calls, skipped_note="", section_ms=None
 ):
+    import portfolio_polish as pp
+
+    if pp.is_capture_mode(st):
+        return
     if skipped_note:
         st.markdown(skipped_note, unsafe_allow_html=True)
     if not globals().get("SHOW_PERF_DEBUG", False):
@@ -11964,12 +11983,13 @@ def render_playoff_command_center(team_name):
             f"{fan_nick(team_name)} Playoff Command Center",
             "Live bracket context, matchup pulse, and fan-facing playoff intelligence.",
         )
-    pp.render_executive_summary(
-        st,
-        "Central playoff dashboard for your team — scores, matchup context, and next actions.",
-        "Gives fans a single command center during the playoff run without hunting across pages.",
-        "Hero matchup tile, live scoreboard hooks, emphasis cards, and quick navigation to bracket and games.",
-    )
+    if not pp.is_screenshot_mode(st):
+        pp.render_executive_summary(
+            st,
+            "Central playoff dashboard for your team — scores, matchup context, and next actions.",
+            "Gives fans a single command center during the playoff run without hunting across pages.",
+            "Hero matchup tile, live scoreboard hooks, emphasis cards, and quick navigation to bracket and games.",
+        )
     if _validation_mode_active():
         _render_validation_mode_banner()
         st.session_state[HOME_DASH_LIVE_UPDATES] = False
@@ -11981,15 +12001,15 @@ def render_playoff_command_center(team_name):
         live_on = False
     effective_live = live_on and not is_eliminated
 
-    ident = team_fan_identity(team_name)
-    render_fan_page_hero(
-        team_name,
-        f"{fan_nick(team_name)} Playoff Pulse",
-        f"{ident['stakes']} {ident['texture']}",
-        "YOUR TEAM",
-    )
-    if not pp.is_screenshot_mode(st) and not pp.is_demo_mode(st):
-        render_page_trust_strip("home", "Scores from the bracket engine · tiles are analyst-style briefing, not live play-by-play.")
+    if not pp.is_capture_mode(st):
+        ident = team_fan_identity(team_name)
+        render_fan_page_hero(
+            team_name,
+            f"{fan_nick(team_name)} Playoff Pulse",
+            f"{ident['stakes']} {ident['texture']}",
+            "YOUR TEAM",
+        )
+    render_page_trust_strip("home", "Scores from the bracket engine · tiles are analyst-style briefing, not live play-by-play.")
     render_fan_product_shell_open()
 
     api_calls = 0
@@ -12010,24 +12030,25 @@ def render_playoff_command_center(team_name):
         st.success(
             f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
         )
-    b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
-    with b1:
-        if is_eliminated:
-            st.caption(
-                "This team is in wrap-up mode. Open **Live Game Center** for games still being played."
-            )
-        elif st.button("Go live", key="home_btn_live_apis", disabled=live_on, help="Pull in the latest scoreboard and injury updates."):
-            st.session_state[HOME_DASH_LIVE_UPDATES] = True
-            st.rerun()
-    with b2:
-        if st.button("Back to quick view", key="home_btn_fast_mode", disabled=not live_on):
-            st.session_state[HOME_DASH_LIVE_UPDATES] = False
-            st.session_state.pop(HOME_DASH_LOAD_INJ, None)
-            st.session_state.pop(HOME_DASH_LOAD_STARS, None)
-            st.session_state.pop(HOME_DASH_LOAD_LEGACY, None)
-            st.rerun()
-    with b3:
-        st.caption("Quick view" if not live_on else "Live feed on")
+    if not pp.is_capture_mode(st):
+        b1, b2, b3 = st.columns([1.35, 1.35, 1.1])
+        with b1:
+            if is_eliminated:
+                st.caption(
+                    "This team is in wrap-up mode. Open **Live Game Center** for games still being played."
+                )
+            elif st.button("Go live", key="home_btn_live_apis", disabled=live_on, help="Pull in the latest scoreboard and injury updates."):
+                st.session_state[HOME_DASH_LIVE_UPDATES] = True
+                st.rerun()
+        with b2:
+            if st.button("Back to quick view", key="home_btn_fast_mode", disabled=not live_on):
+                st.session_state[HOME_DASH_LIVE_UPDATES] = False
+                st.session_state.pop(HOME_DASH_LOAD_INJ, None)
+                st.session_state.pop(HOME_DASH_LOAD_STARS, None)
+                st.session_state.pop(HOME_DASH_LOAD_LEGACY, None)
+                st.rerun()
+        with b3:
+            st.caption("Quick view" if not live_on else "Live feed on")
 
     _inject_home_command_center_css()
     sections.append("inject_css")
@@ -17262,8 +17283,11 @@ def main():
         pass
 
     import portfolio_polish as pp
+    import portfolio_demo as pdemo
 
     pp.render_sidebar_toggle(st)
+    if pp.is_demo_mode(st):
+        pdemo.ensure_global_demo_seed(st)
 
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
     default_idx = team_keys_sorted.index("New York Knicks") if "New York Knicks" in team_keys_sorted else 0
@@ -17271,22 +17295,29 @@ def main():
     if _restore_team and _restore_team in team_keys_sorted:
         default_idx = team_keys_sorted.index(_restore_team)
 
-    QA_MODE = st.sidebar.toggle(
-        "QA mode (fast testing)",
-        value=bool(st.session_state.get("QA_MODE", False)),
-        key="QA_MODE",
-        help="Skips bracket API sync, autorefresh, Plotly, and heavy Live GC. Uses one session playoff snapshot.",
-    )
-    ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
-        "Ultra-fast validation (no network)",
-        value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
-        key="ULTRA_FAST_VALIDATION_MODE",
-        help="Fastest Cloud QA: no API/CDN/Plotly. Home and Matchup Lineups still show full fan UI; other pages may offer expand.",
-    )
+    if pp.show_sidebar_debug(st):
+        QA_MODE = st.sidebar.toggle(
+            "QA mode (fast testing)",
+            value=bool(st.session_state.get("QA_MODE", False)),
+            key="QA_MODE",
+            help="Skips bracket API sync, autorefresh, Plotly, and heavy Live GC. Uses one session playoff snapshot.",
+        )
+        ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
+            "Ultra-fast validation (no network)",
+            value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
+            key="ULTRA_FAST_VALIDATION_MODE",
+            help="Fastest Cloud QA: no API/CDN/Plotly. Home and Matchup Lineups still show full fan UI; other pages may offer expand.",
+        )
+    else:
+        QA_MODE = bool(st.session_state.get("QA_MODE", False))
+        ULTRA_FAST_VALIDATION_MODE = bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False))
     if _validation_mode_active():
         USE_DEMO_BACKUP = True
         ENABLE_BRACKET_API_REFRESH = False
         _warm_validation_playoff_state()
+    elif pp.is_demo_mode(st):
+        USE_DEMO_BACKUP = True
+        ENABLE_BRACKET_API_REFRESH = False
     else:
         USE_DEMO_BACKUP = st.sidebar.toggle(
             "Use playoff fallback when API is empty",
@@ -17315,22 +17346,25 @@ def main():
         )
     elif DEV_MODE:
         st.sidebar.caption("🛠️ Dev mode — Dev Lab visible")
-    SHOW_PERF_DEBUG = st.sidebar.toggle(
-        "Show performance debug",
-        value=False,
-        help="Shows page timing, playoff state debug table, and cache mode details.",
-    )
-    st.sidebar.caption(
-        f"Deploy {APP_DEPLOY_BRANCH} · build {APP_BUILD_COMMIT[:12]}"
-    )
-    if _ultra_fast_active():
-        st.sidebar.caption(
-            "Ultra-fast: no network — fan UI still renders; APIs/plots skipped where gated."
+    if pp.show_sidebar_debug(st):
+        SHOW_PERF_DEBUG = st.sidebar.toggle(
+            "Show performance debug",
+            value=False,
+            help="Shows page timing, playoff state debug table, and cache mode details.",
         )
-    elif QA_MODE:
-        st.sidebar.caption("QA mode: demo bracket + session snapshot; fan UI sections stay visible.")
-    if SHOW_PERF_DEBUG:
-        render_playoff_state_debug_expander("sidebar")
+        st.sidebar.caption(
+            f"Deploy {APP_DEPLOY_BRANCH} · build {APP_BUILD_COMMIT[:12]}"
+        )
+        if _ultra_fast_active():
+            st.sidebar.caption(
+                "Ultra-fast: no network — fan UI still renders; APIs/plots skipped where gated."
+            )
+        elif QA_MODE:
+            st.sidebar.caption("QA mode: demo bracket + session snapshot; fan UI sections stay visible.")
+        if SHOW_PERF_DEBUG:
+            render_playoff_state_debug_expander("sidebar")
+    else:
+        SHOW_PERF_DEBUG = False
     boot_t = _page_perf_startup_tick("sidebar_toggles", boot_t) if st.session_state.get(PAGE_PERF_KEY) else boot_t
     profile = get_effective_team_profile(
         favorite_team, _val_stt if _validation_mode_active() else None
@@ -17392,7 +17426,7 @@ def main():
     _page_perf_finish()
     _render_page_perf_report(page, favorite_team)
 
-    if SHOW_PERF_DEBUG:
+    if SHOW_PERF_DEBUG and pp.show_sidebar_debug(st):
         elapsed_ms = (pytime.perf_counter() - app_page_t0) * 1000
         with st.expander("Performance debug", expanded=False):
             st.caption(f"Page rendered in {elapsed_ms:.0f} ms.")
@@ -17422,8 +17456,9 @@ def main():
     except Exception:
         pass
 
-    st.divider()
-    st.caption("Daniel Cohen — NBA Playoff Companion AI | live bracket sync | automatic series tracking | previous rounds | live game center")
+    if not pp.is_capture_mode(st):
+        st.divider()
+        st.caption("Daniel Cohen — NBA Playoff Companion AI | live bracket sync | automatic series tracking | previous rounds | live game center")
 
 
 if __name__ == "__main__":
