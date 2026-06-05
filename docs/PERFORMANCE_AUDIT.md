@@ -1,6 +1,6 @@
 # Performance audit
 
-**Last updated:** 2026-06-05 · **Branch:** `dev`
+**Last updated:** 2026-06-05 · **Branch:** `dev` · **Build:** `premium-fan-2026-06-05`
 
 Speed is part of stability: factual QA (P5) is impractical when every page takes 10–30+ seconds on Cloud.
 
@@ -63,8 +63,9 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 | Home Dashboard | Live bundle on **Go live**; injury/star pulls | Keep quick view default; 8s timeout guard |
 | Playoff Bracket | `get_playoff_state` API refresh loop | Session cache TTL; sidebar auto-sync toggle |
 | Matchup Lineups | `season_averages` per card + headshots | Curated board for Finals teams (`_lineups_use_curated_board`) |
-| Player Playoff Tracker | Prior-season log on every load | YoY checkbox; expanders for pressure/narrative |
-| Legacy Tracker | Full game log table on load | Log in expander; meters/cards first paint |
+| Player Playoff Tracker | `_cached_playoff_gamelog` + Plotly on expander | Game log cards first; charts in **Load progression charts** expander; YoY checkbox only |
+| Legacy Tracker | Full game log table on load | Meters/badges first; Plotly path in collapsed expander |
+| Matchup Lineups | `season_averages` per bench/X-factor card | PG–C grid first; bench/tactical/X-factor in one collapsed expander |
 
 Headless script (`scripts/audit_page_performance.py`) shows playoff engine & validation &lt;20 ms; browser cost is Streamlit render + network.
 
@@ -90,7 +91,7 @@ Approximate from `audit_page_performance.py` + Home perf footer on `dev`. Order 
 | 1 | **`get_playoff_state_cached` / NBA API bracket sync** | 3000–15000+ | `fetch_completed_games_recent` loops scoreboard + gamefinder when API sync on; runs on most pages + 60s autorefresh |
 | 2 | **Home “Go live” bundle** | 2000–8000 | `series_for_team` + `featured_broadcast_state` + injury paths (8s timeout cap) |
 | 3 | **Live GC Layer 1 resolve** | 1500–5000 | CDN scoreboard + stats-today enrichment per render |
-| 4 | **Player Playoff Tracker — game logs + Plotly** | 2000–6000 | `_cached_playoff_gamelog` + 2–3 `st.plotly_chart` per player change |
+| 4 | **Player Playoff Tracker — game logs + Plotly** | 2000–6000 | `_cached_playoff_gamelog` + Plotly only when expander opened |
 | 5 | **Matchup Intelligence full board** | 1500–4000 | `build_matchup_intelligence_sections` on button (injury + scouting build) |
 
 **Honorable mentions:** Playoff bracket HTML assembly (~1–3s), `estimated_starters_from_api` / rotation API on lineups (~30–65s cold without QA), Legacy simulator `build_legacy_path` + Plotly (~2–4s).

@@ -1,6 +1,6 @@
 # Current tasks (Cursor mirror)
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-05
 
 > **Authoritative:** [docs/DEVELOPMENT_PRIORITIES.md](../docs/DEVELOPMENT_PRIORITIES.md) · **Phase:** [docs/PHASE_STABILITY.md](../docs/PHASE_STABILITY.md)
 
@@ -18,6 +18,14 @@
 - [x] Fan briefing board — 9-tile energy grid (Game 1→2, coaching, pressure)
 - [ ] Identify slowest sections; cache audit
 - [ ] Quick view &lt; 3s on Cloud
+
+### Premium fan experience pass (2026-06-05)
+
+- [x] P1 Player Tracker — record race lane, next 3 / easiest / hardest / series milestones
+- [x] P2 Legacy — badges, title/Finals MVP impact, GOAT ladder, run ranking
+- [x] P3 Home — sportswriter tile copy (Finals-specific)
+- [x] P4 Team History — Mount Rushmore, countdown, movement tracker, great runs/games
+- [x] P5 Normal-mode speed — Plotly/season_averages deferred behind expanders
 
 ### Polish phase (2026-06-05)
 

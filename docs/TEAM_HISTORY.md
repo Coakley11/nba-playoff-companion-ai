@@ -1,6 +1,6 @@
 # Team history & leaders
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-05 · **Build:** `premium-fan-2026-06-05`
 
 ## Purpose
 
@@ -9,6 +9,11 @@
 ## UX goals
 
 - Hero: franchise playoff legends framing.
+- **Mount Rushmore** — four faces fans cite first (titles-weighted from curated board).
+- **Milestone countdown cards** — e.g. “Brunson passes Houston with 22 more points.”
+- **Current-player movement tracker** — progress bars on active chase lines.
+- **Greatest playoff runs** — curated franchise chapters (`FRANCHISE_GREAT_RUNS` + fallback from legends).
+- **Greatest playoff games** — Finals log when available (canonical G1 score preserved).
 - Sortable leaderboard (points, RPG, APG, steals, blocks, 40-pt games, Finals appearances, etc.).
 - Visual history cards (`hist-grid`, `_history_card_html`) for top legends.
 - Highlight current players on the board (`_is_current_history_player`).
@@ -23,7 +28,7 @@
 | Surface | Focus |
 |---------|--------|
 | **Team History** | Franchise catalog + sortable all-time board |
-| **Legacy Tracker** | Narrative chase for active stars / career arc |
+| **Legacy Tracker** | Narrative chase for active stars / career arc + slider toy |
 
 ## Requirements
 

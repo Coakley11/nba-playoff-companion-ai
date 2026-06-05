@@ -1,6 +1,6 @@
 # Pages & UX — fan-facing surfaces
 
-**Last updated:** 2026-06-05 · **Build:** `refine-ux-2026-06-05`
+**Last updated:** 2026-06-05 · **Build:** `premium-fan-2026-06-05`
 
 Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is optional (`DEV_MODE` or sidebar toggle).
 
@@ -65,7 +65,8 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **UX goals:**
 - Broadcast matchup strip + dual-team color hero (logos, headshots).
 - Curated playoff rotation overrides outdated API players (e.g. Harrison Barnes PF, no Jeremy Sochan).
-- PG–C cards with team/opp edge highlighting, advantage badges, bench battle columns, X-factor tiles, edge summary.
+- PG–C cards with team/opp edge highlighting, advantage badges, edge summary on first paint.
+- **Bench battle, tactical edges, X-factor** collapsed under one expander (defers `season_averages` API calls).
 - Section headers match TV broadcast blocks; raw rotation in expander only.
 
 ---
@@ -90,11 +91,11 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - Premium player card hero (large headshot, inline PPG/GP/record tiles, playoff badges).
-- **Franchise chase hero** — `#rank` banner + explicit “X pts/reb to pass {Name}” cards with labeled progress bars.
+- **Franchise chase hero** — visual **record race lane** (current vs target headshots), next record / next 3 / easiest / hardest / series-within-reach ladder, plus `#rank` banner and progress bars.
 - **Standout award strip** — 30/40-pt nights, engine scorer, two-way pressure callouts.
 - Playoff average stat pills; **series journey strip** + **round tabs** with per-series game log cards.
 - Franchise comparison cards (named Ewing/Frazier/Duncan/Parker-style copy).
-- Game log cards + progression charts (Plotly skipped in QA/Ultra only).
+- Game log cards first; **Plotly progression charts** in collapsed expander (QA/Ultra still skip charts).
 
 ---
 
@@ -104,12 +105,14 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Purpose:** Career playoff legacy chase with **specific franchise names** (Ewing, Frazier, Duncan, Parker, etc.) — not generic greatness copy.
 
-**UX goals (2026-06-05 polish):**
-- Legacy score / ceiling / bracket-climb **meters** (not wall-of-text metrics).
-- **If playoffs ended today** badge with `specific_legacy_comparison` copy.
+**UX goals (2026-06-05 premium pass):**
+- Legacy score / ceiling / bracket-climb **meters** + **earned badge chips** (Franchise Legend, Championship Hero, Finals MVP track, etc.).
+- **Title probability impact** + **Finals MVP impact** + franchise rank panel (updates with sliders).
+- **Franchise GOAT ladder** (top six curated legends; current player highlighted).
+- **Playoff run ranking** copy tied to franchise great runs.
 - Named franchise **comparison face cards** (headshots where network allows).
 - **What-if scenario cards** — next round, Conference Finals, title — with legacy score + named read.
-- Simulator sliders remain; Plotly path chart skipped in QA only.
+- Simulator sliders remain; Plotly path chart in collapsed expander only.
 
 **See:** [LEGACY_TRACKER.md](./LEGACY_TRACKER.md)
 
@@ -119,7 +122,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **Route:** `Team History Leaders` · **Renderer:** `render_team_history_leaders_page`
 
-**UX goals (2026-06-04 polish):** Legend cards with headshots/logos and hover lift; current-player chase cards; sortable leaderboard; milestone progress bars; named comparison cards.
+**UX goals (2026-06-05 premium pass):** Mount Rushmore (top four faces), milestone **countdown cards**, current-player **movement tracker**, greatest playoff runs/games, legend cards with headshots/logos, sortable leaderboard, named comparison cards.
 
 **Purpose:** Franchise playoff legends board + sortable leaderboards (30/40-pt games, scoring, rebounds, assists) + current-player chase cards with progress bars.
 
