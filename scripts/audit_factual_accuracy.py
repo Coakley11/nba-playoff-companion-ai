@@ -70,9 +70,12 @@ def main() -> int:
             ok(f"NBA Finals: {s.get('a')} vs {s.get('b')}")
             g1 = (s.get("games") or [{}])[0]
             sc = str(g1.get("Score", ""))
-            if "108, Spurs 102" in sc or sc == "Knicks 108, Spurs 102":
-                fail(f"Finals G1 score still duplicates ECF copy: {sc!r}")
-            elif sc:
+            canonical = getattr(app, "FINALS_GAME1_CANONICAL_SCORE", "Knicks 105, Spurs 95")
+            if sc != canonical:
+                fail(f"Finals G1 score must be {canonical!r}, got {sc!r}")
+            elif sc in ("Knicks 118, Spurs 112", "Knicks 108, Spurs 102"):
+                fail(f"Finals G1 uses retired incorrect score: {sc!r}")
+            else:
                 ok(f"Finals G1 score: {sc}")
         else:
             fail(f"Finals teams must be Knicks+Spurs, got {teams}")
@@ -102,6 +105,21 @@ def main() -> int:
 
     if not any("standout" in f.lower() or "Trae" in f for f in FAILURES):
         ok("All resolved standouts pass roster/outdated checks")
+
+    print("\n=== Active Finals roster (no outdated players) ===")
+    for team in ("New York Knicks", "San Antonio Spurs"):
+        prof = app.TEAM_PROFILES.get(team) or {}
+        for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+            if app._is_outdated_playoff_player(name, team):
+                fail(f"{team} profile lists outdated player {name!r}")
+        board = (app.CURRENT_PLAYOFF_LINEUPS.get(team) or {}).get("bench")
+        starters = [app.CURRENT_PLAYOFF_LINEUPS.get(team, {}).get(s) for s in ("PG", "SG", "SF", "PF", "C")]
+        if "Jeremy Sochan" in starters and team == "San Antonio Spurs":
+            fail("Spurs curated lineup still starts Jeremy Sochan")
+        if "Precious Achiuwa" in (starters + (board or [])) and team == "New York Knicks":
+            fail("Knicks curated lineup still includes Precious Achiuwa")
+    if not any("Sochan" in f or "Achiuwa" in f for f in FAILURES):
+        ok("Knicks and Spurs active rotations exclude outdated players")
 
     print("\n=== Player playoff log fallback ===")
     br_logs = app.fetch_playoff_gamelog("Jalen Brunson", "New York Knicks", app.CURRENT_NBA_SEASON)

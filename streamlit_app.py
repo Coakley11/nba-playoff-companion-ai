@@ -503,10 +503,10 @@ PLAYOFF_PLAYER_ID_MAP = {
     "Stephon Castle": 1642264,
     "Devin Vassell": 1630170,
     "Keldon Johnson": 1629640,
-    "Jeremy Sochan": 1631110,
+    "Harrison Barnes": 203084,
     "Victor Wembanyama": 1641705,
     "Tre Jones": 1630200,
-    "Julian Champagnie": 1630570,
+    "Julian Champagnie": 1630577,
     "Zach Collins": 1628380,
     "Malaki Branham": 1631103,
     "Blake Wesley": 1631104,
@@ -514,7 +514,7 @@ PLAYOFF_PLAYER_ID_MAP = {
 
 TEAM_PROFILES = {
     "New York Knicks": {"seed":3,"conference":"Eastern Conference","status":"Active","round":"NBA Finals","current_opponent":"San Antonio Spurs","first_round_opponent":"Atlanta Hawks","first_round_result":"Defeated Atlanta Hawks, 4-2","starters":["Jalen Brunson","Mikal Bridges","OG Anunoby","Josh Hart","Karl-Anthony Towns"],"subs":["Miles McBride","Mitchell Robinson","Jordan Clarkson","Landry Shamet","Jose Alvarado"],"strengths":["Brunson shot creation","Towns spacing","OG/Bridges wing defense","Hart rebounding"],"concerns":["Towns foul trouble","bench scoring consistency","overreliance on Brunson late"]},
-    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"NBA Finals","current_opponent":"New York Knicks","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Jeremy Sochan","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
+    "San Antonio Spurs": {"seed":2,"conference":"Western Conference","status":"Active","round":"NBA Finals","current_opponent":"New York Knicks","first_round_opponent":"Portland Trail Blazers","first_round_result":"Defeated Portland Trail Blazers, 4-1","starters":["Stephon Castle","Devin Vassell","Keldon Johnson","Harrison Barnes","Victor Wembanyama"],"subs":["Tre Jones","Julian Champagnie","Zach Collins","Malaki Branham","Blake Wesley"],"strengths":["Wembanyama two-way impact","length","rim protection","young talent"],"concerns":["turnovers","playoff inexperience","foul trouble"]},
 }
 # Eliminated teams
 ELIMINATED_INFO = [
@@ -608,7 +608,7 @@ PLAYER_POSITION_OVERRIDES = {
     "Stephon Castle": "PG",
     "Devin Vassell": "SG",
     "Keldon Johnson": "SF",
-    "Jeremy Sochan": "PF",
+    "Harrison Barnes": "PF",
     "Victor Wembanyama": "C",
     "Tre Jones": "PG",
     "Zach Collins": "C",
@@ -663,7 +663,7 @@ CURRENT_PLAYOFF_LINEUPS = {
         "bench": ["Gabe Vincent", "Jarred Vanderbilt", "Max Christie", "Jaxson Hayes"],
     },
     "San Antonio Spurs": {
-        "PG": "Stephon Castle", "SG": "Devin Vassell", "SF": "Keldon Johnson", "PF": "Jeremy Sochan", "C": "Victor Wembanyama",
+        "PG": "Stephon Castle", "SG": "Devin Vassell", "SF": "Keldon Johnson", "PF": "Harrison Barnes", "C": "Victor Wembanyama",
         "bench": ["Tre Jones", "Julian Champagnie", "Zach Collins", "Malaki Branham", "Blake Wesley"],
     },
     "Minnesota Timberwolves": {
@@ -681,7 +681,7 @@ OUTDATED_PLAYOFF_PLAYERS = {
     "Philadelphia 76ers": [],
     "Oklahoma City Thunder": [],
     "Los Angeles Lakers": [],
-    "San Antonio Spurs": [],
+    "San Antonio Spurs": ["Jeremy Sochan"],
     "Minnesota Timberwolves": [],
 }
 
@@ -1821,10 +1821,19 @@ CONFERENCE_FINALS_DEMO_BACKUP = {
     ]},
 }
 
+# Single source of truth for NBA Finals Game 1 in this app's playoff universe.
+FINALS_GAME1_CANONICAL_SCORE = "Knicks 105, Spurs 95"
+
 # Emergency/demo backup for NBA Finals when API has no rows yet.
 NBA_FINALS_DEMO_BACKUP = {
     "NYK-SAS": {"games":[
-        {"Game":"Game 1","Date":"Jun 3","Score":"Knicks 118, Spurs 112","Winner":"New York Knicks","GameID":"demo-nyk-sas-g1"},
+        {
+            "Game": "Game 1",
+            "Date": "Jun 3",
+            "Score": FINALS_GAME1_CANONICAL_SCORE,
+            "Winner": "New York Knicks",
+            "GameID": "demo-nyk-sas-g1",
+        },
     ]},
 }
 
@@ -1929,7 +1938,7 @@ for mirror, source in [("Orlando Magic","Detroit Pistons"),("Toronto Raptors","C
 
 FALLBACK_TOP_PLAYS = {
     "New York Knicks": [
-        {"Game":"Game 1 vs Spurs","Top Play":"Brunson and Towns carried the opening-night offense in a tight Finals Game 1 win.","Why it mattered":"The series opens 1-0 — home court and first-possession tone belong to New York."},
+        {"Game":"Game 1 vs Spurs","Top Play":"Brunson and Towns carried the opening-night offense in a 105–95 Finals Game 1 win.","Why it mattered":"The series opens 1-0 — home court and first-possession tone belong to New York."},
         {"Game":"Game 4 vs Cavaliers","Top Play":"New York closed the East at home to punch the Finals ticket.","Why it mattered":"The conference finals ended 4-0 — the bracket now reads Knicks vs Spurs for the title."},
     ],
     "San Antonio Spurs": [
@@ -2980,10 +2989,26 @@ def validate_playoff_factual_accuracy(stt=None):
 
     cf_scores = {g.get("Score") for g in (cle_nyk or {}).get("games") or [] if g.get("Score")}
     for _fk, fs in (finals or {}).items():
+        teams = {fs.get("a"), fs.get("b")}
+        if teams == {"New York Knicks", "San Antonio Spurs"}:
+            games = fs.get("games") or []
+            if games and str(games[0].get("Score", "")) != FINALS_GAME1_CANONICAL_SCORE:
+                errors.append(
+                    f"Finals G1 score must be {FINALS_GAME1_CANONICAL_SCORE!r}, "
+                    f"got {games[0].get('Score')!r}"
+                )
         for g in fs.get("games") or []:
             sc = g.get("Score")
             if sc and sc in cf_scores:
                 errors.append(f"Finals game score duplicates East CF row: {sc!r}")
+            if sc in ("Knicks 118, Spurs 112", "Knicks 108, Spurs 102"):
+                errors.append(f"Finals game uses retired incorrect score: {sc!r}")
+
+    for team_name in ("New York Knicks", "San Antonio Spurs"):
+        prof = TEAM_PROFILES.get(team_name) or {}
+        for name in (prof.get("starters") or []) + (prof.get("subs") or []):
+            if _is_outdated_playoff_player(name, team_name):
+                errors.append(f"{team_name}: active profile lists outdated player {name!r}")
 
     for s in _iter_playoff_series_shells_merged(stt):
         a, b = s.get("a"), s.get("b")
@@ -6310,7 +6335,7 @@ _DEMO_PLAYOFF_STAT_BASE = {
 
 
 def _parse_team_points_from_score(score_str, team_name):
-    """Return (team_pts, opp_pts) from a demo score string like 'Knicks 118, Spurs 112'."""
+    """Return (team_pts, opp_pts) from a demo score string like 'Knicks 105, Spurs 95'."""
     if not score_str:
         return None, None
     parts = [p.strip() for p in str(score_str).split(",")]
