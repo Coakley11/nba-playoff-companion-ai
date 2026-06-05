@@ -76,3 +76,8 @@ def test_load_legacy_demo_marks_legacy():
     pdemo.load_legacy_demo(st)
     assert pp.demo_applied(st, "nba_legacy")
     assert st.session_state["_nba_restore_team"] == pdemo.DEMO_TEAM
+
+
+def test_portfolio_demo_exports_ensure_global_demo_seed():
+    assert "ensure_global_demo_seed" in pdemo.__all__
+    assert callable(pdemo.ensure_global_demo_seed)
