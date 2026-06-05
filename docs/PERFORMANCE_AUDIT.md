@@ -27,9 +27,9 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 | Sidebar team labels | Use cached snapshot (no N× rebuild) |
 | Live Game Center | Safe path; ultra skips CDN entirely |
 | Matchup Intelligence | Fast ribbon only — no full scouting board |
-| Legacy Tracker | No Plotly path chart; full meters + scenario cards still render |
-| Player Playoff Tracker | No Plotly; no prior-season log fetch; full fan UI still renders |
-| Matchup Lineups | Curated `CURRENT_PLAYOFF_LINEUPS` — no rotation API; full broadcast UI |
+| Legacy Tracker | No Plotly path chart; game log in expander; meters + scenario cards visible |
+| Player Playoff Tracker | No Plotly; YoY only via checkbox; pressure/narrative in expanders |
+| Matchup Lineups | Curated board when available; full broadcast UI |
 | Home Dashboard | Full fan briefing UI (no deferred body) |
 
 ### Ultra-fast mode (additional)
