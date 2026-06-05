@@ -62,9 +62,9 @@ Speed is part of stability: factual QA (P5) is impractical when every page takes
 |------|-----------------------------------|----------------------|
 | Home Dashboard | Live bundle on **Go live**; injury/star pulls | Keep quick view default; 8s timeout guard |
 | Playoff Bracket | `get_playoff_state` API refresh loop | Session cache TTL; sidebar auto-sync toggle |
-| Matchup Lineups | `estimated_starters_from_api` + `season_averages` per card | Curated path in validation; batch headshot cache |
-| Player Playoff Tracker | `fetch_playoff_gamelog` + prior-season compare + Plotly | QA skips Plotly; demo log fallback |
-| Legacy Tracker | `playoff_game_logs_for_player` + Plotly ladder | QA skips simulator chart only |
+| Matchup Lineups | `season_averages` per card + headshots | Curated board for Finals teams (`_lineups_use_curated_board`) |
+| Player Playoff Tracker | Prior-season log on every load | YoY checkbox; expanders for pressure/narrative |
+| Legacy Tracker | Full game log table on load | Log in expander; meters/cards first paint |
 
 Headless script (`scripts/audit_page_performance.py`) shows playoff engine & validation &lt;20 ms; browser cost is Streamlit render + network.
 

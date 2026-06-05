@@ -251,16 +251,73 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .pp-stat-pill .k { font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #64748b; margin-top: 4px; }
 .pp-stat-pill.hot .v { color: var(--team-primary, #0ea5e9); }
 .pp-chase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin: 10px 0 14px; }
+.pp-chase-hero {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  padding: 16px 18px; border-radius: 18px; margin-bottom: 12px;
+  background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 70%);
+  border: 1px solid var(--team-border); color: #f8fafc;
+  box-shadow: 0 10px 28px rgba(15,23,42,.18);
+}
+.pp-chase-hero-rank {
+  min-width: 72px; text-align: center; padding: 10px; border-radius: 14px;
+  background: rgba(255,255,255,.08); border: 1px solid var(--team-border);
+}
+.pp-chase-hero-rank .num { font-size: 2rem; font-weight: 950; line-height: 1; color: var(--team-accent,#38bdf8); }
+.pp-chase-hero-rank .lbl { font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; margin-top: 4px; }
+.pp-chase-hero h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 900; }
+.pp-chase-hero p { margin: 0; font-size: 13px; color: #cbd5e1; line-height: 1.45; }
 .pp-chase-card {
   border-radius: 16px; padding: 14px; background: #fff;
   border: 1px solid var(--team-border); border-left: 5px solid var(--team-primary);
   box-shadow: 0 6px 18px rgba(15,23,42,.07);
 }
+.pp-chase-card--hero-stat { border-left-width: 6px; background: linear-gradient(180deg, #fff, var(--team-card-tint, #f8fafc)); }
 .pp-chase-k { font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: var(--team-primary); }
+.pp-chase-gap { font-size: 1.5rem; font-weight: 950; color: #0f172a; margin: 4px 0 2px; line-height: 1.1; }
+.pp-chase-target { font-size: 12px; font-weight: 800; color: #64748b; margin-bottom: 6px; }
 .pp-chase-rank { font-size: 1.75rem; font-weight: 950; color: #0f172a; margin: 4px 0; }
 .pp-chase-b { font-size: 13px; color: #475569; line-height: 1.42; }
-.pp-progress { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
+.pp-progress { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; position: relative; }
 .pp-progress > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--team-primary), var(--team-accent)); }
+.pp-progress-label { display: flex; justify-content: space-between; font-size: 10px; font-weight: 800; color: #64748b; margin-top: 5px; }
+.pp-game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 8px 0 12px; }
+.pp-game-card {
+  border-radius: 14px; padding: 12px 12px 10px; background: #fff;
+  border: 1px solid rgba(148,163,184,.25); box-shadow: 0 2px 8px rgba(15,23,42,.05);
+}
+.pp-game-card.win { border-left: 4px solid #16a34a; background: linear-gradient(180deg, #fff, #f0fdf4); }
+.pp-game-card.loss { border-left: 4px solid #dc2626; background: linear-gradient(180deg, #fff, #fef2f2); }
+.pp-game-top { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
+.pp-game-wl { padding: 2px 8px; border-radius: 999px; font-size: 9px; }
+.pp-game-wl.win { background: #dcfce7; color: #166534; }
+.pp-game-wl.loss { background: #fee2e2; color: #991b1b; }
+.pp-game-pts { font-size: 1.65rem; font-weight: 950; color: #0f172a; line-height: 1; }
+.pp-game-opp { font-size: 12px; font-weight: 800; color: #334155; margin: 4px 0 8px; }
+.pp-game-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.pp-game-chip { font-size: 10px; font-weight: 800; padding: 3px 7px; border-radius: 8px; background: #f1f5f9; color: #475569; }
+.pp-game-chip.pm-pos { background: #dcfce7; color: #166534; }
+.pp-game-chip.pm-neg { background: #fee2e2; color: #991b1b; }
+.pp-journey { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; align-items: center; }
+.pp-journey-step {
+  padding: 9px 14px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  background: var(--team-accent-soft); border: 1px solid var(--team-border); color: #334155;
+}
+.pp-journey-step.active {
+  background: linear-gradient(135deg, var(--team-primary), var(--team-accent));
+  color: #fff; border-color: transparent; box-shadow: 0 4px 14px rgba(15,23,42,.15);
+}
+.pp-series-tab-banner {
+  padding: 10px 14px; border-radius: 12px; margin-bottom: 10px;
+  background: var(--team-accent-soft); border: 1px solid var(--team-border);
+  font-size: 12px; font-weight: 800; color: #334155;
+}
+.fan-player-card img.hs { width: 112px; height: 112px; border-radius: 16px; object-fit: cover;
+  border: 3px solid var(--team-primary,#38bdf8); background: #0b1224; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.pp-journey-arrow { color: #94a3b8; font-weight: 900; font-size: 14px; }
+.pp-chase-pill-hero {
+  display: inline-block; margin-top: 8px; padding: 5px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; background: rgba(234,179,8,.2); border: 1px solid rgba(253,224,71,.45); color: #fef9c3;
+}
 .pp-award-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
 .pp-award {
   flex: 1 1 200px; padding: 10px 12px; border-radius: 14px;
@@ -268,23 +325,8 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
   border: 1px solid var(--team-border); font-size: 12px; line-height: 1.4; color: #334155;
 }
 .pp-award b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--team-primary); margin-bottom: 4px; }
-.pp-game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 12px; }
-.pp-game-card {
-  border-radius: 14px; padding: 12px; background: #fff;
-  border: 1px solid rgba(148,163,184,.25); box-shadow: 0 2px 8px rgba(15,23,42,.05);
-}
-.pp-game-card.win { border-left: 4px solid #16a34a; }
-.pp-game-card.loss { border-left: 4px solid #dc2626; }
-.pp-game-top { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 6px; }
-.pp-game-pts { font-size: 1.35rem; font-weight: 950; color: #0f172a; }
+.pp-game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 8px 0 12px; }
 .pp-game-meta { font-size: 12px; color: #475569; margin-top: 4px; }
-.pp-journey { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; align-items: center; }
-.pp-journey-step {
-  padding: 8px 12px; border-radius: 999px; font-size: 11px; font-weight: 800;
-  background: var(--team-accent-soft); border: 1px solid var(--team-border); color: #334155;
-}
-.pp-journey-step.active { background: var(--team-primary); color: #fff; border-color: var(--team-primary); }
-.pp-journey-arrow { color: #94a3b8; font-weight: 900; }
 .pp-compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 8px 0 12px; }
 .pp-compare-card {
   border-radius: 14px; padding: 14px; background: linear-gradient(180deg, #fff, var(--team-card-tint, #f8fafc));
@@ -296,26 +338,40 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
 .lt-meter {
   border-radius: 16px; padding: 14px; background: #fff;
   border: 1px solid var(--team-border); box-shadow: 0 4px 14px rgba(15,23,42,.06);
+  position: relative; overflow: hidden;
 }
+.lt-meter--hof { border-top: 4px solid var(--team-accent); }
 .lt-meter-k { font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: var(--team-primary); }
 .lt-meter-v { font-size: 1.85rem; font-weight: 950; color: #0f172a; margin: 4px 0; }
-.lt-meter-bar { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
-.lt-meter-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--team-primary), var(--team-accent)); }
+.lt-meter-sub { font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 6px; }
+.lt-meter-bar { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
+.lt-meter-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--team-primary), var(--team-accent)); }
+.lt-tier-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 900;
+  letter-spacing: .08em; text-transform: uppercase; margin-top: 6px;
+  background: var(--team-accent-soft); border: 1px solid var(--team-border); color: var(--team-primary);
+}
 .lt-badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
 .lt-badge {
-  padding: 8px 12px; border-radius: 12px; font-size: 11px; font-weight: 800;
-  background: var(--team-accent-soft); border: 1px solid var(--team-border); color: #334155;
+  padding: 10px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 1.4;
+  background: linear-gradient(135deg, var(--team-accent-soft), #fff 70%);
+  border: 1px solid var(--team-border); color: #334155; flex: 1 1 280px;
 }
-.lt-scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+.lt-badge b { color: #0f172a; }
+.lt-scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
 .lt-scenario {
   border-radius: 16px; padding: 14px; background: linear-gradient(145deg, var(--team-accent-soft), #fff 55%);
-  border: 1px solid var(--team-border); min-height: 160px;
+  border: 1px solid var(--team-border); min-height: 140px;
 }
+.lt-scenario--title { border-left: 5px solid #ca8a04; background: linear-gradient(145deg, rgba(254,243,199,.5), #fff 60%); }
+.lt-scenario--finals { border-left: 5px solid var(--team-primary); }
 .lt-scenario-k { font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; color: var(--team-primary); }
-.lt-scenario-score { font-size: 1.7rem; font-weight: 950; color: #0f172a; margin: 6px 0; }
-.lt-scenario-b { font-size: 13px; color: #475569; line-height: 1.42; }
-.lt-compare-face { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+.lt-scenario-score { font-size: 1.85rem; font-weight: 950; color: #0f172a; margin: 6px 0; }
+.lt-scenario-delta { font-size: 11px; font-weight: 800; color: #16a34a; margin-bottom: 4px; }
+.lt-scenario-b { font-size: 12px; color: #475569; line-height: 1.4; }
+.lt-compare-face { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: center; margin-bottom: 8px; }
 .lt-compare-face img { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; border: 2px solid var(--team-primary); background: #0b1224; }
+.lt-touchstone-rank { font-size: 10px; font-weight: 900; color: var(--team-primary); letter-spacing: .08em; text-transform: uppercase; }
 /* Fan branding (team CSS vars injected per selected team) */
 .team-match-header {
   text-align: center; padding: 14px 16px; border-radius: 18px; margin-bottom: 14px;
@@ -343,9 +399,9 @@ div[role="radiogroup"] label:hover { background-color: rgba(249,115,22,.18) !imp
   background: linear-gradient(135deg, var(--team-bg0,#0f172a) 0%, var(--team-bg1,#1e293b) 72%, #0f172a 100%);
   border: 1px solid var(--team-border, rgba(148,163,184,.3)); color: #f8fafc;
 }
-.fan-player-card img.hs { width: 88px; height: 88px; border-radius: 14px; object-fit: cover;
-  border: 2px solid var(--team-primary,#38bdf8); background: #0b1224; }
-.fan-player-card img.logo { width: 48px; opacity: .95; }
+.fan-player-card img.hs { width: 112px; height: 112px; border-radius: 16px; object-fit: cover;
+  border: 3px solid var(--team-primary,#38bdf8); background: #0b1224; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.fan-player-card img.logo { width: 52px; opacity: .95; }
 .fan-player-name { font-size: 1.15rem; font-weight: 900; margin: 0 0 4px; }
 .fan-player-role { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
 .fan-stat-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2078,7 +2134,7 @@ ULTRA_FAST_VALIDATION_MODE = False
 
 # Visible on Cloud (sidebar) — bump when shipping fan UI or deploy wiring fixes.
 APP_DEPLOY_BRANCH = "dev"
-APP_BUILD_COMMIT = "polish-p1-p2-2026-06-04"
+APP_BUILD_COMMIT = "refine-ux-2026-06-05"
 
 VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
 VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
@@ -6101,28 +6157,29 @@ def render_legacy_tracker_page(team_name):
         )
     else:
         st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
-        show_cols = [
-            c
-            for c in [
-                "GAME_DATE",
-                "MATCHUP",
-                "WL",
-                "MIN",
-                "PTS",
-                "REB",
-                "AST",
-                "STL",
-                "BLK",
-                "TOV",
-                "FG_PCT",
-                "FG3_PCT",
-                "FT_PCT",
-                "PLUS_MINUS",
+        with st.expander(f"Full playoff game log ({current['GP']} games)", expanded=False):
+            show_cols = [
+                c
+                for c in [
+                    "GAME_DATE",
+                    "MATCHUP",
+                    "WL",
+                    "MIN",
+                    "PTS",
+                    "REB",
+                    "AST",
+                    "STL",
+                    "BLK",
+                    "TOV",
+                    "FG_PCT",
+                    "FG3_PCT",
+                    "FT_PCT",
+                    "PLUS_MINUS",
+                ]
+                if c in logs.columns
             ]
-            if c in logs.columns
-        ]
-        prep_logs = _prepare_chrono_playoff_logs(logs)
-        render_fan_stat_table(_df_newest_first_for_display(prep_logs)[show_cols], team_name)
+            prep_logs = _prepare_chrono_playoff_logs(logs)
+            render_fan_stat_table(_df_newest_first_for_display(prep_logs)[show_cols], team_name)
 
     pts0 = float(current.get("PTS", 20.0) or 20.0)
     reb0 = float(current.get("REB", 6.0) or 6.0)
@@ -6264,16 +6321,11 @@ def render_legacy_tracker_page(team_name):
         render_fan_section_open()
     ceiling = float(player_legacy_ceiling(player, team_name))
     st.markdown(
-        _lt_legacy_meters(locked_score, ceiling, series_wins_bracket, int(current.get("GP", 0) or 0)),
+        _lt_legacy_meters(player, team_name, locked_score, ceiling, series_wins_bracket, int(current.get("GP", 0) or 0)),
         unsafe_allow_html=True,
     )
     st.markdown(_pp_stat_pills_html(current, hot_keys={"PTS", "REB", "AST"}), unsafe_allow_html=True)
-    st.markdown(
-        f"<div class='lt-badge-row'>"
-        f"<span class='lt-badge'>If playoffs ended today: <b>{html.escape(specific_legacy_comparison(player, team_name, pts0, fg0, th0, pm0, series_wins_bracket, False, locked_score))}</b></span>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(_lt_today_read_card(player, team_name, pts0, fg0, th0, pm0, series_wins_bracket, locked_score), unsafe_allow_html=True)
     render_fan_section_close()
 
     if render_fan_section("Franchise bar — who sets the tier", "🏛️", caption="Named comparisons fans actually cite.", tone="default"):
@@ -6367,15 +6419,21 @@ def render_legacy_tracker_page(team_name):
         ("Win the Conference Finals", cf_wins, False),
         ("Win the NBA Finals", title_wins, True),
     ]
-    if render_fan_section("What-if scenario cards", "🎯", caption="Win next round · Conference Finals · NBA title.", tone="broadcast"):
+    if render_fan_section("What-if scenario cards", "🎯", caption="Next round · Conference Finals · title — legacy score jump.", tone="broadcast"):
         render_fan_section_open()
     scenario_html = []
     for label, wins, title in scenarios:
         sc = _scenario_score(wins, title)
+        delta = round(sc - sim_now, 1)
+        cls = "lt-scenario--title" if title else ("lt-scenario--finals" if "Finals" in label else "lt-scenario")
+        read = _legacy_profile_read(sc, wins, title)
+        if len(read) > 160:
+            read = read[:157] + "…"
         scenario_html.append(
-            f"<div class='lt-scenario'><div class='lt-scenario-k'>{html.escape(label)}</div>"
+            f"<div class='lt-scenario {cls}'><div class='lt-scenario-k'>{html.escape(label)}</div>"
             f"<div class='lt-scenario-score'>{sc}</div>"
-            f"<div class='lt-scenario-b'>{html.escape(_legacy_profile_read(sc, wins, title))}</div></div>"
+            f"<div class='lt-scenario-delta'>+{delta} legacy pts vs today</div>"
+            f"<div class='lt-scenario-b'>{html.escape(read)}</div></div>"
         )
     st.markdown("<div class='lt-scenario-grid'>" + "".join(scenario_html) + "</div>", unsafe_allow_html=True)
     render_fan_section_close()
@@ -7132,39 +7190,104 @@ def _pp_stat_pills_html(cur_summary, *, hot_keys=None):
     return "<div class='pp-stat-grid'>" + "".join(pills) + "</div>"
 
 
-def _pp_franchise_chase_cards_html(player, team_name, df):
-    e = html.escape
+def _pp_chase_board_data(player, team_name, df):
+    """Structured franchise chase: rank, hero headline, stat gaps with progress."""
     data = franchise_history_data(team_name)
     legends = data.get("legends", [])
     entry = next((x for x in legends if str(x.get("name", "")).lower() == player.lower()), None)
     if not entry:
-        return ""
+        return None, [], ""
     sorted_pts = sorted(legends, key=lambda x: -float(x.get("pts", 0) or 0))
     rank = next((i + 1 for i, x in enumerate(sorted_pts) if str(x.get("name", "")).lower() == player.lower()), None)
-    run_pts = int(df["PTS"].sum()) if df is not None and not df.empty and "PTS" in df.columns else 0
-    run_g30 = int((df["PTS"] >= 30).sum()) if df is not None and not df.empty and "PTS" in df.columns else 0
-    cards = []
+    stat_specs = [
+        ("pts", "Playoff points", "pts", int),
+        ("reb", "Playoff rebounds", "REB", int),
+        ("g30", "30-point games", "30+ games", int),
+        ("g40", "40-point games", "40+ games", int),
+        ("ast", "Playoff assists", "AST", int),
+    ]
+    gaps = []
+    for stat, label, short, caster in stat_specs:
+        val = float(entry.get(stat, 0) or 0)
+        higher = sorted(
+            [x for x in legends if str(x.get("name", "")).lower() != player.lower() and float(x.get(stat, 0) or 0) > val],
+            key=lambda x: float(x.get(stat, 0) or 0),
+        )
+        if not higher:
+            continue
+        target = higher[0]
+        target_val = float(target.get(stat, 0) or 0)
+        gap = caster(round(target_val - val))
+        if gap <= 0:
+            continue
+        progress = min(0.98, val / max(target_val, 1))
+        gaps.append(
+            {
+                "stat": stat,
+                "label": label,
+                "short": short,
+                "current": caster(val),
+                "target_name": target["name"],
+                "target_val": caster(target_val),
+                "gap": gap,
+                "progress": progress,
+            }
+        )
+    hero = ""
+    if gaps:
+        top = gaps[0]
+        hero = f"{top['gap']} {top['short']} to pass {top['target_name']} on the curated board"
+    elif rank:
+        hero = f"Already at #{rank} on the franchise playoff scoring board — next tier is about Finals-stage proof."
+    return rank, gaps[:5], hero
+
+
+def _pp_progress_bar_html(current, target_val, progress):
+    pct = max(6, min(98, int(progress * 100)))
+    return (
+        f"<div class='pp-progress'><span style='width:{pct}%'></span></div>"
+        f"<div class='pp-progress-label'><span>{current}</span><span>{target_val} target</span></div>"
+    )
+
+
+def _pp_franchise_chase_cards_html(player, team_name, df):
+    e = html.escape
+    rank, gaps, hero = _pp_chase_board_data(player, team_name, df)
+    if rank is None and not gaps:
+        return ""
+    parts = []
     if rank:
-        cards.append(
-            f"<div class='pp-chase-card'><div class='pp-chase-k'>Franchise playoff rank</div>"
-            f"<div class='pp-chase-rank'>#{rank}</div>"
-            f"<div class='pp-chase-b'>Among curated {e(fan_nick(team_name))} playoff scorers on this board.</div></div>"
+        ctx = franchise_history_data(team_name).get("context", "")
+        parts.append(
+            f"<div class='pp-chase-hero'>"
+            f"<div class='pp-chase-hero-rank'><div class='num'>#{rank}</div><div class='lbl'>Franchise rank</div></div>"
+            f"<div><h3>{e(player)} · playoff chase board</h3>"
+            f"<p>{e(hero)}</p>"
+            f"<span class='pp-chase-pill-hero'>{e(fan_nick(team_name))} curated history · estimates labeled</span>"
+            f"</div></div>"
         )
-    milestones = _milestone_lines_for_player(entry, legends)
-    for label, text, progress in milestones[:3]:
-        pct = max(6, min(98, int(progress * 100)))
-        cards.append(
-            f"<div class='pp-chase-card'><div class='pp-chase-k'>{e(label.title())}</div>"
-            f"<div class='pp-chase-b'>{e(text)}</div>"
-            f"<div class='pp-progress'><span style='width:{pct}%'></span></div></div>"
+    for g in gaps:
+        parts.append(
+            f"<div class='pp-chase-card pp-chase-card--hero-stat'>"
+            f"<div class='pp-chase-k'>{e(g['label'])}</div>"
+            f"<div class='pp-chase-gap'>{g['gap']} {e(g['short'])}</div>"
+            f"<div class='pp-chase-target'>to pass <b>{e(g['target_name'])}</b> ({g['target_val']})</div>"
+            f"{_pp_progress_bar_html(g['current'], g['target_val'], g['progress'])}"
+            f"</div>"
         )
-    if run_pts and run_g30:
-        cards.append(
-            f"<div class='pp-chase-card'><div class='pp-chase-k'>This run</div>"
-            f"<div class='pp-chase-b'><b>{run_pts}</b> playoff points in log · <b>{run_g30}</b> games at 30+ "
-            f"— live totals stack on the curated career board above.</div></div>"
+    run_g30 = int((df["PTS"] >= 30).sum()) if df is not None and not df.empty and "PTS" in df.columns else 0
+    run_g40 = int((df["PTS"] >= 40).sum()) if df is not None and not df.empty and "PTS" in df.columns else 0
+    if run_g30 or run_g40:
+        rec = []
+        if run_g30:
+            rec.append(f"{run_g30}× 30-pt")
+        if run_g40:
+            rec.append(f"{run_g40}× 40-pt")
+        parts.append(
+            f"<div class='pp-chase-card'><div class='pp-chase-k'>Records within reach this run</div>"
+            f"<div class='pp-chase-b'>Logged so far: <b>{' · '.join(rec)}</b> — stacks on curated career totals above.</div></div>"
         )
-    return "<div class='pp-chase-grid'>" + "".join(cards) + "</div>" if cards else ""
+    return "<div class='pp-chase-grid'>" + "".join(parts) + "</div>" if parts else ""
 
 
 def _pp_standout_awards_html(df, cur_summary, player, team_name):
@@ -7202,16 +7325,36 @@ def _pp_game_log_cards_html(df, team_tri, *, limit=6):
         wl = str(rr.get("WL", "—")).upper()
         win = wl.startswith("W")
         cls = "pp-game-card win" if win else "pp-game-card loss"
+        wl_cls = "pp-game-wl win" if win else "pp-game-wl loss"
         pts = safe_float(rr.get("PTS"))
+        pm = safe_float(rr.get("PLUS_MINUS"))
+        pm_cls = "pm-pos" if pm >= 0 else "pm-neg"
+        opp = _matchup_opponent_tri(rr.get("MATCHUP"), team_tri)
         cards.append(
-            f"<div class='{cls}'><div class='pp-game-top'><span>{e(str(rr.get('GAME_DATE','')))}</span>"
-            f"<span>{e(wl)}</span></div>"
-            f"<div class='pp-game-pts'>{pts:.0f} PTS</div>"
-            f"<div class='pp-game-meta'>vs {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)} · "
-            f"{safe_float(rr.get('REB')):.0f}/{safe_float(rr.get('AST')):.0f}/{safe_float(rr.get('STL')):.0f} "
-            f"· +/- {safe_float(rr.get('PLUS_MINUS')):+.0f}</div></div>"
+            f"<div class='{cls}'>"
+            f"<div class='pp-game-top'><span>{e(str(rr.get('GAME_DATE','')))}</span>"
+            f"<span class='{wl_cls}'>{e(wl)}</span></div>"
+            f"<div class='pp-game-pts'>{pts:.0f} <span style='font-size:12px;font-weight:800;color:#64748b'>PTS</span></div>"
+            f"<div class='pp-game-opp'>vs {e(opp)}</div>"
+            f"<div class='pp-game-chips'>"
+            f"<span class='pp-game-chip'>{safe_float(rr.get('REB')):.0f} REB</span>"
+            f"<span class='pp-game-chip'>{safe_float(rr.get('AST')):.0f} AST</span>"
+            f"<span class='pp-game-chip'>{safe_float(rr.get('MIN')):.0f} MIN</span>"
+            f"<span class='pp-game-chip {pm_cls}'>+/- {pm:+.0f}</span>"
+            f"</div></div>"
         )
     return "<div class='pp-game-grid'>" + "".join(cards) + "</div>"
+
+
+def _pp_series_tab_banner_html(label, w, el, sm):
+    e = html.escape
+    ts = f"{(sm.get('TS_PCT') * 100):.1f}% TS" if sm.get("TS_PCT") is not None else ""
+    line = f"{sm.get('PTS', 0):.1f} PPG · {sm.get('REB', 0):.1f} RPG · {sm.get('AST', 0):.1f} APG"
+    if ts:
+        line += f" · {ts}"
+    return (
+        f"<div class='pp-series-tab-banner'>{e(label)} · <b>{w}-{el}</b> in log · {e(line)}</div>"
+    )
 
 
 def _pp_journey_strip_html(chunks, rnd_names):
@@ -7245,57 +7388,108 @@ def _pp_premium_hero_html(player, team_name, season, prof, cur_summary, df, hs, 
     if "WL" in df.columns:
         w = int((df["WL"].astype(str).str.upper().str.startswith("W")).sum())
         l = int((df["WL"].astype(str).str.upper().str.startswith("L")).sum())
-        wl_record = f"{w}-{l} in log"
-    badge_html = "".join(f"<span class='pp-badge team'>{e(b)}</span>" for b in hero_badges[:4])
+        wl_record = f"{w}-{l}"
+    _, _, chase_headline = _pp_chase_board_data(player, team_name, df)
+    badge_html = "".join(f"<span class='pp-badge team'>{e(b)}</span>" for b in hero_badges[:3])
     if cur_summary.get("PTS", 0) >= 25:
-        badge_html += "<span class='pp-badge gold'>High scoring load</span>"
-    for lbl, cls in player_fan_badges(cur_summary)[:3]:
+        badge_html += "<span class='pp-badge gold'>Scoring load</span>"
+    for lbl, cls in player_fan_badges(cur_summary)[:2]:
         badge_html += f"<span class='fan-badge {cls}' style='font-size:10px;padding:3px 8px'>{e(lbl)}</span>"
+    chase_line = f"<div class='pp-chase-pill-hero'>{e(chase_headline)}</div>" if chase_headline else ""
+    hs_src = hs or ""
     return f"""<div class='fan-player-card'>
-  <img class='hs' src='{e(hs)}' alt=''/>
+  <img class='hs' src='{e(hs_src)}' alt='' onerror="this.style.opacity='0.35'"/>
   <div>
     <div class='fan-player-name'>{e(player)}</div>
     <div class='fan-player-role'>{e(season)} playoffs · {e(prof.get('role', 'Rotation'))} · {e(fan_nick(team_name))}</div>
     <div class='fan-stat-tiles'>
       <div class='fan-stat-tile'><div class='v'>{cur_summary.get('PTS', 0):.1f}</div><div class='k'>PPG</div></div>
       <div class='fan-stat-tile'><div class='v'>{int(cur_summary.get('GP', 0))}</div><div class='k'>GP</div></div>
-      <div class='fan-stat-tile'><div class='v'>{e(wl_record)}</div><div class='k'>Record</div></div>
+      <div class='fan-stat-tile'><div class='v'>{e(wl_record)}</div><div class='k'>W-L</div></div>
     </div>
+    {chase_line}
     <div class='fan-badges'>{badge_html}</div>
   </div>
   <img class='logo' src='{e(logo)}' alt=''/>
 </div>"""
 
 
+def _lt_legacy_tier_label(score, ceiling):
+    ratio = score / max(ceiling, 1)
+    if ratio >= 0.92:
+        return "Hall of Fame track"
+    if ratio >= 0.78:
+        return "Franchise icon tier"
+    if ratio >= 0.55:
+        return "Deep-run contributor"
+    return "Building the case"
+
+
+def _lt_franchise_rank_pct(player, team_name, locked_score):
+    data = franchise_history_data(team_name)
+    legends = sorted(data.get("legends", []), key=lambda x: -float(x.get("pts", 0) or 0))
+    entry = next((x for x in legends if str(x.get("name", "")).lower() == player.lower()), None)
+    if not entry:
+        return None, 0
+    rank = next((i + 1 for i, x in enumerate(legends) if str(x.get("name", "")).lower() == player.lower()), len(legends))
+    pct = max(10, min(92, int(100 - (rank - 1) * max(8, 80 // max(len(legends), 1)))))
+    return rank, pct
+
+
+def _lt_legacy_meters(player, team_name, locked_score, ceiling, series_wins, gp):
+    pct = max(8, min(96, int(100 * locked_score / max(ceiling, 1))))
+    rank, rank_pct = _lt_franchise_rank_pct(player, team_name, locked_score)
+    tier = _lt_legacy_tier_label(locked_score, ceiling)
+    rank_txt = f"#{rank}" if rank else "—"
+    return f"""<div class='lt-meter-grid'>
+  <div class='lt-meter lt-meter--hof'>
+    <div class='lt-meter-k'>Legacy score</div>
+    <div class='lt-meter-v'>{locked_score:.0f}</div>
+    <div class='lt-meter-sub'>Ceiling {ceiling:.0f} · {max(0, ceiling - locked_score):.0f} room</div>
+    <div class='lt-meter-bar'><span style='width:{pct}%'></span></div>
+    <span class='lt-tier-badge'>{html.escape(tier)}</span>
+  </div>
+  <div class='lt-meter'>
+    <div class='lt-meter-k'>Franchise rank</div>
+    <div class='lt-meter-v'>{rank_txt}</div>
+    <div class='lt-meter-sub'>Curated playoff board · {html.escape(fan_nick(team_name))}</div>
+    <div class='lt-meter-bar'><span style='width:{rank_pct if rank else 40}%'></span></div>
+  </div>
+  <div class='lt-meter'>
+    <div class='lt-meter-k'>Bracket climb</div>
+    <div class='lt-meter-v'>{series_wins} / 4</div>
+    <div class='lt-meter-sub'>{gp} playoff games logged</div>
+    <div class='lt-meter-bar'><span style='width:{max(12, min(88, 20 + series_wins * 18))}%'></span></div>
+  </div>
+</div>"""
+
+
 def _lt_franchise_compare_faces(player, team_name):
-    """Named franchise icons for legacy comparison cards."""
-    touchstones = _franchise_playoff_touchstones(team_name)
+    """Named franchise touchstones — short bar-setter cards."""
+    data = franchise_history_data(team_name)
+    entry = next((x for x in data.get("legends", []) if str(x.get("name", "")).lower() == player.lower()), None)
+    names = (entry or {}).get("compare_to") or [n for n, _, _ in _franchise_playoff_touchstones(team_name)[:3]]
     cards = []
     e = html.escape
-    for name, role, context in touchstones[:3]:
-        img = e(headshot(name)) if not _validation_skip_network() else ""
+    for nm in names[:3]:
+        leg = next((x for x in data.get("legends", []) if x.get("name") == nm), None)
+        tier = leg.get("tier", "Franchise bar") if leg else "Reference point"
+        img = e(headshot(nm)) if not _validation_skip_network() else ""
         img_tag = f"<img src='{img}' alt=''/>" if img else "<div style='width:52px;height:52px;border-radius:12px;background:#e2e8f0'></div>"
         cards.append(
-            f"<div class='lt-scenario'><div class='lt-compare-face'>{img_tag}<div>"
-            f"<div style='font-weight:900;color:#0f172a'>{e(name)}</div>"
-            f"<div style='font-size:11px;color:#64748b'>{e(role)}</div></div></div>"
-            f"<div class='lt-scenario-b'>{e(context)}</div></div>"
+            f"<div class='lt-scenario lt-scenario--finals'><div class='lt-compare-face'>{img_tag}<div>"
+            f"<div style='font-weight:900;color:#0f172a'>{e(nm)}</div>"
+            f"<div class='lt-touchstone-rank'>{e(tier)}</div></div></div>"
+            f"<div class='lt-scenario-b'>{e((leg or {}).get('accomplishments', 'Sets the tier fans cite in bar talk.')[:120])}</div></div>"
         )
     return "<div class='lt-scenario-grid'>" + "".join(cards) + "</div>"
 
 
-def _lt_legacy_meters(locked_score, ceiling, series_wins, gp):
-    pct = max(8, min(96, int(100 * locked_score / max(ceiling, 1))))
-    rank_pct = max(12, min(88, 20 + series_wins * 18 + min(gp, 12) * 3))
-    e = html.escape
-    return f"""<div class='lt-meter-grid'>
-  <div class='lt-meter'><div class='lt-meter-k'>Legacy score</div><div class='lt-meter-v'>{locked_score:.0f}</div>
-    <div class='lt-meter-bar'><span style='width:{pct}%'></span></div></div>
-  <div class='lt-meter'><div class='lt-meter-k'>Room to ceiling</div><div class='lt-meter-v'>{max(0, ceiling - locked_score):.0f}</div>
-    <div class='lt-meter-bar'><span style='width:{max(8, 100-pct)}%'></span></div></div>
-  <div class='lt-meter'><div class='lt-meter-k'>Bracket climb</div><div class='lt-meter-v'>{series_wins} series</div>
-    <div class='lt-meter-bar'><span style='width:{rank_pct}%'></span></div></div>
-</div>"""
+def _lt_today_read_card(player, team_name, pts, fg, three, pm, wins, score):
+    read = specific_legacy_comparison(player, team_name, pts, fg, three, pm, wins, False, score)
+    if len(read) > 220:
+        read = read[:217] + "…"
+    return f"<div class='lt-badge'><b>If playoffs ended today</b><br>{html.escape(read)}</div>"
 
 
 def render_player_playoff_story_hub(team_name, profile):
@@ -7347,12 +7541,6 @@ def render_player_playoff_story_hub(team_name, profile):
 
     prev_season = _prior_nba_season_label(season)
     prev_summary = None
-    if prev_season and not _qa_skip_expensive_apis():
-        prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
-        if not prev_df.empty:
-            prev_summary = summarize_playoff_logs(prev_df)
-            prev_summary["TS_PCT"] = _true_shooting_pct(prev_df)
-            prev_summary["GP"] = int(len(prev_df))
 
     prof = player_resume_profile(player, team_name)
     role_lower = str(prof.get("role", "")).lower()
@@ -7380,12 +7568,10 @@ def render_player_playoff_story_hub(team_name, profile):
         _pp_premium_hero_html(player, team_name, season, prof, cur_summary, df, hs, logo, hero_badges, mx),
         unsafe_allow_html=True,
     )
-    st.markdown(_pp_standout_awards_html(df, cur_summary, player, team_name), unsafe_allow_html=True)
-
     if render_fan_section(
         "Franchise chase board",
         "🏛️",
-        caption="Where this player sits on the curated playoff leaderboard — rank, gaps, and progress meters.",
+        caption="Rank, points/rebounds to next legend, and records within reach — the first thing fans should see.",
         tone="broadcast",
     ):
         render_fan_section_open()
@@ -7396,56 +7582,33 @@ def render_player_playoff_story_hub(team_name, profile):
         st.caption("Franchise chase cards appear when this player is on the curated history board.")
     render_fan_section_close()
 
-    # --- 1 · Current run ---
+    st.markdown(_pp_standout_awards_html(df, cur_summary, player, team_name), unsafe_allow_html=True)
+
     if render_fan_section("Playoff averages", "🏀", caption="Core counting stats for this postseason sample.", tone="default"):
         render_fan_section_open()
     st.markdown(_pp_stat_pills_html(cur_summary), unsafe_allow_html=True)
     render_fan_section_close()
 
-    c_a, c_b = st.columns(2)
-    with c_a:
-        st.markdown("<div class='pp-card'><h4>Efficiency & turnover texture</h4>", unsafe_allow_html=True)
-        fg = cur_summary.get("FG_PCT") or 0
-        tp = cur_summary.get("FG3_PCT") or 0
-        ft = cur_summary.get("FT_PCT") or 0
-        tov = cur_summary.get("TOV") or 0
-        st.markdown(
-            f"<p class='pp-muted'>FG <b>{fg * 100:.1f}%</b> · 3P <b>{tp * 100:.1f}%</b> · FT <b>{ft * 100:.1f}%</b> · TOV <b>{tov:.1f}</b> per game.</p>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<p class='pp-muted'>TS% uses makes/attempts from the log when available; it is not opponent-adjusted.</p>",
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-    with c_b:
-        st.markdown("<div class='pp-card'><h4>Playoff highs / lows (box)</h4>", unsafe_allow_html=True)
-        if "PTS" in df.columns:
-            imax = int(df["PTS"].idxmax())
-            imin = int(df["PTS"].idxmin())
-            rmax = df.loc[imax]
-            rmin = df.loc[imin]
+    with st.expander("Efficiency splits & highs/lows", expanded=False):
+        c_a, c_b = st.columns(2)
+        with c_a:
+            fg = cur_summary.get("FG_PCT") or 0
+            tp = cur_summary.get("FG3_PCT") or 0
+            ft = cur_summary.get("FT_PCT") or 0
+            tov = cur_summary.get("TOV") or 0
             st.markdown(
-                f"<p class='pp-muted'><b>High:</b> {safe_float(rmax.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(rmax.get('MATCHUP'), team_tri)} on {html.escape(str(rmax.get('GAME_DATE','')))} "
-                f"(+/- {safe_float(rmax.get('PLUS_MINUS')):+.0f}).<br/>"
-                f"<b>Low:</b> {safe_float(rmin.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(rmin.get('MATCHUP'), team_tri)} on {html.escape(str(rmin.get('GAME_DATE','')))}.</p>",
-                unsafe_allow_html=True,
+                f"FG **{fg * 100:.1f}%** · 3P **{tp * 100:.1f}%** · FT **{ft * 100:.1f}%** · TOV **{tov:.1f}** per game."
             )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div class='pp-card'><h4>Clutch texture (proxies — no quarter splits in this feed)</h4>", unsafe_allow_html=True)
-    wins = df[df["WL"].astype(str).str.upper().str.startswith("W")] if "WL" in df.columns else df
-    loss = df[df["WL"].astype(str).str.upper().str.startswith("L")] if "WL" in df.columns else pd.DataFrame()
-    wppg = float(wins["PTS"].mean()) if not wins.empty and "PTS" in wins.columns else None
-    lppg = float(loss["PTS"].mean()) if not loss.empty and "PTS" in loss.columns else None
-    win_txt = f"{wppg:.1f}" if wppg is not None else "—"
-    loss_txt = f" · in losses: <b>{lppg:.1f}</b> PPG" if lppg is not None else ""
-    st.markdown(
-        f"<p class='pp-muted'>In logged wins: <b>{win_txt}</b> PPG average{loss_txt}. "
-        f"Bounce-back wins after a loss in this run: <b>{_bounce_back_games(df)}</b>.</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+        with c_b:
+            if "PTS" in df.columns:
+                imax = int(df["PTS"].idxmax())
+                imin = int(df["PTS"].idxmin())
+                rmax = df.loc[imax]
+                rmin = df.loc[imin]
+                st.markdown(
+                    f"**High:** {safe_float(rmax.get('PTS')):.0f} PTS vs {_matchup_opponent_tri(rmax.get('MATCHUP'), team_tri)} · "
+                    f"**Low:** {safe_float(rmin.get('PTS')):.0f} PTS"
+                )
 
     # --- 2 · Series ---
     chunks = _series_chunks_playoff_order(df, team_tri)
@@ -7473,145 +7636,81 @@ def render_player_playoff_story_hub(team_name, profile):
                 el = int((seg["WL"].astype(str).str.upper().str.startswith("L")).sum()) if "WL" in seg.columns else 0
                 sm = summarize_playoff_logs(seg)
                 sm["TS_PCT"] = _true_shooting_pct(seg)
-                mom = _momentum_reading(seg)
-                cons, cons_note = _consistency_rating(seg["PTS"]) if "PTS" in seg.columns else (None, "—")
+                st.markdown(_pp_series_tab_banner_html(label, w, el, sm), unsafe_allow_html=True)
                 st.markdown(_pp_stat_pills_html(sm, hot_keys={"PTS", "PLUS_MINUS"}), unsafe_allow_html=True)
-                ts_part = f"{(sm.get('TS_PCT') * 100):.1f}%" if sm.get("TS_PCT") is not None else "—"
-                st.markdown(
-                    f"<div class='pp-card'><h4>{html.escape(label)} · {w}-{el} in log</h4>"
-                    f"<p class='pp-muted'><b>Momentum:</b> {html.escape(mom)} · <b>TS%:</b> {ts_part}"
-                    + (f" · <b>Consistency:</b> {cons}/100 — {html.escape(cons_note)}" if cons is not None else "")
-                    + "</p></div>",
-                    unsafe_allow_html=True,
-                )
                 st.markdown(_pp_game_log_cards_html(seg, team_tri, limit=8), unsafe_allow_html=True)
     render_fan_section_close()
 
-    # --- 3 · Pressure & legacy ---
-
-    team_section_header("3 · Pressure & legacy", "🎯")
-    pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
-    rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
-    stakes = min(100, 35 + _round_narrative_weight(rnd) + (12 if status == "Active" else 0))
-    elim_pressure = min(100, 22 + _bounce_back_games(df) * 14 + (10 if any(str(x).upper().startswith("L") for x in df.get("WL", [])) else 0))
-
-    nar = _pp_hub_pressure_legacy_narratives(
-        team_name,
-        player,
-        seed,
-        rnd,
-        status,
-        opp,
-        pressure_base,
-        rep,
-        stakes,
-        elim_pressure,
-        cur_summary,
-        df,
-        prof,
-    )
-
-    def meter_bar(label, val, klass, body_text):
-        v = max(0, min(100, int(val)))
-        safe_cls = klass if klass in ("", "gold", "ember") else ""
-        return (
-            f"<div class='pp-card'><h4>{html.escape(label)}</h4>"
-            f"<div class='pp-meter'><span class='{safe_cls}' style='width:{v}%'></span></div>"
-            f"<p class='pp-muted'>{html.escape(body_text)}</p></div>"
+    with st.expander("Pressure meters & legacy texture", expanded=False):
+        pressure_base = min(100, 28 + max(0, 10 - seed) * 4 + _round_narrative_weight(rnd) + min(22, int(cur_summary.get("PTS", 0)) * 2))
+        rep = min(100, int(prof.get("baseline", 50) + min(18, abs(safe_float(cur_summary.get("PLUS_MINUS"))) * 2)))
+        stakes = min(100, 35 + _round_narrative_weight(rnd) + (12 if status == "Active" else 0))
+        elim_pressure = min(100, 22 + _bounce_back_games(df) * 14 + (10 if any(str(x).upper().startswith("L") for x in df.get("WL", [])) else 0))
+        nar = _pp_hub_pressure_legacy_narratives(
+            team_name, player, seed, rnd, status, opp,
+            pressure_base, rep, stakes, elim_pressure, cur_summary, df, prof,
         )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(meter_bar("Pressure level", pressure_base, "", nar["pressure"]), unsafe_allow_html=True)
-        st.markdown(
-            f"<div class='pp-card'><h4>Playoff expectations</h4><p class='pp-muted'>{html.escape(nar['expectations'])}</p></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            meter_bar(
-                "How much this run could change perception",
-                rep,
-                "gold",
-                nar["reputation"],
-            ),
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(meter_bar("What's at stake this postseason", stakes, "ember", nar["stakes"]), unsafe_allow_html=True)
-        st.markdown(
-            meter_bar(
-                "Elimination & bounce-back pressure",
-                elim_pressure,
-                "gold",
-                nar["elimination"],
-            ),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div class='pp-card'><h4>What this playoff run could mean historically</h4><p class='pp-muted'>"
-            + html.escape(nar["legacy"])
-            + "</p></div>",
-            unsafe_allow_html=True,
-        )
+        def meter_bar(label, val, klass, body_text):
+            v = max(0, min(100, int(val)))
+            safe_cls = klass if klass in ("", "gold", "ember") else ""
+            return (
+                f"<div class='pp-card'><h4>{html.escape(label)}</h4>"
+                f"<div class='pp-meter'><span class='{safe_cls}' style='width:{v}%'></span></div>"
+                f"<p class='pp-muted'>{html.escape(body_text[:140])}</p></div>"
+            )
 
-    # --- 4 · Historical comparisons ---
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(meter_bar("Pressure level", pressure_base, "", nar["pressure"]), unsafe_allow_html=True)
+            st.markdown(meter_bar("Reputation swing", rep, "gold", nar["reputation"]), unsafe_allow_html=True)
+        with c2:
+            st.markdown(meter_bar("Stakes", stakes, "ember", nar["stakes"]), unsafe_allow_html=True)
+            st.markdown(meter_bar("Elimination pressure", elim_pressure, "gold", nar["elimination"]), unsafe_allow_html=True)
+
     if render_fan_section(
         "Franchise comparison cards",
         "📚",
-        caption="Named Knicks/Spurs/Lakers-style bar talk — not generic greatness copy.",
+        caption="Named bar talk — Ewing, Frazier, Duncan, Parker tier references.",
         tone="default",
     ):
         render_fan_section_open()
+    if prev_season and not _qa_skip_expensive_apis() and st.checkbox(
+        f"Compare to {prev_season} postseason (loads extra API call)",
+        value=False,
+        key=f"pp_prev_yoy_{player}",
+    ):
+        prev_df = _prepare_chrono_playoff_logs(_cached_playoff_gamelog(pid, prev_season))
+        if not prev_df.empty:
+            prev_summary = summarize_playoff_logs(prev_df)
+            prev_summary["TS_PCT"] = _true_shooting_pct(prev_df)
+            prev_summary["GP"] = int(len(prev_df))
     comp_lines = _historical_comparison_lines(player, team_name, cur_summary, prev_summary, prof, role_lower)
     st.markdown(_pp_compare_cards_html(comp_lines), unsafe_allow_html=True)
-    if prev_summary:
-        st.caption(f"Prior playoff sample: **{prev_season}** ({prev_summary.get('GP', 0)} games) used only when the API returned a log.")
     render_fan_section_close()
 
-    # --- 5 · Clutch impact ---
-
-    team_section_header("5 · Clutch impact", "⏱️")
-    df_c = df.copy()
-    df_c["_impact"] = df_c.apply(_game_impact_score, axis=1)
-    df_c = df_c.sort_values("_impact", ascending=False)
-    st.markdown("<div class='pp-card'><h4>Late-game / takeover proxies</h4>", unsafe_allow_html=True)
-    st.markdown(
-        "<p class='pp-muted'>Quarter splits are not in standard season game logs here — instead we rank <b>playoff takeover games</b> by a weighted blend of points, playmaking, stocks, and plus/minus.</p>",
-        unsafe_allow_html=True,
-    )
-    if not df_c.empty:
-        top3 = df_c.head(3)
-        lines = []
-        for _, rr in top3.iterrows():
-            lines.append(
-                f"{html.escape(str(rr.get('GAME_DATE','')))}: {safe_float(rr.get('PTS')):.0f} PTS, "
-                f"+/- {safe_float(rr.get('PLUS_MINUS')):+.0f} vs {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)}"
-            )
-        st.markdown("<p class='pp-muted'><b>Top takeover games:</b><br/>" + "<br/>".join(lines) + "</p>", unsafe_allow_html=True)
-    takeover = min(100, int(38 + 2.2 * (cur_summary.get("PTS", 0)) + 4.5 * (cur_summary.get("STL", 0) + cur_summary.get("BLK", 0)) + 1.1 * max(0, cur_summary.get("PLUS_MINUS", 0))))
-    st.markdown(
-        f"<p class='pp-muted'><b>Playoff takeover rating:</b> {takeover}/100 — "
-        f"big scoring nights plus steals, blocks, and winning margin in this log push this number up.</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # --- 6 · Narratives ---
-
-    team_section_header("6 · Narrative storylines", "📰")
-    for s in _narrative_storylines(player, team_name, cur_summary, reg_avg, prev_summary, prof):
-        with st.container(border=True):
+    with st.expander("Takeover games & bonus storylines", expanded=False):
+        df_c = df.copy()
+        df_c["_impact"] = df_c.apply(_game_impact_score, axis=1)
+        df_c = df_c.sort_values("_impact", ascending=False)
+        if not df_c.empty:
+            for _, rr in df_c.head(3).iterrows():
+                st.caption(
+                    f"{rr.get('GAME_DATE','')}: {safe_float(rr.get('PTS')):.0f} PTS, "
+                    f"+/- {safe_float(rr.get('PLUS_MINUS')):+.0f} vs {_matchup_opponent_tri(rr.get('MATCHUP'), team_tri)}"
+                )
+        for s in _narrative_storylines(player, team_name, cur_summary, reg_avg, prev_summary, prof)[:3]:
             st.markdown(s)
 
-    # --- 7 · Visuals ---
-
-    team_section_header("7 · Progression & raw log", "📈")
+    if render_fan_section("Progression & game log", "📈", caption="Charts and full table.", tone="default"):
+        render_fan_section_open()
     if _qa_skip_heavy_ui():
-        st.caption("QA mode: Plotly progression charts skipped — table and series cards remain for factual checks.")
+        st.caption("QA mode: Plotly progression charts skipped — game log cards above remain for factual checks.")
         show_cols = [c for c in ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS"] if c in df.columns]
-        with st.expander("Full playoff game log (table)", expanded=True):
+        with st.expander("Full playoff game log (table)", expanded=False):
             df_tbl = _df_newest_first_for_display(df)
             st.dataframe(df_tbl[show_cols], use_container_width=True)
+        render_fan_section_close()
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -7675,6 +7774,7 @@ def render_player_playoff_story_hub(team_name, profile):
         df_tbl = _df_newest_first_for_display(df)
         st.dataframe(df_tbl[show_cols], use_container_width=True)
 
+    render_fan_section_close()
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -8063,6 +8163,15 @@ def _lineup_xfactor_candidates(team_name, opp):
     return out[:6]
 
 
+def _lineups_use_curated_board(team_name):
+    """Use curated playoff rotation when a board exists (Finals accuracy + fewer API calls)."""
+    return bool(CURRENT_PLAYOFF_LINEUPS.get(team_name))
+
+
+def _curated_bench_list(team_name, limit=5):
+    return list((CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}).get("bench") or [])[:limit]
+
+
 def render_matchup_lineups_page(team_name, profile):
     _page_perf_tick("lineups_start")
     if _validation_mode_active():
@@ -8093,7 +8202,7 @@ def render_matchup_lineups_page(team_name, profile):
     series_obj = hctx.get("series") or _build_local_series_shell(team_name)
     round_label = hctx.get("round_label") or (series_obj or {}).get("round") or profile.get("round", "Playoffs")
     status = (hctx.get("ctx") or {}).get("status_text") or series_status_text(team_name, series_obj)
-    if _validation_mode_active():
+    if _lineups_use_curated_board(team_name):
         t_starters = _curated_starters_list(team_name)
         o_starters = _curated_starters_list(opp)
     else:
@@ -8215,7 +8324,7 @@ def render_matchup_lineups_page(team_name, profile):
     bench_cols_html = []
     for tm in (team_name, opp):
         cards_b = []
-        for p in estimated_bench_from_api(tm)[:4]:
+        for p in (_curated_bench_list(tm, 4) if _lineups_use_curated_board(tm) else estimated_bench_from_api(tm)[:4]):
             stats = season_averages(p)
             badge = "Bench Spark" if _lineup_stat_num(stats, "PTS") >= 8 else "Rotation Trust"
             cards_b.append(
@@ -9859,6 +9968,38 @@ def _home_matchup_swing_line(team_name, pctx, s_active):
     return f"{ax[0]} against {on}'s best counter — whoever owns that duel controls the shot diet for Game 2."
 
 
+def _home_series_tactical_why(team_name, s_active, pctx):
+    """Scheme-level why — distinct from narrative storyline bar above the ledger."""
+    if not s_active or not s_active.get("games"):
+        return "Opening possession battle: who sets the physical tone and forces the first schematic answer?"
+    lens = pctx.get("lens") or team_dashboard_lens(team_name)
+    ax = lens.get("identity_axes") or ("half-court engine", "wing defense", "glass margin")
+    prof = TEAM_PROFILES.get(team_name) or {}
+    opp = s_active["b"] if team_name == s_active["a"] else s_active["a"]
+    on = fan_nick(opp)
+    if team_name == "New York Knicks" and opp == "San Antonio Spurs":
+        return (
+            f"Tactical hinge: {ax[1]} vs Wembanyama length — if {fan_nick(team_name)} win the paint-touch battle, "
+            f"Brunson's pull-ups stay efficient; if not, the game becomes a turnover war."
+        )
+    if team_name == "San Antonio Spurs" and opp == "New York Knicks":
+        return (
+            f"Tactical hinge: drop vs Towns spacing — when San Antonio packs the paint, Castle must punish "
+            f"closeouts; when New York stretches the floor, Wembanyama's deterrence sets the terms."
+        )
+    return (
+        f"Scheme question: does {ax[0]} travel against {on}'s length, or does {on} shrink the floor "
+        f"before {(prof.get('starters') or ['the star'])[0]} gets clean looks?"
+    )
+
+
+def _home_watch_next_brief(team_name, pctx, watch_keys):
+    """Single fan-facing watch line — not the swing matchup tile."""
+    if len(watch_keys) > 1:
+        return watch_keys[1][1]
+    return f"First-quarter pace and {(TEAM_PROFILES.get(team_name) or {}).get('subs', ['bench'])[0]} minutes."
+
+
 def _home_game1_to_game2_shift(team_name, s_active, pctx):
     """What changed from Game 1 to Game 2 — coaching and possession texture."""
     games = (s_active or {}).get("games") or []
@@ -11173,20 +11314,18 @@ def render_playoff_command_center(team_name):
         ):
             render_fan_section_open()
         _render_fan_energy_grid([
-            ("📖", "Why the series feels this way", _home_series_storyline(team_name, current_series_obj, pctx), ""),
-            ("🔄", "Game 1 → Game 2 shift", _home_game1_to_game2_shift(team_name, current_series_obj, pctx), "hot"),
+            ("🎯", "Why is it unfolding this way?", _home_series_tactical_why(team_name, current_series_obj, pctx), "hot"),
+            ("🔄", "What changed Game 1 → Game 2?", _home_game1_to_game2_shift(team_name, current_series_obj, pctx), "hot"),
             ("⚔️", "Biggest matchup advantage", _home_matchup_swing_line(team_name, pctx, current_series_obj), ""),
-            ("🎯", "Players under pressure", _home_pressure_players_line(team_name, pctx, current_series_obj), "spotlight"),
-            ("📋", "Coaching adjustment", _home_coaching_adjustment_line(team_name, pctx, current_series_obj), ""),
+            ("🔥", "Who is under pressure?", _home_pressure_players_line(team_name, pctx, current_series_obj), "spotlight"),
+            ("📋", "Coaching adjustment that matters", _home_coaching_adjustment_line(team_name, pctx, current_series_obj), ""),
             ("⭐", "Player to watch", f"{watch} — {watch_why}" if watch else "Rotation leader loads from curated board.", "spotlight"),
-            ("📈", "Rising performer", rising or "Bench spark still forming — watch second-unit minutes.", ""),
+            ("📈", "Who is rising?", f"{rising} — second-unit or role expansion spot." if rising else "Bench spark still forming — watch substitution patterns.", ""),
             ("🏛️", "Historical stakes", _home_franchise_stakes(team_name), ""),
-            ("👀", watch_keys[0][0] if watch_keys else "Watch next", watch_keys[0][1] if watch_keys else "", ""),
+            ("👀", "What should fans watch next?", _home_watch_next_brief(team_name, pctx, watch_keys), ""),
         ])
         if last_mvp:
             st.caption(f"**Last game standout:** {last_mvp} — _{last_why}_")
-        if rising:
-            st.caption(f"**Rising performer:** {rising}")
         sections.append("fan_energy_board")
         _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "fan_energy_board")
         render_fan_section_close()
@@ -16006,27 +16145,32 @@ def _curated_starters_list(team_name):
 
 def build_lineup_matchups(team_name, opp_name):
     """Position-by-position lineup board data — no Streamlit rendering."""
-    if _validation_mode_active():
+    if _lineups_use_curated_board(team_name):
+        t_starters = _curated_starters_list(team_name)
+        o_starters = _curated_starters_list(opp_name)
+        t_meta = {"source": "curated playoff board"}
+        o_meta = {"source": "curated playoff board"}
+        t_bench = _curated_bench_list(team_name, 5)
+        o_bench = _curated_bench_list(opp_name, 5)
+    elif _validation_mode_active():
         t_starters = _curated_starters_list(team_name)
         o_starters = _curated_starters_list(opp_name)
         t_meta = {"source": "curated playoff override (validation)"}
         o_meta = {"source": "curated playoff override (validation)"}
+        t_bench = _curated_bench_list(team_name, 5)
+        o_bench = _curated_bench_list(opp_name, 5)
     else:
         t_meta = get_lineup_resolution_info(team_name)
         o_meta = get_lineup_resolution_info(opp_name)
         t_starters = estimated_starters_from_api(team_name)
         o_starters = estimated_starters_from_api(opp_name)
+        t_bench = list(estimated_bench_from_api(team_name)[:5])
+        o_bench = list(estimated_bench_from_api(opp_name)[:5])
     matchups = []
     for i, pos in enumerate(LINEUP_SLOTS):
         tp = t_starters[i] if i < len(t_starters) else "TBD"
         op = o_starters[i] if i < len(o_starters) else "TBD"
         matchups.append({"position": pos, "team_player": tp, "opp_player": op})
-    if _validation_mode_active():
-        t_bench = list((CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}).get("bench") or [])[:5]
-        o_bench = list((CURRENT_PLAYOFF_LINEUPS.get(opp_name) or {}).get("bench") or [])[:5]
-    else:
-        t_bench = list(estimated_bench_from_api(team_name)[:5])
-        o_bench = list(estimated_bench_from_api(opp_name)[:5])
     return {
         "team": team_name,
         "opponent": opp_name,
