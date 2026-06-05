@@ -2588,7 +2588,7 @@ def get_playoff_refresh_settings():
     if _validation_mode_active():
         use_demo = True
         api_refresh = False
-    elif st.session_state.get("portfolio_demo_mode"):
+    elif st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode"):
         use_demo = True
         api_refresh = False
     return use_demo, api_refresh
@@ -2620,6 +2620,8 @@ def first_round_series_for_team(team_name, stt=None):
 def tick_playoff_state_autorefresh(page_key, interval_ms=None):
     """Rerun the app on a timer so series scores and advancement stay current without code edits."""
     if _validation_mode_active():
+        return
+    if st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode"):
         return
     if not AUTOREFRESH_AVAILABLE:
         return
@@ -6679,24 +6681,25 @@ def render_legacy_tracker_page(team_name):
         ("Win the Conference Finals", cf_wins, False),
         ("Win the NBA Finals", title_wins, True),
     ]
-    if render_fan_section("What-if scenario cards", "🎯", caption="Next round · Conference Finals · title — legacy score jump.", tone="broadcast"):
-        render_fan_section_open()
-    scenario_html = []
-    for label, wins, title in scenarios:
-        sc = _scenario_score(wins, title)
-        delta = round(sc - sim_now, 1)
-        cls = "lt-scenario--title" if title else ("lt-scenario--finals" if "Finals" in label else "lt-scenario")
-        read = _legacy_profile_read(sc, wins, title)
-        if len(read) > 160:
-            read = read[:157] + "…"
-        scenario_html.append(
-            f"<div class='lt-scenario {cls}'><div class='lt-scenario-k'>{html.escape(label)}</div>"
-            f"<div class='lt-scenario-score'>{sc}</div>"
-            f"<div class='lt-scenario-delta'>+{delta} legacy pts vs today</div>"
-            f"<div class='lt-scenario-b'>{html.escape(read)}</div></div>"
-        )
-    st.markdown("<div class='lt-scenario-grid'>" + "".join(scenario_html) + "</div>", unsafe_allow_html=True)
-    render_fan_section_close()
+    if not pp.skip_heavy_work(st):
+        if render_fan_section("What-if scenario cards", "🎯", caption="Next round · Conference Finals · title — legacy score jump.", tone="broadcast"):
+            render_fan_section_open()
+        scenario_html = []
+        for label, wins, title in scenarios:
+            sc = _scenario_score(wins, title)
+            delta = round(sc - sim_now, 1)
+            cls = "lt-scenario--title" if title else ("lt-scenario--finals" if "Finals" in label else "lt-scenario")
+            read = _legacy_profile_read(sc, wins, title)
+            if len(read) > 160:
+                read = read[:157] + "…"
+            scenario_html.append(
+                f"<div class='lt-scenario {cls}'><div class='lt-scenario-k'>{html.escape(label)}</div>"
+                f"<div class='lt-scenario-score'>{sc}</div>"
+                f"<div class='lt-scenario-delta'>+{delta} legacy pts vs today</div>"
+                f"<div class='lt-scenario-b'>{html.escape(read)}</div></div>"
+            )
+        st.markdown("<div class='lt-scenario-grid'>" + "".join(scenario_html) + "</div>", unsafe_allow_html=True)
+        render_fan_section_close()
 
     render_fan_product_shell_close()
 
@@ -6859,6 +6862,8 @@ def demo_playoff_gamelog_from_bracket(player_name, team_name, season):
 
 def fetch_playoff_gamelog(player_name, team_name, season=CURRENT_NBA_SEASON):
     """NBA API log with curated bracket fallback for current-season playoffs."""
+    if st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode"):
+        return demo_playoff_gamelog_from_bracket(player_name, team_name, season)
     pid = get_player_id(player_name)
     logs = pd.DataFrame()
     if pid:
@@ -11627,6 +11632,8 @@ def render_home_live_hub_strip(team_name, fb_prefetched=None):
 
 def render_home_current_game_card(team_name):
     """Prominent Home card for scheduled/starting-soon/live games (CDN-first Layer 1)."""
+    if st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode"):
+        return
     try:
         snap = get_home_layer1_snapshot(team_name)
     except Exception:
@@ -12053,7 +12060,7 @@ def render_playoff_command_center(team_name):
     _inject_home_command_center_css()
     sections.append("inject_css")
 
-    if not is_eliminated and not _validation_mode_active():
+    if not is_eliminated and not _validation_mode_active() and not pp.skip_heavy_work(st):
         with game_watch_slot.container():
             render_home_current_game_card(team_name)
         sections.append("current_game_watch")
@@ -12860,7 +12867,8 @@ def render_bracket(favorite_team=None):
 
     render_page_trust_strip("bracket")
     use_demo, api_on = get_playoff_refresh_settings()
-    if use_demo or api_on:
+    import portfolio_polish as _pp_bracket
+    if (use_demo or api_on) and not _pp_bracket.skip_heavy_work(st):
         st.caption(f"Auto-refresh every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s when sync is on.")
     render_playoff_matchup_ribbon(favorite_team, _get_validation_playoff_state() if _validation_mode_active() else None)
     _page_perf_tick("bracket_ribbon")
@@ -17439,22 +17447,23 @@ def main():
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
-    try:
-        sig = (favorite_team, page_label or page)
-        if st.session_state.get("_suite_activity_sig") != sig:
-            st.session_state["_suite_activity_sig"] = sig
-            from nba_activity import log_from_page_context
+    if not pp.skip_background_persistence(st):
+        try:
+            sig = (favorite_team, page_label or page)
+            if st.session_state.get("_suite_activity_sig") != sig:
+                st.session_state["_suite_activity_sig"] = sig
+                from nba_activity import log_from_page_context
 
-            log_from_page_context(favorite_team, page, page_label)
-    except Exception:
-        pass
+                log_from_page_context(favorite_team, page, page_label)
+        except Exception:
+            pass
 
-    try:
-        from nba_persistent_state import autosave_nba_state
+        try:
+            from nba_persistent_state import autosave_nba_state
 
-        autosave_nba_state(st)
-    except Exception:
-        pass
+            autosave_nba_state(st)
+        except Exception:
+            pass
 
     if not pp.is_capture_mode(st):
         st.divider()

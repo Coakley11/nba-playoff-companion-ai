@@ -17,11 +17,15 @@ _REQUIRED_PORTFOLIO_POLISH_SYMBOLS = frozenset({
     "is_demo_mode",
     "is_screenshot_mode",
     "mark_demo_applied",
+    "prefer_cached_demo",
     "render_executive_summary",
     "render_hero_banner",
     "render_sidebar_toggle",
     "show_sidebar_debug",
     "show_trust_strip",
+    "skip_api_refresh",
+    "skip_background_persistence",
+    "skip_heavy_work",
 })
 
 
@@ -81,3 +85,12 @@ def test_load_legacy_demo_marks_legacy():
 def test_portfolio_demo_exports_ensure_global_demo_seed():
     assert "ensure_global_demo_seed" in pdemo.__all__
     assert callable(pdemo.ensure_global_demo_seed)
+
+
+def test_capture_perf_helpers():
+    st = _FakeSt()
+    st.session_state["portfolio_screenshot_mode"] = True
+    assert pp.skip_heavy_work(st)
+    assert pp.skip_api_refresh(st)
+    assert pp.prefer_cached_demo(st)
+    assert pp.skip_background_persistence(st)
