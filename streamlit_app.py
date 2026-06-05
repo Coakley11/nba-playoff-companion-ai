@@ -17214,6 +17214,13 @@ def main():
     except Exception:
         pass
 
+    try:
+        from suite_command_center_link import render_command_center_sidebar_link
+
+        render_command_center_sidebar_link(st)
+    except Exception:
+        pass
+
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
     default_idx = team_keys_sorted.index("New York Knicks") if "New York Knicks" in team_keys_sorted else 0
     _restore_team = st.session_state.pop("_nba_restore_team", None)
