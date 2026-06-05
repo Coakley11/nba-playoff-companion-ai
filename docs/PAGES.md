@@ -1,6 +1,6 @@
 # Pages & UX — fan-facing surfaces
 
-**Last updated:** 2026-06-05 · **Build:** `final-refine-2026-06-05`
+**Last updated:** 2026-06-05 · **Build:** `quality-pass-2026-06-05`
 
 Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is optional (`DEV_MODE` or sidebar toggle).
 
@@ -13,6 +13,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **Purpose:** Playoff command center for the selected favorite team—tonight's feel, series context, and optional live refresh.
 
 **UX goals:**
+- **Trust strip** — official bracket scores vs curated briefing tiles labeled on first paint.
 - **Finals broadcast hero** — dual Knicks/Spurs team colors, series score once, last game box score (canonical `FINALS_GAME1_CANONICAL_SCORE`).
 - **Fan energy board** — nine distinct briefing tiles (tactical why, Game 1→2 shift, matchup, pressure, coaching, watch, rising, history, watch-next) — no scoreboard repeat.
 - Series log + storyline bar in one section; keys for next tip in a follow-on section.
@@ -32,6 +33,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - CDN-first Layer 1 (fast scoreboard).
+- **Trust badges** (official CDN) + existing metric strip (status, score, clock, source).
 - Layer 2 analysis and Layer 3 heavy tabs on demand.
 - Safe mode banner when `LIVE_GC_SAFE_MODE` is True.
 - Auto-refresh ~60s on page open.
@@ -49,6 +51,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - Conference columns, clear winner advancement.
+- **Trust strip** — NBA.com sync vs demo fallback badges.
 - Demo fallback when API returns empty (sidebar toggle).
 - API auto-sync toggle (~60s refresh).
 
@@ -64,6 +67,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - Broadcast matchup strip + dual-team color hero (logos, headshots).
+- **Trust strip** — curated Finals rotation vs estimated season averages (expanders).
 - Curated playoff rotation overrides outdated API players (e.g. Harrison Barnes PF, no Jeremy Sochan).
 - PG–C cards with team/opp edge highlighting, advantage badges, edge summary on first paint.
 - **Bench battle, tactical edges, X-factor** collapsed under one expander (defers `season_averages` API calls).
@@ -91,6 +95,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 
 **UX goals:**
 - Premium player card hero (large headshot, inline PPG/GP/record tiles, playoff badges).
+- **Trust strip** — official game logs vs curated chase / projected milestones / fan pass model.
 - **Franchise chase hero** — visual **record race lane** plus **journey panel** (projected pass game, Finals pass %, title-rank projection, most likely milestone), team **playoff pulse** (hottest, riser, stock up/down).
 - **Standout award strip** — 30/40-pt nights, engine scorer, two-way pressure callouts.
 - Playoff average stat pills; **series journey strip** + **round tabs** with per-series game log cards.
@@ -107,6 +112,7 @@ Sidebar routes are defined in `PAGES` inside `streamlit_app.py`. **Dev Lab** is 
 **Purpose:** Career playoff legacy chase with **specific franchise names** (Ewing, Frazier, Duncan, Parker, etc.) — not generic greatness copy.
 
 **UX goals (2026-06-05 final refine):**
+- **Trust strip** — official logs vs fan-model legacy score and sliders.
 - Legacy score / ceiling / bracket-climb **meters** + **achievement unlocks** (locked/unlocked chips).
 - **Career-defining game alert**, **legacy swing** cards (win Finals / lose Finals / next game), **franchise rank movement** animation.
 - Title probability + Finals MVP impact + GOAT ladder + badges (slider-reactive).

@@ -1,6 +1,6 @@
 # Performance audit
 
-**Last updated:** 2026-06-05 · **Branch:** `dev` · **Build:** `final-refine-2026-06-05`
+**Last updated:** 2026-06-05 · **Branch:** `dev` · **Build:** `quality-pass-2026-06-05`
 
 Speed is part of stability: factual QA (P5) is impractical when every page takes 10–30+ seconds on Cloud.
 

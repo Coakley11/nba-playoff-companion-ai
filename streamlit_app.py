@@ -688,6 +688,60 @@ table.fan-stat-table td.stat-bad { color: #b91c1c; font-weight: 800; }
 .mode-banner--postmortem .k { color: #b91c1c; }
 .mode-banner--live { border-color: rgba(52,211,153,.45); background: rgba(209,250,229,.4); }
 .mode-banner--live .k { color: #047857; }
+/* Product shell + trust badges (consistency pass) */
+.fan-product-shell, .pp-wrap, .cmd-shell, .ml-shell { max-width: 1280px; margin: 0 auto; padding: 0 2px; }
+.fan-trust-strip {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 0 0 14px; padding: 10px 14px; border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #f8fafc);
+  border: 1px solid rgba(148,163,184,.28);
+  box-shadow: 0 2px 8px rgba(15,23,42,.04);
+}
+.fan-data-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+  padding: 5px 11px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+}
+.fan-data-badge--official { background: #ecfdf5; color: #047857; border-color: #6ee7b7; }
+.fan-data-badge--curated { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.fan-data-badge--fan_model { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.fan-data-badge--projected { background: #f5f3ff; color: #6d28d9; border-color: #c4b5fd; }
+.fan-data-badge--estimate { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.fan-trust-note { font-size: 11px; font-weight: 700; color: #64748b; line-height: 1.35; flex: 1 1 180px; }
+.fan-card-unified {
+  border-radius: 16px; padding: 14px 16px; background: #fff;
+  border: 1px solid var(--team-border, rgba(148,163,184,.28));
+  box-shadow: 0 4px 14px rgba(15,23,42,.06);
+}
+@media (max-width: 768px) {
+  .fan-energy-grid { grid-template-columns: 1fr; gap: 10px; }
+  .fan-energy-card { min-height: auto; }
+  .pp-chase-grid, .pp-race-ladder, .pp-pulse-strip { grid-template-columns: 1fr; }
+  .pp-journey-panel { grid-template-columns: 1fr 1fr; }
+  .pp-chase-hero { grid-template-columns: 1fr; text-align: center; }
+  .pp-chase-hero-rank { margin: 0 auto; }
+  .pp-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .pp-game-grid { grid-template-columns: 1fr; }
+  .pp-race-meta { flex-direction: column; gap: 6px; }
+  .pp-race-track { height: 68px; margin-bottom: 16px; }
+  .pp-race-marker { min-width: 58px; }
+  .pp-race-marker-lbl { font-size: 8px; max-width: 62px; }
+  .lt-meter-grid, .lt-impact-grid, .lt-swing-grid, .lt-achieve-grid, .lt-scenario-grid { grid-template-columns: 1fr; }
+  .hist-rushmore { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hist-grid, .hist-compare-grid, .hist-milestone-grid { grid-template-columns: 1fr !important; }
+  .hist-countdown-grid, .hist-week-grid, .hist-move-grid { grid-template-columns: 1fr; }
+  .ml-grid { grid-template-columns: 1fr !important; }
+  .ml-bench-grid { grid-template-columns: 1fr !important; }
+  .ml-tile-grid { grid-template-columns: 1fr !important; }
+  .fan-matchup-ribbon { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .live-fan-hero { flex-direction: column !important; text-align: center; align-items: center !important; }
+  .fan-trust-strip { flex-direction: column; align-items: flex-start; }
+  .fan-trust-note { margin-left: 0; width: 100%; }
+  .fan-player-card { flex-direction: column; text-align: center; }
+  .fan-player-card img.hs { margin: 0 auto; }
+  .cmd-emph-grid { grid-template-columns: 1fr; }
+  .os-card-grid { grid-template-columns: 1fr; }
+}
 </style>
 """
 
@@ -1941,6 +1995,7 @@ background:linear-gradient(135deg,{th['bg0']},#0f172a);margin:0 0 14px;color:#f8
 def render_offseason_future_outlook_sections(team_name):
     """Home Dashboard: high-visibility offseason analysis (eliminated teams only)."""
     st.markdown(_offseason_playoff_recap_banner(team_name), unsafe_allow_html=True)
+    render_page_trust_strip("offseason", "Front-office read — not official team statements.")
     od = get_offseason_outlook(team_name)
     ref = od["reflection"]
     nick = fan_nick(team_name)
@@ -2259,7 +2314,7 @@ ULTRA_FAST_VALIDATION_MODE = False
 
 # Visible on Cloud (sidebar) — bump when shipping fan UI or deploy wiring fixes.
 APP_DEPLOY_BRANCH = "dev"
-APP_BUILD_COMMIT = "final-refine-2026-06-05"
+APP_BUILD_COMMIT = "quality-pass-2026-06-05"
 
 VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
 VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
@@ -6255,6 +6310,9 @@ def render_legacy_tracker_page(team_name):
             variant="live",
         )
 
+    render_page_trust_strip("legacy")
+    render_fan_product_shell_open()
+
     player_pool = current_roster_names(team_name, limit=15)
     player = st.selectbox("Choose player", player_pool)
     if _qa_skip_expensive_apis():
@@ -6616,7 +6674,7 @@ def render_legacy_tracker_page(team_name):
     st.markdown("<div class='lt-scenario-grid'>" + "".join(scenario_html) + "</div>", unsafe_allow_html=True)
     render_fan_section_close()
 
-    st.caption("A fun fan model, not an official ranking. Signature games, matchups, health, and hardware still decide how the story really ages.")
+    render_fan_product_shell_close()
 
 
 # --- Player Playoff Story Hub (narrative + impact layer on raw logs) ---
@@ -7607,7 +7665,7 @@ def _pp_chase_race_graphic_html(player, team_name, df, primary):
         f"<div class='pp-race-meta'>"
         f"<span><b>{gap}</b> {e(primary['short'])} remaining</span>"
         f"<span>{e(proj)}</span>"
-        f"<span>Curated {e(fan_nick(team_name))} board · estimates labeled</span>"
+        f"<span>Curated {e(fan_nick(team_name))} board</span>"
         f"</div></div>"
     )
 
@@ -7690,7 +7748,7 @@ def _pp_franchise_chase_cards_html(player, team_name, df):
             f"<div class='pp-chase-hero-rank'><div class='num'>#{rank}</div><div class='lbl'>Franchise rank</div></div>"
             f"<div><h3>{e(player)} · what records break next?</h3>"
             f"<p>{e(hero)}</p>"
-            f"<span class='pp-chase-pill-hero'>{e(fan_nick(team_name))} curated history · estimates labeled</span>"
+            f"<span class='pp-chase-pill-hero'>{e(fan_nick(team_name))} franchise chase</span>"
             f"</div></div>"
         )
     primary = gaps[0] if gaps else None
@@ -8148,13 +8206,14 @@ def render_player_playoff_story_hub(team_name, profile):
     if _validation_mode_active():
         _render_validation_mode_banner()
     inject_team_brand_css(team_name)
-    st.markdown('<div class="pp-wrap">', unsafe_allow_html=True)
+    st.markdown('<div class="fan-product-shell pp-wrap">', unsafe_allow_html=True)
     render_fan_page_hero(
         team_name,
         "Player Playoff Tracker",
         f"Follow {fan_nick(team_name)} players through the bracket — milestones, game logs, and franchise chase boards.",
         "PLAYOFF JOURNEY",
     )
+    render_page_trust_strip("player_tracker")
 
     plist = current_roster_names(team_name)
     c_sel1, c_sel2 = st.columns([1.1, 1])
@@ -8819,6 +8878,8 @@ def render_matchup_lineups_page(team_name, profile):
         f"{mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — position-by-position playoff boards.",
         "MATCHUP BOARD",
     )
+    render_page_trust_strip("lineups")
+    render_fan_product_shell_open()
     render_playoff_matchup_ribbon(team_name)
     hctx = resolve_home_matchup_context_fast(team_name)
     possible = hctx.get("opponents") or []
@@ -8871,21 +8932,16 @@ def render_matchup_lineups_page(team_name, profile):
       </div>
     </div>
     <div class="ml-headline">{html.escape(headline)}</div>
-    <div class="ml-sub">{html.escape(status)} Lineups use current playoff rotation data where available, with curated overrides for this app's playoff universe.</div>
+    <div class="ml-sub">{html.escape(status)}</div>
   </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    t_meta = get_lineup_resolution_info(team_name)
-    o_meta = get_lineup_resolution_info(opp)
-    st.caption(
-        f"Lineup source · **{team_name}**: {t_meta['source']} (updated {t_meta['updated']}) · "
-        f"**{opp}**: {o_meta['source']} (updated {o_meta['updated']})"
-    )
-
     if globals().get("SHOW_PERF_DEBUG", False):
+        t_meta = get_lineup_resolution_info(team_name)
+        o_meta = get_lineup_resolution_info(opp)
         with st.expander("Debug: lineup resolution", expanded=False):
             c1, c2 = st.columns(2)
             with c1:
@@ -9034,6 +9090,7 @@ def render_matchup_lineups_page(team_name, profile):
                 st.dataframe(pd.DataFrame({"Player": current_roster_names(opp, limit=12)}), use_container_width=True, hide_index=True)
 
     render_fan_section_close()
+    render_fan_product_shell_close()
 
 
 # ==========================================================
@@ -9441,6 +9498,7 @@ def render_matchup_intelligence(team_name):
         f"Fast preview first: {mx['team_nick']} vs {mx['opponent_nick']}. Load the full scouting board when you want the deeper read.",
         "SCOUTING BOARD",
     )
+    render_page_trust_strip("matchup_intel")
     render_playoff_matchup_ribbon(team_name)
     if _qa_skip_heavy_ui():
         st.info(
@@ -9587,6 +9645,91 @@ def render_fan_section_open():
 
 
 def render_fan_section_close():
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+DATA_SOURCE_LABELS = {
+    "official": "Official data",
+    "curated": "Curated board",
+    "fan_model": "Fan model",
+    "projected": "Projected",
+    "estimate": "Estimate",
+}
+
+PAGE_TRUST_PROFILES = {
+    "home": [
+        ("official", "Bracket & series scores"),
+        ("curated", "Fan briefing tiles"),
+    ],
+    "live_gc": [
+        ("official", "CDN / stats scoreboard"),
+    ],
+    "bracket": [
+        ("official", "NBA.com bracket sync"),
+        ("curated", "Demo fallback when API empty"),
+    ],
+    "lineups": [
+        ("curated", "Finals rotation board"),
+        ("estimate", "Season averages in expanders"),
+    ],
+    "player_tracker": [
+        ("official", "Playoff game logs"),
+        ("curated", "Franchise chase board"),
+        ("projected", "Milestone pace"),
+        ("fan_model", "Pass probability"),
+    ],
+    "legacy": [
+        ("official", "Playoff game logs"),
+        ("fan_model", "Legacy score & sliders"),
+    ],
+    "team_history": [
+        ("curated", "Franchise leader estimates"),
+        ("projected", "Milestone countdown"),
+    ],
+    "previous_rounds": [
+        ("official", "Bracket engine"),
+        ("curated", "Demo rows when needed"),
+    ],
+    "offseason": [
+        ("fan_model", "Front-office analysis"),
+    ],
+    "matchup_intel": [
+        ("estimate", "Scouting synthesis"),
+    ],
+}
+
+
+def data_source_badge_html(kind, label=None):
+    e = html.escape
+    kind = kind if kind in DATA_SOURCE_LABELS else "estimate"
+    text = label or DATA_SOURCE_LABELS[kind]
+    return f"<span class='fan-data-badge fan-data-badge--{e(kind)}'>{e(text)}</span>"
+
+
+def render_page_trust_strip(page_key, extra_note=""):
+    """Visible source labels so fans know what is official vs modeled."""
+    profile = PAGE_TRUST_PROFILES.get(page_key, [("estimate", "Mixed sources")])
+    badges = []
+    for item in profile:
+        if isinstance(item, tuple):
+            kind, lbl = item
+        else:
+            kind, lbl = item, None
+        badges.append(data_source_badge_html(kind, lbl))
+    note_html = ""
+    if extra_note:
+        note_html = f"<span class='fan-trust-note'>{html.escape(extra_note)}</span>"
+    st.markdown(
+        f"<div class='fan-trust-strip'>{''.join(badges)}{note_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_fan_product_shell_open():
+    st.markdown('<div class="fan-product-shell">', unsafe_allow_html=True)
+
+
+def render_fan_product_shell_close():
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -11806,6 +11949,8 @@ def render_playoff_command_center(team_name):
         f"{ident['stakes']} {ident['texture']}",
         "YOUR TEAM",
     )
+    render_page_trust_strip("home", "Scores from the bracket engine · tiles are analyst-style briefing, not live play-by-play.")
+    render_fan_product_shell_open()
 
     api_calls = 0
     skip_note = ""
@@ -12176,6 +12321,7 @@ def render_playoff_command_center(team_name):
 
     section_ms["page_total"] = (pytime.perf_counter() - t0) * 1000.0
     _page_perf_merge_sections(section_ms)
+    render_fan_product_shell_close()
     _home_dashboard_perf_footer(
         t0,
         sections,
@@ -12651,11 +12797,10 @@ def render_bracket(favorite_team=None):
             "YOUR TEAM",
         )
 
+    render_page_trust_strip("bracket")
     use_demo, api_on = get_playoff_refresh_settings()
-    st.caption(
-        f"Bracket auto-updates every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s from NBA.com when sync is on "
-        f"({'API + fallback' if use_demo and api_on else 'fallback only' if use_demo else 'API only'})."
-    )
+    if use_demo or api_on:
+        st.caption(f"Auto-refresh every {PLAYOFF_BRACKET_REFRESH_MS // 1000}s when sync is on.")
     render_playoff_matchup_ribbon(favorite_team, _get_validation_playoff_state() if _validation_mode_active() else None)
     _page_perf_tick("bracket_ribbon")
     stt = get_merged_playoff_state()
@@ -14459,6 +14604,7 @@ def render_previous_rounds_history(team_name):
     stt = get_merged_playoff_state()
     _page_perf_tick("playoff_state")
     render_fan_page_hero(team_name, "Playoff path so far", "Every round you played — scores, MVPs, and series results.", "PLAYOFF HISTORY")
+    render_page_trust_strip("previous_rounds")
     render_playoff_matchup_ribbon(team_name, stt)
     if _validation_page_deferred("previous_rounds"):
         for coll, label in (("first", "First Round"), ("second", "Second Round"), ("cf", "Conference Finals"), ("finals", "NBA Finals")):
@@ -15474,6 +15620,7 @@ def render_live_game_center_safe(team_name, profile):
         unsafe_allow_html=True,
     )
     st.caption("Scores and bracket context auto-refresh about every 60 seconds while this page is open.")
+    render_page_trust_strip("live_gc")
 
     if st.button("Refresh scoreboard", key=f"live_gc_safe_refresh_{team_name}", type="primary"):
         for fn in (fetch_cdn_scoreboard_only, _scoreboard_stats_today_et):
@@ -15583,6 +15730,7 @@ def render_live_game_center(team_name, profile):
         f"{ident['stakes']} {mx['round_short']} · {mx['team_nick']} vs {mx['opponent_nick']} — live score first, analysis second.",
         "GAME NIGHT",
     )
+    render_page_trust_strip("live_gc")
     render_playoff_matchup_ribbon(team_name)
     feed_stressed = state.get("priority") in ("static", "stale") or not parsed
     _render_manual_live_override_panel(team_name, profile, emphasize=(state.get("priority") == "static"))
@@ -16331,6 +16479,8 @@ def render_team_history_leaders_page(team_name):
     current_entries = [p for p in legends if _is_current_history_player(p["name"], current_names) or p.get("current_watch")]
     _inject_history_leaders_css()
     render_fan_page_hero(team_name, f"{fan_nick(team_name)} Franchise Playoff Legends", data.get("context", "Franchise history and current-player chase board."), "TEAM HISTORY LEADERS")
+    render_page_trust_strip("team_history")
+    render_fan_product_shell_open()
     render_playoff_matchup_ribbon(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
     mx = get_display_matchup(team_name)
     if not mx["eliminated"]:
@@ -16343,15 +16493,12 @@ def render_team_history_leaders_page(team_name):
             st.markdown(f"**{p.get('rank')}. {html.escape(p.get('name', ''))}** — {html.escape(p.get('tier', ''))}")
         _validation_offer_full_page("team_history", label="Load full Team History board")
         return
-    st.markdown("<div class='hist-note'><b>Data note:</b> this page uses curated franchise-history fallback boards with estimates where full historical playoff leader feeds are not available. Estimated columns are labeled as estimates; live/current-player context comes from the selected team's roster helpers.</div>", unsafe_allow_html=True)
-
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("Legends on board", len(legends))
     c2.metric("Current players highlighted", len(current_entries))
-    c3.metric("History mode", "Curated estimates")
     st.markdown(
         f"<div class='hist-leaders-hero'><b>{html.escape(fan_nick(team_name))} playoff history</b> — "
-        f"legends set the bar; current roster names chase milestones on curated boards (estimates labeled).</div>",
+        f"legends set the bar; current roster names chase milestones on the curated board.</div>",
         unsafe_allow_html=True,
     )
 
@@ -16457,6 +16604,8 @@ def render_team_history_leaders_page(team_name):
                 st.markdown("<div class='hist-compare-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
         else:
             st.caption("Deep-dive milestone content appears when a current player is on the franchise board.")
+
+    render_fan_product_shell_close()
 
 
 

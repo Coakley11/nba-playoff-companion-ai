@@ -6,6 +6,15 @@
 
 ## Current Priorities (stability phase)
 
+### Fan experience audit (2026-06-05)
+
+- [x] P1 Consistency — product shell, unified trust badges, mobile CSS
+- [x] P2 Trust — `render_page_trust_strip` on all fan pages
+- [x] P3 Fan testing — trim duplicate disclaimers; keep high-value tiles
+- [x] P4 Mobile — stack grids on Home, Tracker, Legacy, Lineups, History
+- [x] P5 Perf — no new systems; build `quality-pass-2026-06-05`
+- [x] Docs — [docs/FAN_EXPERIENCE_AUDIT.md](../docs/FAN_EXPERIENCE_AUDIT.md)
+
 ### P1 — Live Game Center
 
 - [x] Trust strip (`_render_live_gc_trust_strip`) on full + safe paths
