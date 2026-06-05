@@ -2001,6 +2001,10 @@ QA_MODE = False
 # Ultra-fast: static/demo snapshot only — no network, no Plotly, minimal HTML (browser QA).
 ULTRA_FAST_VALIDATION_MODE = False
 
+# Visible on Cloud (sidebar) — bump when shipping fan UI or deploy wiring fixes.
+APP_DEPLOY_BRANCH = "dev"
+APP_BUILD_COMMIT = "86de304-wiring"
+
 VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
 VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
 
@@ -2115,6 +2119,8 @@ def _render_validation_mode_banner():
         f"<b>{html.escape(mode)}</b> — API sync off · autorefresh off · Plotly off · "
         f"Live GC safe · curated lineups · session playoff cache{warm_txt}"
         f"{' · <b>no network</b>' if g['network_blocked'] else ''}"
+        f" · build <code>{html.escape(str(globals().get('APP_BUILD_COMMIT', '?')))}</code>"
+        f" · Home + Matchup Lineups fan UI always on"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -7813,10 +7819,6 @@ def _lineup_xfactor_candidates(team_name, opp):
 
 
 def render_matchup_lineups_page(team_name, profile):
-    if _ultra_fast_active() and _validation_page_deferred("lineups"):
-        _render_ultra_snapshot_lineups(team_name, profile)
-        _validation_offer_full_page("lineups", label="Load full Matchup Lineups board")
-        return
     _page_perf_tick("lineups_start")
     if _validation_mode_active():
         _render_validation_mode_banner()
@@ -7846,7 +7848,7 @@ def render_matchup_lineups_page(team_name, profile):
     series_obj = hctx.get("series") or _build_local_series_shell(team_name)
     round_label = hctx.get("round_label") or (series_obj or {}).get("round") or profile.get("round", "Playoffs")
     status = (hctx.get("ctx") or {}).get("status_text") or series_status_text(team_name, series_obj)
-    if _qa_mode_active():
+    if _validation_mode_active():
         t_starters = _curated_starters_list(team_name)
         o_starters = _curated_starters_list(opp)
     else:
@@ -10661,10 +10663,6 @@ def _home_dashboard_perf_footer(
 
 
 def render_playoff_command_center(team_name):
-    if _ultra_fast_active() and _validation_page_deferred("home"):
-        _render_ultra_snapshot_home(team_name)
-        _validation_offer_full_page("home", label="Load full Home Dashboard")
-        return
     t0 = pytime.perf_counter()
     sections = []
     section_ms = {}
@@ -10702,15 +10700,6 @@ def render_playoff_command_center(team_name):
     sections.append("hero_first_paint")
     _t_tick = _home_dashboard_section_tick(section_ms, _t_tick, "hero_first_paint")
 
-    if _validation_page_deferred("home"):
-        _validation_facts_block(team_name)
-        _validation_offer_full_page("home", label="Load full Home Dashboard sections")
-        section_ms["page_total"] = (pytime.perf_counter() - t0) * 1000.0
-        _page_perf_merge_sections(section_ms)
-        _home_dashboard_perf_footer(
-            t0, sections, True, "validation snapshot", skipped_note="", section_ms=section_ms
-        )
-        return
     if is_eliminated:
         st.success(
             f"**{fan_nick(team_name)} postmortem is live.** The run is over, so the page shifts from tonight's nerves to what this season means next."
@@ -15710,11 +15699,11 @@ def _curated_starters_list(team_name):
 
 def build_lineup_matchups(team_name, opp_name):
     """Position-by-position lineup board data — no Streamlit rendering."""
-    if _qa_mode_active():
+    if _validation_mode_active():
         t_starters = _curated_starters_list(team_name)
         o_starters = _curated_starters_list(opp_name)
-        t_meta = {"source": "curated playoff override (QA)"}
-        o_meta = {"source": "curated playoff override (QA)"}
+        t_meta = {"source": "curated playoff override (validation)"}
+        o_meta = {"source": "curated playoff override (validation)"}
     else:
         t_meta = get_lineup_resolution_info(team_name)
         o_meta = get_lineup_resolution_info(opp_name)
@@ -15725,7 +15714,7 @@ def build_lineup_matchups(team_name, opp_name):
         tp = t_starters[i] if i < len(t_starters) else "TBD"
         op = o_starters[i] if i < len(o_starters) else "TBD"
         matchups.append({"position": pos, "team_player": tp, "opp_player": op})
-    if _qa_mode_active():
+    if _validation_mode_active():
         t_bench = list((CURRENT_PLAYOFF_LINEUPS.get(team_name) or {}).get("bench") or [])[:5]
         o_bench = list((CURRENT_PLAYOFF_LINEUPS.get(opp_name) or {}).get("bench") or [])[:5]
     else:
@@ -15792,7 +15781,7 @@ def main():
         "Ultra-fast validation (no network)",
         value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
         key="ULTRA_FAST_VALIDATION_MODE",
-        help="Fastest Cloud QA: static/demo snapshot pages, no API/CDN/Plotly/headshots. Expand per page for full UI.",
+        help="Fastest Cloud QA: no API/CDN/Plotly. Home and Matchup Lineups still show full fan UI; other pages may offer expand.",
     )
     if _validation_mode_active():
         USE_DEMO_BACKUP = True
@@ -15831,10 +15820,15 @@ def main():
         value=False,
         help="Shows page timing, playoff state debug table, and cache mode details.",
     )
+    st.sidebar.caption(
+        f"Deploy {APP_DEPLOY_BRANCH} · build {APP_BUILD_COMMIT[:12]}"
+    )
     if _ultra_fast_active():
-        st.sidebar.caption("Ultra-fast: no network — use for P5 factual spot-checks on Cloud.")
+        st.sidebar.caption(
+            "Ultra-fast: no network — fan UI still renders; APIs/plots skipped where gated."
+        )
     elif QA_MODE:
-        st.sidebar.caption("QA mode: demo bracket + session snapshot; expand pages for full UI.")
+        st.sidebar.caption("QA mode: demo bracket + session snapshot; fan UI sections stay visible.")
     if SHOW_PERF_DEBUG:
         render_playoff_state_debug_expander("sidebar")
     boot_t = _page_perf_startup_tick("sidebar_toggles", boot_t) if st.session_state.get(PAGE_PERF_KEY) else boot_t
