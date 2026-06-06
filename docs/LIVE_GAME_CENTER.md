@@ -17,13 +17,17 @@ Fan-facing **in-game command post** for the selected team: score, clock, period,
 
 | Item | Rule |
 |------|------|
-| **Flag** | `LIVE_GC_SAFE_MODE` in `streamlit_app.py` (default: `False`) |
+| **Flag** | `LIVE_GC_SAFE_MODE` in `streamlit_app.py` (default: **`True`** during Finals Game 2 incident — 2026-06-05) |
 | **Detector** | `_live_gc_safe_mode_active()` → when True, **never** run full GC |
 | **Entry path** | `render_live_game_center` → immediately delegates to `render_live_game_center_safe` |
-| **UI banner** | Dark bar: "SAFE MODE — live scoreboard only (analysis, box score, PBP, and charts disabled temporarily)" |
-| **Allowed work** | Layer 1 resolve only, manual refresh button, safe board render, emergency manual game entry |
+| **UI banner** | Red bar: "Emergency game-night mode active — live feed unavailable, using manual/local score." |
+| **Allowed work** | Local Finals schedule shell (Game 2), emergency score entry at top, trust strip, win prob, keys to success |
+| **Blocked** | CDN/stats on first paint; box score, PBP, shot chart, injury scrape, headshots, advanced charts; Live GC auto-refresh |
+| **Feed retry** | Optional "Retry live feed (2s max)" — hard `LIVE_GC_FEED_TIMEOUT_SEC` = **2.0**; falls back to local on timeout |
 | **When to enable** | Streamlit Cloud timeouts, API outages, or incident response—document in [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) |
 | **When to disable** | Layer 1 stable on Cloud under expected load; full L2/L3 probed on dev |
+
+**Emergency game-night mode (2026-06-05):** Finals Game 2 (Knicks vs Spurs). Page paints instantly from `PLAYOFF_SCHEDULE_FALLBACK` + canonical Game 1 (`Knicks 105, Spurs 95`, series 1–0). Manual score entry at top powers trust strip, win probability, and keys to success. No API before first paint.
 
 **Do not** change safe mode behavior without updating this section.
 
@@ -112,7 +116,8 @@ Fans must never hunt inside expanders or Layer 2 tabs for basic score metadata.
 ## Constants reference (sync with code)
 
 ```text
-LIVE_GC_SAFE_MODE = False
+LIVE_GC_SAFE_MODE = True
+LIVE_GC_FEED_TIMEOUT_SEC = 2.0
 PLAYOFF_BRACKET_REFRESH_MS = 60000
 PLAYOFF_STATE_CACHE_TTL_SEC = 90
 LIVE_GC_AUTO_LOAD_STATUSES = live, starting soon, final, scheduled
@@ -142,7 +147,8 @@ LIVE_GC_ADVANCED_AUTO_STATUSES = live
 
 ## Planned changes (update doc when done)
 
-- [ ] Cloud perf sign-off for full GC (`LIVE_GC_SAFE_MODE` stays False on prod).  
+- [ ] Cloud perf sign-off for full GC (`LIVE_GC_SAFE_MODE` back to False after Game 2).  
+- [x] Emergency game-night mode for Finals Game 2 (2026-06-05).  
 - [ ] Document max concurrent user guidance after load test.  
 - [x] Schedule fallback wired into Layer 1 fast resolver (2026-06-05).  
 - [x] Pregame panel + trust-strip-first paint (2026-06-05).
