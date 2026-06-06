@@ -1,6 +1,6 @@
 # Live Game Center — source of truth
 
-**Last updated:** 2026-06-05  
+**Last updated:** 2026-06-06  
 **Code entry:** `render_live_game_center` · `render_live_game_center_safe` · `_resolve_live_gc_layer1_fast`
 
 > If this doc and code disagree, reconcile in the **same change**. See [WORKFLOW.md](./WORKFLOW.md).
@@ -26,6 +26,8 @@ Fan-facing **in-game command post** for the selected team: score, clock, period,
 | **Feed retry** | Optional "Retry live feed (2s max)" — hard `LIVE_GC_FEED_TIMEOUT_SEC` = **2.0**; falls back to local on timeout |
 | **When to enable** | Streamlit Cloud timeouts, API outages, or incident response—document in [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) |
 | **When to disable** | Layer 1 stable on Cloud under expected load; full L2/L3 probed on dev |
+
+**Emergency hard route (2026-06-06):** When the selected page is Live Game Center, `main()` returns immediately after shell + disk restore and renders `render_live_game_center_emergency_only()` — no playoff engine, bracket API, roster lookups, or full sidebar setup.
 
 **Emergency game-night mode (2026-06-05):** Finals Game 2 (Knicks vs Spurs). Page paints instantly from `PLAYOFF_SCHEDULE_FALLBACK` + canonical Game 1 (`Knicks 105, Spurs 95`, series 1–0). Manual score entry at top powers trust strip, win probability, and keys to success. No API before first paint.
 

@@ -2680,6 +2680,17 @@ def _peek_sidebar_page_key():
     return None
 
 
+def _is_lgc_route_early():
+    """Detect Live Game Center before heavy sidebar / playoff setup."""
+    try:
+        qp = str(st.query_params.get("page", "") or "").lower().replace("-", "_")
+        if qp in ("live_game_center", "live_gc", "lgc"):
+            return True
+    except Exception:
+        pass
+    return _peek_sidebar_page_key() == "Live Game Center"
+
+
 def _get_lgc_local_playoff_state():
     """Local/demo bracket snapshot for Live Game Center — no NBA bracket API sync."""
     return get_playoff_state_cached(True, False)
@@ -16062,6 +16073,189 @@ def _render_live_gc_safe_board(team_name, profile, state, parsed):
             st.write(f"• {nm}")
 
 
+def _ensure_emergency_lgc_session_defaults():
+    """Pre-fill Finals G2 manual score keys — no roster or engine lookups."""
+    if "manual_live_home_team" not in st.session_state:
+        st.session_state["manual_live_home_team"] = "New York Knicks"
+    if "manual_live_away_team" not in st.session_state:
+        st.session_state["manual_live_away_team"] = "San Antonio Spurs"
+    if "manual_live_series_score" not in st.session_state:
+        st.session_state["manual_live_series_score"] = "1 - 0"
+    if "manual_live_quarter" not in st.session_state:
+        st.session_state["manual_live_quarter"] = 1
+    if "manual_live_clock" not in st.session_state:
+        st.session_state["manual_live_clock"] = "12:00"
+    if "manual_live_status" not in st.session_state:
+        st.session_state["manual_live_status"] = "scheduled"
+
+
+def _emergency_lgc_parsed_from_session():
+    """Build scoreboard dict from session manual entry only."""
+    home, away = "New York Knicks", "San Antonio Spurs"
+    home_score = safe_int(st.session_state.get("manual_live_home_score", 0), 0)
+    away_score = safe_int(st.session_state.get("manual_live_away_score", 0), 0)
+    quarter = safe_int(st.session_state.get("manual_live_quarter", 1), 1)
+    clock = str(st.session_state.get("manual_live_clock", "12:00") or "")
+    status = str(st.session_state.get("manual_live_status", "scheduled"))
+    status_l = status.lower()
+    if status_l == "scheduled":
+        phase = "pregame"
+    elif status_l == "final":
+        phase = "postgame"
+    else:
+        phase = "live"
+    team_name = home
+    margin = home_score - away_score
+    return {
+        "home_name": home,
+        "away_name": away,
+        "home_tri": TEAM_ALIASES.get(home, "NYK"),
+        "away_tri": TEAM_ALIASES.get(away, "SAS"),
+        "home_score": home_score,
+        "away_score": away_score,
+        "period": quarter,
+        "clock": clock,
+        "status": status.title(),
+        "phase": phase,
+        "margin": margin,
+        "opp_name": away,
+        "is_fav_home": True,
+        "series_line": st.session_state.get("manual_live_series_score", "1 - 0"),
+    }
+
+
+def _render_emergency_lgc_trust_strip(parsed):
+    """Minimal trust strip — manual/local data only, no engine or CDN."""
+    status_l = str(parsed.get("status", "")).lower()
+    if status_l == "live":
+        chip = "MANUAL · LIVE"
+    elif status_l == "final":
+        chip = "MANUAL · FINAL"
+    elif status_l == "halftime":
+        chip = "MANUAL · HALFTIME"
+    else:
+        chip = "MANUAL · SCHEDULED"
+    aws, hs = safe_int(parsed.get("away_score", 0)), safe_int(parsed.get("home_score", 0))
+    if parsed.get("phase") == "pregame" and aws == 0 and hs == 0:
+        score_txt, clock_txt = "—", status_l.title() or "Pregame"
+    else:
+        score_txt = f"{aws}–{hs}"
+        if parsed.get("period") and parsed.get("clock"):
+            clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
+        elif parsed.get("period"):
+            clock_txt = f"Q{parsed['period']}"
+        else:
+            clock_txt = str(parsed.get("status") or "—")
+    ts = _format_live_gc_updated_at(datetime.now(timezone.utc))
+    st.markdown(
+        "<div style='font-size:11px;font-weight:800;letter-spacing:.08em;color:#64748b;"
+        "margin:0 0 6px 0'>LIVE SCOREBOARD</div>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Status", chip)
+    c2.metric("Score", score_txt)
+    c3.metric("Clock", clock_txt)
+    c4.metric("Source", "Manual (emergency)")
+    c5.metric("Last updated", ts)
+
+
+def render_live_game_center_emergency_only(boot_t0):
+    """Hardcoded Finals G2 shell — zero API, engine, or roster work."""
+    t_render = pytime.perf_counter()
+    _ensure_emergency_lgc_session_defaults()
+
+    st.markdown(
+        "<div style='padding:10px 14px;border-radius:8px;background:#7f1d1d;color:#fef2f2;"
+        "font-size:13px;font-weight:700;margin-bottom:10px'>"
+        "Emergency game-night mode active — live feed unavailable, using manual/local score."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### NBA Finals · Game 2")
+    st.caption("San Antonio Spurs @ New York Knicks · Knicks lead series **1–0**")
+    st.info(f"**Game 1:** {FINALS_GAME1_CANONICAL_SCORE} — Knicks lead the series **1–0**.")
+
+    st.markdown("#### Manual score entry")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.number_input("Knicks score", 0, 200, key="manual_live_home_score")
+    c2.number_input("Spurs score", 0, 200, key="manual_live_away_score")
+    c3.number_input("Quarter", 1, 4, key="manual_live_quarter")
+    c4.text_input("Clock", key="manual_live_clock")
+    c5.selectbox("Status", ["live", "scheduled", "final", "halftime"], key="manual_live_status")
+
+    parsed = _emergency_lgc_parsed_from_session()
+    _render_emergency_lgc_trust_strip(parsed)
+
+    e = html.escape
+    clock_txt = (
+        f"Q{parsed['period']} · {parsed['clock']}"
+        if parsed.get("period") and parsed.get("clock")
+        else (f"Q{parsed['period']}" if parsed.get("period") else str(parsed.get("status") or "—"))
+    )
+    st.markdown(
+        f"<div class='live-gc-board'>"
+        f"<div style='text-align:center'><div style='font-size:14px;font-weight:800'>{e(parsed['away_name'])}</div></div>"
+        f"<div style='text-align:center;min-width:220px'>"
+        f"<div style='font-size:11px;color:#fbbf24;font-weight:950'>EMERGENCY · GAME 2</div>"
+        f"<div class='live-gc-score'>{parsed['away_score']} — {parsed['home_score']}</div>"
+        f"<div class='live-gc-clock'>{e(clock_txt)}</div>"
+        f"<div style='font-size:11px;color:#94a3b8;margin-top:6px'>Series · {e(parsed.get('series_line') or '1 - 0')} · NBA Finals</div>"
+        f"</div>"
+        f"<div style='text-align:center'><div style='font-size:14px;font-weight:800'>{e(parsed['home_name'])}</div></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    prob = _manual_win_prob(
+        parsed["margin"], parsed["period"], parsed["clock"], parsed["is_fav_home"], parsed["status"]
+    )
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Win probability (Knicks)", f"{prob}%")
+    m2.metric("Margin", f"{parsed['margin']:+d}")
+    m3.metric("Status", parsed["status"])
+
+    emergency_render_ms = (pytime.perf_counter() - t_render) * 1000.0
+    startup_before_lgc = (t_render - boot_t0) * 1000.0
+    total_route_ms = (pytime.perf_counter() - boot_t0) * 1000.0
+
+    with st.expander("Route timing (emergency LGC)", expanded=False):
+        st.metric("startup_before_lgc", f"{startup_before_lgc:.0f} ms")
+        st.metric("emergency_render_ms", f"{emergency_render_ms:.0f} ms")
+        st.metric("total_route_ms", f"{total_route_ms:.0f} ms")
+
+    return emergency_render_ms, total_route_ms
+
+
+def _run_lgc_emergency_route(boot_t0):
+    """Minimal sidebar + emergency LGC shell; rerun if user picks another page."""
+    pages = dict(PAGES)
+    labels = list(pages.keys())
+    def_label = PAGE_LABEL_ALIASES.get(
+        st.session_state.pop("page_override", None)
+        or st.session_state.get("page_label_last")
+        or "🔴 Live Game Center",
+        "🔴 Live Game Center",
+    )
+    lgc_idx = labels.index("🔴 Live Game Center") if "🔴 Live Game Center" in labels else 0
+    page_label = st.sidebar.radio(
+        "Choose page",
+        labels,
+        index=labels.index(def_label) if def_label in labels else lgc_idx,
+    )
+    st.session_state["page_label_last"] = page_label
+    if pages[page_label] != "Live Game Center":
+        st.rerun()
+    render_live_game_center_emergency_only(boot_t0)
+    try:
+        from nba_persistent_state import autosave_nba_state
+
+        autosave_nba_state(st)
+    except Exception:
+        pass
+
+
 def render_live_game_center_safe(team_name, profile):
     """TEMPORARY safe mode — Layer 1 only; zero heavy feature execution."""
     lgc_stt = (
@@ -17705,6 +17899,17 @@ def main():
     _set_lgc_route_skip_bracket_api(False)
 
     try:
+        from nba_persistent_state import restore_nba_disk_state_once
+
+        restore_nba_disk_state_once(st)
+    except Exception:
+        pass
+
+    if _is_lgc_route_early():
+        _run_lgc_emergency_route(boot_t0)
+        return
+
+    try:
         from suite_resume_launch import apply_suite_resume_launch
 
         apply_suite_resume_launch(st, "nba")
@@ -17715,11 +17920,9 @@ def main():
         from nba_persistent_state import (
             autosave_nba_state,
             default_reset_nba_session,
-            restore_nba_disk_state_once,
         )
         from suite_user_persistence import render_reset_controls, show_persistence_messages
 
-        restore_nba_disk_state_once(st)
         show_persistence_messages(st)
         render_reset_controls(
             st,
