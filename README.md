@@ -44,6 +44,8 @@ Enable **Dev Lab** via `DEV_MODE = True` at top of `streamlit_app.py` or the sid
 
 Streamlit Cloud: branch **`dev`**, main file **`streamlit_app.py`**.
 
+**Analyze with Applied Math** is in the sidebar under Command Center (after team select).
+
 ## Author
 
 Daniel Cohen

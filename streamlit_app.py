@@ -17998,6 +17998,23 @@ def main():
         index=default_idx,
         format_func=(lambda tn: _sidebar_team_label(tn, _sidebar_stt)) if _sidebar_stt else _sidebar_team_label,
     )
+
+    from suite_analytical_question import render_applied_math_sidebar_entry
+
+    _nba_ami_page = str(
+        st.session_state.get("page_label_last")
+        or st.session_state.get("page_override")
+        or "🏠 Home Dashboard"
+    )
+    render_applied_math_sidebar_entry(
+        st,
+        source_app="nba",
+        source_page=_nba_ami_page,
+        session_state=st.session_state,
+        context_extra={"team": favorite_team, "page": _nba_ami_page},
+        developer_mode=bool(DEV_MODE or pp.show_sidebar_debug(st)),
+    )
+
     if not DEV_MODE:
         st.sidebar.toggle(
             "Enable Dev Lab (developer)",
@@ -18036,19 +18053,6 @@ def main():
     st.session_state["_nba_persist_team"] = favorite_team
     st.session_state["page_label_last"] = page_label
     page = pages[page_label]
-    try:
-        from suite_analytical_question import build_context_from_session, render_analyze_with_applied_math_sidebar
-
-        _ami_ctx, _ami_summary = build_context_from_session("nba", str(page_label), st.session_state)
-        render_analyze_with_applied_math_sidebar(
-            st,
-            source_app="nba",
-            source_page=str(page_label),
-            context={"team": favorite_team, "page": page, **_ami_ctx},
-            context_summary=_ami_summary or favorite_team,
-        )
-    except Exception:
-        pass
     _set_lgc_route_skip_bracket_api(page == "Live Game Center")
     _lgc_stt = _get_lgc_local_playoff_state() if page == "Live Game Center" else None
     profile = get_effective_team_profile(
