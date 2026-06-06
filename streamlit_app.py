@@ -15146,8 +15146,27 @@ def _manual_win_prob(margin, period, clock_txt, is_home, status):
     return int(max(1, min(99, round(50 + margin * leverage + home_bonus))))
 
 
+def _manual_live_override_active():
+    """Game-night: apply typed scores without an extra checkbox toggle."""
+    if st.session_state.get("manual_live_enabled", False):
+        return True
+    if not _live_gc_game_night_emergency_active():
+        return False
+    home_score = safe_int(st.session_state.get("manual_live_home_score", 0), 0)
+    away_score = safe_int(st.session_state.get("manual_live_away_score", 0), 0)
+    quarter = safe_int(st.session_state.get("manual_live_quarter", 1), 1)
+    status = str(st.session_state.get("manual_live_status", "live")).lower()
+    if home_score > 0 or away_score > 0:
+        return True
+    if quarter > 1:
+        return True
+    if status in ("final", "halftime"):
+        return True
+    return False
+
+
 def _manual_live_override_snapshot(team_name):
-    if not st.session_state.get("manual_live_enabled", False):
+    if not _manual_live_override_active():
         return None
     home = st.session_state.get("manual_live_home_team") or team_name
     away = st.session_state.get("manual_live_away_team") or TEAM_PROFILES.get(team_name, {}).get("current_opponent") or team_name
@@ -15888,9 +15907,9 @@ def _render_game_night_emergency_entry_top(team_name, profile):
     """Emergency score controls — always visible at top during game-night mode."""
     st.markdown("#### Emergency score entry")
     st.caption(
-        "Enter the live score below. It powers the trust strip, win probability, and keys to success."
+        "Enter the live score below — it applies automatically and powers the trust strip, "
+        "win probability, and keys to success."
     )
-    st.checkbox("Use manual score (overrides local shell)", key="manual_live_enabled")
     team_keys = sorted(TEAM_PROFILES.keys())
     c1, c2 = st.columns(2)
     with c1:
@@ -16053,9 +16072,8 @@ def render_live_game_center_safe(team_name, profile):
         st.caption("Scores and bracket context auto-refresh about every 60 seconds while this page is open.")
 
     layer1_slot = st.empty()
-    if not game_night:
-        with layer1_slot.container():
-            _render_live_gc_trust_strip(team_name, _live_gc_connecting_state(team_name, profile))
+    with layer1_slot.container():
+        _render_live_gc_trust_strip(team_name, _live_gc_connecting_state(team_name, profile))
 
     if game_night:
         if st.button("Retry live feed (2s max)", key=f"live_gc_safe_refresh_{team_name}", type="secondary"):
