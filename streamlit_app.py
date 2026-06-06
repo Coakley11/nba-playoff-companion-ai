@@ -2665,10 +2665,41 @@ def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False
     return clean
 
 
+def _peek_sidebar_page_key():
+    """Best-effort page key before sidebar radio (override or last visit)."""
+    ov = st.session_state.get("page_override")
+    if ov:
+        label = PAGE_LABEL_ALIASES.get(str(ov), str(ov))
+        return PAGES.get(label)
+    last = st.session_state.get("page_label_last")
+    if last:
+        if last in PAGES:
+            return PAGES[last]
+        label = PAGE_LABEL_ALIASES.get(str(last), str(last))
+        return PAGES.get(label)
+    return None
+
+
+def _get_lgc_local_playoff_state():
+    """Local/demo bracket snapshot for Live Game Center — no NBA bracket API sync."""
+    return get_playoff_state_cached(True, False)
+
+
+def _set_lgc_route_skip_bracket_api(active: bool):
+    globals()["_LGC_ROUTE_SKIP_BRACKET_API"] = bool(active)
+
+
+def _lgc_route_skip_bracket_api_active():
+    return bool(globals().get("_LGC_ROUTE_SKIP_BRACKET_API"))
+
+
 def get_playoff_refresh_settings():
     """Sidebar-aware flags: NBA API first, bundled demo rows only when the feed is empty."""
     use_demo = bool(globals().get("USE_DEMO_BACKUP", True))
     api_refresh = bool(globals().get("ENABLE_BRACKET_API_REFRESH", True))
+    if _lgc_route_skip_bracket_api_active():
+        use_demo = True
+        api_refresh = False
     if _validation_mode_active():
         use_demo = True
         api_refresh = False
@@ -2705,7 +2736,7 @@ def tick_playoff_state_autorefresh(page_key, interval_ms=None):
     """Rerun the app on a timer so series scores and advancement stay current without code edits."""
     if _validation_mode_active():
         return
-    if _live_gc_game_night_emergency_active() and page_key == "live_game_center":
+    if page_key == "live_game_center":
         return
     if st.session_state.get("portfolio_demo_mode") or st.session_state.get("portfolio_screenshot_mode"):
         return
@@ -16033,7 +16064,12 @@ def _render_live_gc_safe_board(team_name, profile, state, parsed):
 
 def render_live_game_center_safe(team_name, profile):
     """TEMPORARY safe mode — Layer 1 only; zero heavy feature execution."""
-    profile = get_effective_team_profile(team_name, _get_validation_playoff_state() if _validation_mode_active() else None)
+    lgc_stt = (
+        _get_validation_playoff_state()
+        if _validation_mode_active()
+        else _get_lgc_local_playoff_state()
+    )
+    profile = get_effective_team_profile(team_name, lgc_stt)
     _live_gc_trace_clear()
     t_page = pytime.perf_counter()
     section_ms = {}
@@ -17666,6 +17702,7 @@ def main():
     boot_t0 = pytime.perf_counter()
     _configure_app_shell()
     boot_t = boot_t0
+    _set_lgc_route_skip_bracket_api(False)
 
     try:
         from suite_resume_launch import apply_suite_resume_launch
@@ -17749,11 +17786,14 @@ def main():
         )
 
     _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
+    _set_lgc_route_skip_bracket_api(_peek_sidebar_page_key() == "Live Game Center")
+    _pre_lgc_stt = _get_lgc_local_playoff_state() if _lgc_route_skip_bracket_api_active() else None
+    _sidebar_stt = _val_stt or _pre_lgc_stt
     favorite_team = st.sidebar.selectbox(
         "Choose your 2026 NBA playoff team",
         team_keys_sorted,
         index=default_idx,
-        format_func=(lambda tn: _sidebar_team_label(tn, _val_stt)) if _val_stt else _sidebar_team_label,
+        format_func=(lambda tn: _sidebar_team_label(tn, _sidebar_stt)) if _sidebar_stt else _sidebar_team_label,
     )
     if not DEV_MODE:
         st.sidebar.toggle(
@@ -17784,10 +17824,6 @@ def main():
     else:
         SHOW_PERF_DEBUG = False
     boot_t = _page_perf_startup_tick("sidebar_toggles", boot_t) if st.session_state.get(PAGE_PERF_KEY) else boot_t
-    profile = get_effective_team_profile(
-        favorite_team, _val_stt if _validation_mode_active() else None
-    )
-    inject_team_brand_css(favorite_team)
     pages = dict(PAGES)
     if dev_lab_visible():
         pages["🛠️ Dev Lab"] = "Dev Lab"
@@ -17795,7 +17831,14 @@ def main():
     def_label = PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
     page_label = st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
     st.session_state["_nba_persist_team"] = favorite_team
+    st.session_state["page_label_last"] = page_label
     page = pages[page_label]
+    _set_lgc_route_skip_bracket_api(page == "Live Game Center")
+    _lgc_stt = _get_lgc_local_playoff_state() if page == "Live Game Center" else None
+    profile = get_effective_team_profile(
+        favorite_team, _val_stt if _validation_mode_active() else _lgc_stt
+    )
+    inject_team_brand_css(favorite_team)
     app_page_t0 = pytime.perf_counter()
     _page_perf_begin(page)
     perf = st.session_state.get(PAGE_PERF_KEY) or {}

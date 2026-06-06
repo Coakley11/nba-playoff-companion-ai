@@ -29,6 +29,8 @@ Fan-facing **in-game command post** for the selected team: score, clock, period,
 
 **Emergency game-night mode (2026-06-05):** Finals Game 2 (Knicks vs Spurs). Page paints instantly from `PLAYOFF_SCHEDULE_FALLBACK` + canonical Game 1 (`Knicks 105, Spurs 95`, series 1–0). Manual score entry at top powers trust strip, win probability, and keys to success. No API before first paint.
 
+**Live Game Center route:** Bracket NBA API auto-sync is forced off on the Live Game Center page — local/demo playoff state only (`get_playoff_state_cached(True, False)`); sidebar toggle unchanged on other pages.
+
 **Do not** change safe mode behavior without updating this section.
 
 ---
