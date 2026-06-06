@@ -2189,13 +2189,13 @@ PLAYOFF_SCHEDULE_FALLBACK = [
     {
         "game_id": "fallback-nyk-sas-20260605",
         "date": "2026-06-05",
-        "time_et": "20:00",
+        "time_et": "20:30",
         "away": "San Antonio Spurs",
         "home": "New York Knicks",
         "round": "NBA Finals",
         "series_key": "NYK-SAS",
-        "label": "Spurs at Knicks",
-        "source": "Local playoff schedule fallback",
+        "label": "Spurs at Knicks · Game 2",
+        "source": "Local schedule fallback",
     },
     {
         "game_id": "fallback-nyk-sas-20260603",
@@ -4603,6 +4603,40 @@ def _resolve_live_gc_layer1_fast(team_name, profile):
             "cdn_ok": False,
         }
 
+    fb_row = _pick_best_schedule_fallback_row(team_name)
+    if fb_row:
+        parsed = _live_gc_parse_game_row(fb_row, team_name)
+        phase = parsed.get("phase", "pregame")
+        gs = _layer1_snap_game_status(fb_row, phase)
+        sec = _seconds_to_tipoff(fb_row)
+        fb_banner = ""
+        det_tier = "scheduled_today"
+        if sec is not None and -4.5 * 3600 < sec < 0:
+            det_tier = "likely_live_feed_gap"
+            fb_banner = "Game may be in progress, but the live feed is delayed."
+        elif phase == "pregame":
+            fb_banner = "Game scheduled today — live feed not detected yet."
+        _live_gc_trace("layer1.schedule_fallback", game_id=fb_row.get("gameId"), status=gs)
+        return {
+            "layer": 1,
+            "priority": "fallback",
+            "source_label": fb_row.get("_source") or "Local schedule fallback",
+            "feed_banner": fb_banner,
+            "parsed": parsed,
+            "game_row": fb_row,
+            "snap": {
+                "game_found": True,
+                "game_status": gs,
+                "detection_tier": det_tier,
+            },
+            "manual": None,
+            "live_count": live_count,
+            "errors": errors,
+            "updated_at": datetime.now(timezone.utc),
+            "top_scorer": None,
+            "cdn_ok": False,
+        }
+
     opp, round_name, series_text = _live_gc_profile_context(team_name, profile)
     if cdn_err and not stats_row:
         det_msg = _live_gc_fan_msg("feed_delayed")
@@ -4909,6 +4943,33 @@ def _fallback_schedule_games_for_team(team_name, days_each_side=1):
         if abs((d - today).days) <= days_each_side:
             out.append(_fallback_schedule_game_row(row))
     return out
+
+
+def _pick_best_schedule_fallback_row(team_name):
+    """Best local schedule row when CDN/stats have no game (pregame shell)."""
+    games = _fallback_schedule_games_for_team(team_name, days_each_side=1)
+    if not games:
+        return None
+
+    def sort_key(g):
+        phase = _live_broadcast_phase(g)
+        sec = _seconds_to_tipoff(g)
+        if sec is None:
+            sec = 9e9
+        if phase == "live":
+            return (0, 0, sec)
+        if phase == "pregame":
+            if sec is not None and 0 < sec <= 3600:
+                return (1, sec, 0)
+            if sec is not None and sec > 3600:
+                return (2, sec, 0)
+            return (3, sec, 0)
+        if phase == "postgame":
+            return (4, -sec if sec else 0, 0)
+        return (5, sec, 0)
+
+    games.sort(key=sort_key)
+    return games[0]
 
 
 def _pick_featured_game_for_team_uncached(team_name):
@@ -11656,8 +11717,14 @@ def render_home_current_game_card(team_name):
     if AUTOREFRESH_AVAILABLE and status in ("starting soon", "live"):
         st_autorefresh(interval=45000 if status == "starting soon" else 30000, key=f"home_game_watch_refresh_{team_name}")
 
+    series_line, _series_src = _live_series_board(away_name, home_name)
+    mx = get_display_matchup(team_name)
+    rnd = mx.get("round_short") or (game.get("seriesText") or "Playoffs")
+    game_n = _live_gc_next_game_number(team_name)
+    finals_tag = f" · Game {game_n}" if "Finals" in str(rnd) else ""
+
     if status == "live":
-        title = "LIVE NOW"
+        title = f"LIVE NOW{finals_tag}"
         tone = "home-live-strip home-live-strip--live"
         score = f"{snap.get('away_score', 0)} — {snap.get('home_score', 0)}"
         subtitle = f"{away_name} @ {home_name} · {snap.get('game_status_text') or 'In progress'}"
@@ -11669,21 +11736,18 @@ def render_home_current_game_card(team_name):
         subtitle = f"{away_name} @ {home_name} · recap loading from live hub"
         button_label = "Go to Live Game Center — recap"
     elif status == "starting soon":
-        title = "GAME STARTING SOON"
+        title = f"GAME STARTING SOON{finals_tag}"
         tone = "home-live-strip home-live-strip--soon"
         score = f"Starts in {countdown}"
         subtitle = f"{away_name} @ {home_name} · {snap.get('game_status_text') or 'Tipoff approaching'}"
         button_label = f"{fan_nick(away_name)} vs {fan_nick(home_name)} — Starting Soon"
     else:
-        title = "GAME SCHEDULED TODAY"
+        title = f"GAME SCHEDULED TONIGHT{finals_tag}"
         tone = "home-live-strip"
         score = countdown or "Tipoff today"
         subtitle = f"{away_name} @ {home_name} · game scheduled today — live feed not detected yet"
         button_label = "Go to Live Game Center"
 
-    series_line, _series_src = _live_series_board(away_name, home_name)
-    mx = get_display_matchup(team_name)
-    rnd = mx.get("round_short") or (game.get("seriesText") or "Playoffs")
     if status == "live":
         badge = '<div class="home-live-badge">ON AIR · LIVE</div>'
     elif status == "starting soon":
@@ -11700,8 +11764,8 @@ def render_home_current_game_card(team_name):
     <div style="text-align:center;flex:1;min-width:220px">
       <div class="home-live-strip-score">{html.escape(score)}</div>
       <div class="home-live-strip-sub">{html.escape(subtitle)}</div>
-      <div class="home-live-strip-sub">Round: {html.escape(str(rnd))} · Series: {html.escape(series_line or mx.get('series_record') or 'updating')}</div>
-      <div class="home-live-strip-sub">Source: {html.escape(str(snap.get('data_source') or 'scoreboard'))}</div>
+      <div class="home-live-strip-sub">Round: {html.escape(str(rnd))} · Series: {html.escape(series_line or mx.get('series_record') or 'Knicks lead 1–0')}</div>
+      <div class="home-live-strip-sub">Last: {html.escape(FINALS_GAME1_CANONICAL_SCORE)} · Source: {html.escape(str(snap.get('data_source') or 'scoreboard'))}</div>
     </div>
     <div style="text-align:center"><img src="{html.escape(TEAM_LOGOS.get(home_name, ''))}" width="58"/><div style="font-size:12px;font-weight:900">{html.escape(home_name)}</div></div>
   </div>
@@ -15312,6 +15376,57 @@ def _format_live_gc_updated_at(dt):
         return "—"
 
 
+def _live_gc_connecting_state(team_name, profile, series_text=None):
+    """Placeholder state for trust-strip first paint before Layer 1 resolve."""
+    _, _rnd, ser = _live_gc_profile_context(team_name, profile)
+    return {
+        "priority": "shell",
+        "source_label": "connecting…",
+        "parsed": None,
+        "updated_at": datetime.now(timezone.utc),
+        "snap": {},
+        "series_text": series_text or ser,
+    }
+
+
+def _live_gc_record_validation_tick(team_name, state):
+    """Append trust-strip snapshot to Dev Lab session log (game-night diagnostics)."""
+    try:
+        parsed = state.get("parsed")
+        if state.get("priority") == "manual" and state.get("manual"):
+            parsed = state["manual"]
+        chip = _live_status_chip(state)
+        score = "—"
+        if parsed and not _live_gc_suspicious_zero_zero_live(parsed):
+            aws, hs = safe_int(parsed.get("away_score", 0)), safe_int(parsed.get("home_score", 0))
+            if parsed.get("phase") == "pregame" and aws == 0 and hs == 0:
+                score = "pregame"
+            else:
+                score = f"{aws}–{hs}"
+        suspicious = bool(parsed and _live_gc_suspicious_zero_zero_live(parsed))
+        entry = {
+            "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+            "team": team_name,
+            "status": chip,
+            "score": score,
+            "source": str(state.get("source_label") or "—")[:40],
+            "priority": state.get("priority"),
+            "zero_zero_guard": suspicious,
+        }
+        log = st.session_state.setdefault(LIVE_GC_VALIDATION_LOG_KEY, [])
+        prev = log[-1] if log else {}
+        if (
+            prev.get("score") != entry["score"]
+            or prev.get("status") != entry["status"]
+            or prev.get("source") != entry["source"]
+        ):
+            log.append(entry)
+        if len(log) > 50:
+            st.session_state[LIVE_GC_VALIDATION_LOG_KEY] = log[-50:]
+    except Exception:
+        pass
+
+
 def _render_live_gc_trust_strip(team_name, state):
     """Always-visible Layer 1 metadata: status, score, clock, source, last updated."""
     parsed = state.get("parsed")
@@ -15323,13 +15438,18 @@ def _render_live_gc_trust_strip(team_name, state):
         src = src[:29] + "…"
     ts = _format_live_gc_updated_at(state.get("updated_at") or state.get("last_known_at"))
     if parsed and not _live_gc_suspicious_zero_zero_live(parsed):
-        score_txt = f"{parsed.get('away_score', '—')}–{parsed.get('home_score', '—')}"
-        if parsed.get("period") and parsed.get("clock"):
-            clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
-        elif parsed.get("period"):
-            clock_txt = f"Q{parsed['period']}"
+        aws, hs = safe_int(parsed.get("away_score", 0)), safe_int(parsed.get("home_score", 0))
+        if parsed.get("phase") == "pregame" and aws == 0 and hs == 0:
+            score_txt = "—"
+            clock_txt = str(parsed.get("status") or "Pregame")
         else:
-            clock_txt = str(parsed.get("status") or parsed.get("phase") or "—")
+            score_txt = f"{aws}–{hs}"
+            if parsed.get("period") and parsed.get("clock"):
+                clock_txt = f"Q{parsed['period']} · {parsed['clock']}"
+            elif parsed.get("period"):
+                clock_txt = f"Q{parsed['period']}"
+            else:
+                clock_txt = str(parsed.get("status") or parsed.get("phase") or "—")
     else:
         score_txt = "—"
         clock_txt = "—" if chip in ("UNAVAILABLE", "FEED UNAVAILABLE") else chip
@@ -15411,6 +15531,82 @@ def _render_live_gc_layer1(team_name, profile, state):
         f"<b>{html.escape(chip)}</b> · {html.escape(rnd_l)}</div>",
         unsafe_allow_html=True,
     )
+
+
+def _live_gc_next_game_number(team_name):
+    """1-based game number in current series (e.g. 2 after Game 1 final)."""
+    try:
+        _k, s = series_for_team(team_name)
+        if s and s.get("games"):
+            return len(s["games"]) + 1
+    except Exception:
+        pass
+    return 2
+
+
+def _render_live_gc_pregame_panel(team_name, profile, parsed, state):
+    """Pregame / starting-soon essentials — no box score or PBP APIs."""
+    opp = parsed.get("opp_name") or profile.get("current_opponent")
+    game_n = _live_gc_next_game_number(team_name)
+    _, rnd_l, ser_l = _live_gc_profile_context(team_name, profile)
+    series_line, _ = _live_series_board(parsed.get("away_name"), parsed.get("home_name"))
+    if not series_line:
+        series_line = ser_l
+    sec = _seconds_to_tipoff(state.get("game_row") or parsed.get("game") or {})
+    countdown = _format_countdown(sec) if sec is not None and sec > 0 else ""
+    tip_et = ""
+    gr = state.get("game_row") or {}
+    if gr.get("gameEt"):
+        raw_et = str(gr["gameEt"])
+        tip_et = raw_et if "ET" in raw_et.upper() else f"{raw_et} ET"
+    elif gr.get("gameTimeUTC"):
+        try:
+            tz = _nba_et_zone() or timezone.utc
+            dt = datetime.fromisoformat(str(gr["gameTimeUTC"]).replace("Z", "+00:00")).astimezone(tz)
+            h = dt.hour % 12 or 12
+            tip_et = f"{h}:{dt.minute:02d} {'PM' if dt.hour >= 12 else 'AM'} ET"
+        except Exception:
+            tip_et = "8:30 PM ET"
+
+    st.markdown(f"### {html.escape(rnd_l)} · Game {game_n}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Matchup", f"{fan_nick(parsed['away_name'])} @ {fan_nick(parsed['home_name'])}")
+    c2.metric("Series", series_line or ser_l)
+    c3.metric("Tipoff", countdown or tip_et or "Tonight")
+
+    st.info(f"**Game 1:** {FINALS_GAME1_CANONICAL_SCORE} — Knicks lead the series **1–0**.")
+
+    if "Finals" in str(rnd_l):
+        watch = (
+            "Brunson–Towns two-man game vs Wembanyama drop coverage; "
+            "San Antonio's transition defense and Castle–Vassell floor spacing."
+        )
+    else:
+        hctx = resolve_home_matchup_context_fast(team_name)
+        pctx = build_dashboard_playoff_context(team_name, hctx, None, skip_live_fetch=True)
+        watch = _home_watch_next_brief(team_name, pctx, _home_watch_next_keys(team_name, pctx, None))
+    st.markdown(f"**What to watch tonight:** {html.escape(watch)}")
+
+    cols = st.columns(2)
+    with cols[0]:
+        st.markdown(f"**{fan_nick(team_name)} keys**")
+        for nm in (TEAM_PROFILES.get(team_name, {}).get("starters") or [])[:4]:
+            st.write(f"• {nm}")
+    with cols[1]:
+        st.markdown(f"**{fan_nick(opp)} keys**")
+        for nm in (TEAM_PROFILES.get(opp, {}).get("starters") or [])[:4]:
+            st.write(f"• {nm}")
+
+    inj_rows = (FALLBACK_INJURY_REPORT.get(team_name, []) or []) + (FALLBACK_INJURY_REPORT.get(opp, []) or [])
+    if inj_rows:
+        st.markdown("**Injury monitor** (check official pregame report before tip)")
+        st.dataframe(pd.DataFrame(inj_rows).head(6), use_container_width=True, hide_index=True)
+    else:
+        st.caption("Tap **Injuries / Foul Trouble** after tipoff for live availability, or **Go live** on Home.")
+
+    banner = str(state.get("feed_banner") or "").strip()
+    if banner:
+        st.warning(banner)
 
 
 def _render_live_gc_instant_shell(team_name, profile, state):
@@ -15689,7 +15885,10 @@ def render_live_game_center_safe(team_name, profile):
         unsafe_allow_html=True,
     )
     st.caption("Scores and bracket context auto-refresh about every 60 seconds while this page is open.")
-    render_page_trust_strip("live_gc")
+
+    layer1_slot = st.empty()
+    with layer1_slot.container():
+        _render_live_gc_trust_strip(team_name, _live_gc_connecting_state(team_name, profile))
 
     if st.button("Refresh scoreboard", key=f"live_gc_safe_refresh_{team_name}", type="primary"):
         for fn in (fetch_cdn_scoreboard_only, _scoreboard_stats_today_et):
@@ -15710,12 +15909,19 @@ def render_live_game_center_safe(team_name, profile):
     elif state.get("parsed"):
         parsed = state["parsed"]
 
-    _render_live_gc_trust_strip(team_name, state)
-    if parsed:
-        _render_live_gc_safe_board(team_name, profile, state, parsed)
-    else:
-        st.warning(state.get("feed_banner") or _live_gc_fan_msg("no_game"))
-        _render_safe_emergency_entry(team_name, profile)
+    snap = state.get("snap") or {}
+    gs_pre = str(snap.get("game_status") or "")
+    is_pregame = parsed and (parsed.get("phase") == "pregame" or gs_pre in ("scheduled", "starting soon"))
+
+    with layer1_slot.container():
+        _render_live_gc_trust_strip(team_name, state)
+        if parsed and is_pregame and state.get("priority") != "manual":
+            _render_live_gc_pregame_panel(team_name, profile, parsed, state)
+        elif parsed:
+            _render_live_gc_safe_board(team_name, profile, state, parsed)
+        else:
+            st.warning(state.get("feed_banner") or _live_gc_fan_msg("no_game"))
+            _render_safe_emergency_entry(team_name, profile)
 
     section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
     if _live_gc_debug_enabled():
@@ -15759,16 +15965,7 @@ def render_live_game_center(team_name, profile):
     _opp_l, _rnd_l, ser_l = _live_gc_profile_context(team_name, profile)
     layer1_slot = st.empty()
     with layer1_slot.container():
-        _render_live_gc_instant_shell(
-            team_name,
-            profile,
-            {
-                "priority": "shell",
-                "source_label": "connecting · profile",
-                "parsed": None,
-                "series_text": ser_l,
-            },
-        )
+        _render_live_gc_trust_strip(team_name, _live_gc_connecting_state(team_name, profile, ser_l))
 
     t0 = pytime.perf_counter()
     state = _resolve_live_gc_layer1_fast(team_name, profile)
@@ -15782,10 +15979,16 @@ def render_live_game_center(team_name, profile):
                 del st.session_state[k]
         st.session_state["_live_gc_gid"] = parsed.get("gid")
 
+    gs_pre = str((snap or {}).get("game_status") or "")
+    is_pregame = parsed and (parsed.get("phase") == "pregame" or gs_pre in ("scheduled", "starting soon"))
+
     with layer1_slot.container():
         _render_live_gc_trust_strip(team_name, state)
         if state.get("priority") == "manual" and state.get("manual"):
             _render_manual_live_game_center(team_name, state["manual"])
+        elif parsed and is_pregame:
+            _render_live_gc_matchup_header(parsed, ser_l)
+            _render_live_gc_pregame_panel(team_name, profile, parsed, state)
         elif parsed:
             _render_live_gc_layer1(team_name, profile, state)
         else:
@@ -15864,6 +16067,16 @@ def render_live_game_center(team_name, profile):
     prob = live_win_probability(
         team_name, parsed["opp_name"], parsed["margin"], parsed["period"], parsed["is_fav_home"]
     )
+
+    if is_pregame:
+        st.caption("Pregame board above — detailed stats tabs unlock after tipoff.")
+        section_ms["total"] = (pytime.perf_counter() - t_page) * 1000.0
+        _render_live_gc_debug(
+            team_name, opp, layer1_loaded=True, live_attempted=True,
+            live_count=state.get("live_count"), errors=state.get("errors"),
+            state=state, section_ms=section_ms,
+        )
+        return
 
     t0 = pytime.perf_counter()
     _render_live_gc_tabbed_sections(team_name, profile, parsed, state, prob, section_ms)

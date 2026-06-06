@@ -11,6 +11,9 @@
 - [x] Phase charter in [PHASE_STABILITY.md](./PHASE_STABILITY.md)
 - [x] **Trust strip** on every Live GC path (score, clock, status, source, last updated)
 - [x] **0–0 live guard** — last-known fallback when CDN returns stale zeros (Q1+)
+- [x] **Schedule fallback in Layer 1** — Finals Game 2 (8:30 PM ET) when CDN quiet pregame
+- [x] **Pregame panel** — series, Game 1 result, keys, injuries, watch-tonight (no heavy tabs pre-tip)
+- [x] **Validation tick** — `_live_gc_record_validation_tick` → Dev Lab session log
 - [ ] Verify safe mode during real game (manual + Dev Lab checklist)
 - [ ] Cloud Layer 1: CDN resolve &lt; 3s typical; no blank board on refresh
 - [ ] **Freeze** new Live GC features until Layer 1 sign-off ([LIVE_GAME_CENTER.md](./LIVE_GAME_CENTER.md))
@@ -19,6 +22,7 @@
 
 - [x] Section timing in perf footer — **top 3 slowest** with exact ms (SHOW_PERF_DEBUG)
 - [x] Hero/header first paint before matchup ribbon and game-watch CDN card
+- [x] Home game-watch card — Finals Game 2 label, Game 1 score, LGC deep link (Layer 1 snapshot)
 - [ ] Quick view first paint target &lt; 3s on Streamlit Cloud
 - [ ] Confirm 8s live bundle timeout UX is acceptable
 - [ ] Cache audit: `get_playoff_state_cached`, `resolve_home_matchup_context_fast`

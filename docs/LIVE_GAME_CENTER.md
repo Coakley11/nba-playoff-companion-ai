@@ -1,6 +1,6 @@
 # Live Game Center — source of truth
 
-**Last updated:** 2026-06-04  
+**Last updated:** 2026-06-05  
 **Code entry:** `render_live_game_center` · `render_live_game_center_safe` · `_resolve_live_gc_layer1_fast`
 
 > If this doc and code disagree, reconcile in the **same change**. See [WORKFLOW.md](./WORKFLOW.md).
@@ -40,10 +40,12 @@ Fan-facing **in-game command post** for the selected team: score, clock, period,
 **Render sequence (full mode, not safe):**
 
 1. Clear per-team session keys when favorite team changes (`live_gc__*`, `live_gc_depth_*`, …).  
-2. Render **instant shell** in `layer1_slot` (connecting state).  
-3. `_resolve_live_gc_layer1_fast(team, profile)` — replace slot with real or fallback UI.  
-4. Hero + matchup ribbon + manual override panel.  
-5. Layer 2/3 only after user action or auto rules above.
+2. Render **trust strip** in `layer1_slot` with connecting placeholder (`_live_gc_connecting_state`).  
+3. `_resolve_live_gc_layer1_fast(team, profile)` — replace slot with real scoreboard or fallback UI.  
+4. **Pregame / starting soon:** `_render_live_gc_pregame_panel` only (no tabbed Layer 2/3 until after tipoff).  
+5. **Live / final:** `_render_live_gc_layer1` + tabbed sections on demand.  
+6. Hero + matchup ribbon + manual override panel (below pinned scoreboard).  
+7. Layer 2/3 tabs only after tipoff (live/final) or explicit tab selection.
 
 **Manual override priority:** If session manual game is set, Layer 1 uses `priority == "manual"` and `_render_manual_live_game_center`.
 
@@ -55,7 +57,10 @@ Order in `_resolve_live_gc_layer1_fast`:
 
 1. **Manual session game** — user-entered home/away/status (Dev Lab or fan override panel).  
 2. **CDN live row** — `fetch_cdn_scoreboard_only` / parsed row for favorite team.  
-3. **Profile / static fallback** — opponent, round, scheduled messaging when no live row (`priority` static/stale).
+3. **Stats today (ET)** — merge or rescue when CDN row missing or stale.  
+4. **Last-known score** — session cache when CDN returns suspicious 0–0 during live Q1+.  
+5. **Local schedule fallback** — `PLAYOFF_SCHEDULE_FALLBACK` (e.g. Finals Game 2 at 8:30 PM ET) when feeds are quiet pregame.  
+6. **Profile / static fallback** — opponent, round, scheduled messaging when no row at all (`priority` static).
 
 Parsed game must expose: phase, scores, period, clock, opponent (`opp_name`), optional `gid` for session cache invalidation.
 
@@ -131,6 +136,7 @@ LIVE_GC_ADVANCED_AUTO_STATUSES = live
 | `resolve_live_game_state(team, network=True)` | Full Layer 1 |
 | `scripts/test_live_gc_layer1.py` | Layer 1 regression |
 | Dev Lab → Live GC tab | Timing, trace, debug expander |
+| Dev Lab → Live GC session log | `_live_gc_record_validation_tick` — trust-strip ticks per visit |
 
 ---
 
@@ -138,4 +144,5 @@ LIVE_GC_ADVANCED_AUTO_STATUSES = live
 
 - [ ] Cloud perf sign-off for full GC (`LIVE_GC_SAFE_MODE` stays False on prod).  
 - [ ] Document max concurrent user guidance after load test.  
-- [ ] Optional: persist manual game to suite session (dev-only).
+- [x] Schedule fallback wired into Layer 1 fast resolver (2026-06-05).  
+- [x] Pregame panel + trust-strip-first paint (2026-06-05).

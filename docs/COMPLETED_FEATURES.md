@@ -1,6 +1,6 @@
 # Completed features
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-05
 
 ## Completed Features
 
@@ -10,6 +10,7 @@
 - [x] UI polish pass (2026-06-04) — Finals broadcast hero, fan energy board, matchup TV graphics, history/offseason card layouts (no data changes)
 - [x] Live Game Center — Layer 1/2/3 architecture + safe mode path
 - [x] Live Game Center — always-visible trust strip (status, score, clock, source, last updated)
+- [x] Live Game Center game-night pass (2026-06-05) — trust-strip-first paint, schedule fallback in Layer 1, pregame panel, validation session log, Home Game 2 card
 - [x] Playoff Bracket — full bracket with API sync + demo fallback
 - [x] Matchup Lineups — position matchups, curated playoff rotations
 - [x] Matchup Intelligence — injury + narrative matchup hub
