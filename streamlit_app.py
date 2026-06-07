@@ -18028,12 +18028,19 @@ def main():
         or st.session_state.get("page_override")
         or "🏠 Home Dashboard"
     )
+    try:
+        from applied_math_context import build_nba_applied_math_context
+
+        _nba_ami_ctx = build_nba_applied_math_context(_nba_ami_page, st.session_state)
+    except Exception:
+        _nba_ami_ctx = {"team": favorite_team, "page": _nba_ami_page}
+
     render_applied_math_sidebar_entry(
         st,
         source_app="nba",
         source_page=_nba_ami_page,
         session_state=st.session_state,
-        context_extra={"team": favorite_team, "page": _nba_ami_page},
+        context_extra=_nba_ami_ctx,
         developer_mode=bool(DEV_MODE),
     )
 
