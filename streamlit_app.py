@@ -18033,7 +18033,7 @@ def main():
         source_page=_nba_ami_page,
         session_state=st.session_state,
         context_extra={"team": favorite_team, "page": _nba_ami_page},
-        developer_mode=bool(DEV_MODE or pp.show_sidebar_debug(st)),
+        developer_mode=bool(DEV_MODE),
     )
 
     if not DEV_MODE:
@@ -18081,7 +18081,12 @@ def main():
         else:
             st.session_state[NBA_PAGE_RADIO_KEY] = "🏠 Home Dashboard"
     if st.session_state.get(NBA_PAGE_RADIO_KEY) not in labels:
-        st.session_state[NBA_PAGE_RADIO_KEY] = "🏠 Home Dashboard"
+        _last = st.session_state.get(NBA_PAGE_RADIO_KEY)
+        _mapped = PAGE_LABEL_ALIASES.get(str(_last), str(_last)) if _last else None
+        if _mapped in labels:
+            st.session_state[NBA_PAGE_RADIO_KEY] = _mapped
+        else:
+            st.session_state[NBA_PAGE_RADIO_KEY] = "🏠 Home Dashboard"
     page_label = st.sidebar.radio("Choose page", labels, key=NBA_PAGE_RADIO_KEY)
     st.session_state["_nba_persist_team"] = favorite_team
     st.session_state["page_label_last"] = page_label
