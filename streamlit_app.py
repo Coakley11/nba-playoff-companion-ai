@@ -12,10 +12,17 @@ from datetime import datetime, timedelta, time, timezone
 import time as pytime
 import concurrent.futures
 
+# Stable Streamlit widget keys for team/page sidebar (match nba_persistent_state.py).
+NBA_TEAM_SELECT_KEY = "favorite_team_sidebar"
+NBA_PAGE_RADIO_KEY = "nba_choose_page"
 try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover
-    ZoneInfo = None  # type: ignore
+    from nba_persistent_state import NBA_PAGE_RADIO_KEY as _NBA_PAGE_KEY
+    from nba_persistent_state import NBA_TEAM_SELECT_KEY as _NBA_TEAM_KEY
+
+    NBA_PAGE_RADIO_KEY = _NBA_PAGE_KEY
+    NBA_TEAM_SELECT_KEY = _NBA_TEAM_KEY
+except Exception:
+    pass
 
 # ==========================================================
 # Optional packages
@@ -17952,7 +17959,6 @@ def main():
         pdemo.ensure_global_demo_seed(st)
 
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
-    from nba_persistent_state import NBA_PAGE_RADIO_KEY, NBA_TEAM_SELECT_KEY
 
     _restore_team = st.session_state.pop("_nba_restore_team", None)
     if _restore_team and _restore_team in team_keys_sorted:
