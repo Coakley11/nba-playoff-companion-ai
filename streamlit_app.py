@@ -6576,6 +6576,7 @@ def render_legacy_tracker_page(team_name):
     else:
         if not pp.is_capture_mode(st):
             st.success(f"Loaded {current['GP']} current playoff games for {player} from NBA API.")
+        _sync_ami_legacy_stat_gap(player, team_name, logs)
         with st.expander(f"Full playoff game log ({current['GP']} games)", expanded=False):
             show_cols = [
                 c
@@ -6599,6 +6600,9 @@ def render_legacy_tracker_page(team_name):
             ]
             prep_logs = _prepare_chrono_playoff_logs(logs)
             render_fan_stat_table(_df_newest_first_for_display(prep_logs)[show_cols], team_name)
+
+    if (logs is not None and not getattr(logs, "empty", True)) and not st.session_state.get("_ami_stat_gap_context"):
+        _sync_ami_legacy_stat_gap(player, team_name, logs)
 
     pts0 = float(current.get("PTS", 20.0) or 20.0)
     reb0 = float(current.get("REB", 6.0) or 6.0)
@@ -7718,6 +7722,46 @@ def _pp_chase_board_data(player, team_name, df):
     return rank, gaps, hero
 
 
+def _sync_ami_legacy_stat_gap(player: str, team_name: str, logs) -> None:
+    """Populate _ami_legacy_context / stat_gap for Applied Math from franchise chase board."""
+    try:
+        from applied_math_context import record_legacy_stat_gap_context
+
+        rank, gaps, hero = _pp_chase_board_data(player, team_name, logs)
+        if not gaps:
+            return
+        primary = gaps[0]
+        games_left = _pp_chase_games_left_est(team_name)
+        pace = _pp_chase_pace_for_stat(logs, primary["stat"])
+        rate = f"{pace:.1f} {primary['short']}/game" if pace else None
+        record_legacy_stat_gap_context(
+            st.session_state,
+            player=player,
+            team_name=team_name,
+            stat_label=str(primary["label"]),
+            stat_key=str(primary["stat"]),
+            current_value=primary["current"],
+            target_name=str(primary["target_name"]),
+            target_value=primary["target_val"],
+            gap=primary["gap"],
+            games_remaining=int(games_left) if games_left else None,
+            rate_needed=rate,
+            historical_comparison=str(hero or ""),
+            all_gaps=[
+                {
+                    "stat": g["label"],
+                    "current": g["current"],
+                    "target": g["target_name"],
+                    "target_value": g["target_val"],
+                    "gap": g["gap"],
+                }
+                for g in gaps[:4]
+            ],
+        )
+    except Exception:
+        pass
+
+
 def _pp_chase_pace_for_stat(df, stat):
     if df is None or df.empty:
         return None
@@ -8487,6 +8531,7 @@ def render_player_playoff_story_hub(team_name, profile):
     cur_summary = summarize_playoff_logs(df)
     cur_summary["TS_PCT"] = _true_shooting_pct(df)
     cur_summary["GP"] = int(len(df))
+    _sync_ami_legacy_stat_gap(player, team_name, df)
 
     prev_season = _prior_nba_season_label(season)
     prev_summary = None
@@ -9766,6 +9811,38 @@ def render_matchup_intelligence(team_name):
     if meta is None:
         st.warning(payload)
         return
+    try:
+        from applied_math_context import record_matchup_intelligence_context
+
+        opp_name = str(meta.get("opp") or prof.get("current_opponent") or "")
+        inj = _intel_injury_signal(team_name, opp_name)
+        inj_txt = ""
+        if inj.get("headline"):
+            h = inj["headline"]
+            inj_txt = f"{h[1]} ({h[2]})" if len(h) >= 3 else str(h)
+        summaries = []
+        for _num, _title, _icon, body, _tone, _kind in payload[:4]:
+            text = re.sub(r"\*\*", "", str(body))[:220]
+            if text:
+                summaries.append(text)
+        t_star = (prof.get("starters") or [""])[0]
+        o_prof = TEAM_PROFILES.get(opp_name) or {}
+        o_star = (o_prof.get("starters") or [""])[0]
+        pst = st.session_state.get("playoff_team_state") or {}
+        sp = pst.get("series_win_probability") or pst.get("series_prob")
+        series_prob = f"{float(sp):.0f}%" if sp is not None else None
+        record_matchup_intelligence_context(
+            st.session_state,
+            team_name=team_name,
+            opponent=opp_name,
+            meta=meta,
+            section_summaries=summaries,
+            injury_summary=inj_txt,
+            key_players=[p for p in (t_star, o_star) if p],
+            series_probability=series_prob,
+        )
+    except Exception:
+        pass
     render_mi_intelligence_hero(team_name, meta)
     anchor = (prof.get("starters") or [None])[0]
     if anchor:

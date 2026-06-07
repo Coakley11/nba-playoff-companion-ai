@@ -15,6 +15,95 @@ def cache_page_context(session_state: dict[str, Any], page: str, ctx: dict[str, 
     session_state["_ami_context_by_page"] = store
 
 
+def record_legacy_stat_gap_context(
+    session_state: dict[str, Any],
+    *,
+    player: str,
+    team_name: str,
+    stat_label: str,
+    stat_key: str,
+    current_value: Any,
+    target_name: str,
+    target_value: Any,
+    gap: Any,
+    games_remaining: int | None = None,
+    rate_needed: str | None = None,
+    historical_comparison: str = "",
+    all_gaps: list[dict[str, Any]] | None = None,
+) -> None:
+    """Cache franchise chase / legacy stat-gap data for Applied Math sidebar."""
+    rate_str = str(rate_needed or "").strip()
+    summary_parts = [
+        f"{player} has {current_value} {stat_label}",
+        f"target {target_name} has {target_value}",
+        f"gap {gap}",
+    ]
+    if games_remaining is not None:
+        summary_parts.append(f"{games_remaining} games left est.")
+    if rate_str:
+        summary_parts.append(f"needs ~{rate_str}")
+
+    stat_gap = {
+        "player": player,
+        "comparison": target_name,
+        "stat": stat_label,
+        "stat_key": stat_key,
+        "current_value": current_value,
+        "target_value": target_value,
+        "gap": gap,
+        "games_remaining": games_remaining,
+        "rate_needed": rate_str or None,
+        "summary": "; ".join(summary_parts),
+    }
+    legacy_ctx = {
+        "player": player,
+        "team": team_name,
+        "stat_gap": stat_gap,
+        "games_remaining": games_remaining,
+        "rate_needed": rate_str or None,
+        "historical_comparison": historical_comparison or None,
+        "chase_gaps": all_gaps or [stat_gap],
+    }
+    session_state["_ami_stat_gap_context"] = legacy_ctx
+    session_state["_ami_legacy_context"] = legacy_ctx
+    cache_page_context(session_state, "Legacy Tracker", legacy_ctx)
+    cache_page_context(session_state, "Player Playoff Tracker", legacy_ctx)
+
+
+def record_matchup_intelligence_context(
+    session_state: dict[str, Any],
+    *,
+    team_name: str,
+    opponent: str,
+    meta: dict[str, Any],
+    section_summaries: list[str] | None = None,
+    injury_summary: str = "",
+    key_players: list[str] | None = None,
+    win_probability: str | None = None,
+    series_probability: str | None = None,
+) -> None:
+    """Cache matchup scouting data for Applied Math sidebar."""
+    tw = meta.get("tw")
+    ow = meta.get("ow")
+    ctx: dict[str, Any] = {
+        "team": team_name,
+        "opponent": opponent,
+        "workflow": "Matchup intelligence",
+        "series_record": f"{tw}-{ow}" if tw is not None and ow is not None else None,
+        "matchup_advantages": section_summaries or [],
+        "injury_summary": injury_summary or None,
+        "key_players": [p for p in (key_players or []) if p],
+        "pressure_score": meta.get("pressure"),
+        "games_played": meta.get("games_n"),
+    }
+    if win_probability:
+        ctx["win_probability"] = win_probability
+    if series_probability:
+        ctx["series_probability"] = series_probability
+    session_state["_ami_matchup_context"] = ctx
+    cache_page_context(session_state, "Matchup Intelligence", ctx)
+
+
 def build_nba_applied_math_context(page: str, session_state: dict[str, Any]) -> dict[str, Any]:
     p = str(page or "").strip()
     low = p.lower()
@@ -51,15 +140,13 @@ def build_nba_applied_math_context(page: str, session_state: dict[str, Any]) -> 
         if isinstance(mi, dict):
             ctx.update(mi)
 
-    if "legacy" in low:
+    if "legacy" in low or "playoff tracker" in low:
         ctx["workflow"] = "Legacy / career context"
-        leg = session_state.get("_ami_legacy_context")
+        leg = session_state.get("_ami_legacy_context") or session_state.get("_ami_stat_gap_context")
         if isinstance(leg, dict):
             ctx.update(leg)
-
-    stat_ctx = session_state.get("_ami_stat_gap_context")
-    if isinstance(stat_ctx, dict):
-        ctx.update(stat_ctx)
+            if isinstance(leg.get("stat_gap"), dict):
+                ctx["stat_gap"] = leg["stat_gap"]
 
     cached = session_state.get("_ami_context_by_page")
     if isinstance(cached, dict):
