@@ -18208,6 +18208,10 @@ def main():
     if page in playoff_auto_refresh_pages:
         tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
 
+    from suite_analytical_question import render_suite_applied_math_insight
+
+    render_suite_applied_math_insight(st, source_app="nba", source_page=page)
+
     if page == "Home Dashboard":
         render_playoff_command_center(favorite_team)
     elif page == "Playoff Bracket":
