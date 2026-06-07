@@ -12,6 +12,9 @@ from suite_user_persistence import (
 
 APP_ID = "nba"
 
+NBA_TEAM_SELECT_KEY = "favorite_team_sidebar"
+NBA_PAGE_RADIO_KEY = "nba_choose_page"
+
 _PERSIST_KEYS = (
     "favorite_team_sidebar",
     "page_override",
@@ -43,10 +46,16 @@ def build_nba_disk_state(st: Any) -> dict[str, Any]:
 def apply_nba_disk_state(st: Any, state: dict[str, Any]) -> None:
     team = state.pop("favorite_team", None)
     if team:
-        st.session_state["page_override"] = st.session_state.get("page_override")
         st.session_state["_nba_restore_team"] = team
+        st.session_state["favorite_team"] = team
     for key, val in state.items():
         st.session_state[key] = copy.deepcopy(val)
+    restored_team = st.session_state.get("_nba_restore_team") or st.session_state.get("favorite_team")
+    if restored_team:
+        st.session_state[NBA_TEAM_SELECT_KEY] = restored_team
+    page_label = st.session_state.get("page_label_last") or st.session_state.get("page_override")
+    if page_label:
+        st.session_state[NBA_PAGE_RADIO_KEY] = page_label
 
 
 def apply_nba_session_defaults(st: Any) -> None:
@@ -54,8 +63,10 @@ def apply_nba_session_defaults(st: Any) -> None:
     ss = st.session_state
     for key in _PERSIST_KEYS:
         ss.pop(key, None)
-    for key in ("page_override", "page_label_last", "_nba_restore_team", "_nba_persist_team"):
+    for key in ("page_override", "page_label_last", "_nba_restore_team", "_nba_persist_team", "favorite_team"):
         ss.pop(key, None)
+    ss.pop(NBA_TEAM_SELECT_KEY, None)
+    ss.pop(NBA_PAGE_RADIO_KEY, None)
 
 
 def restore_nba_disk_state_once(st: Any) -> bool:

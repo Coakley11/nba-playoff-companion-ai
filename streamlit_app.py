@@ -5855,7 +5855,11 @@ def playoff_game_logs_for_player(name, season=CURRENT_NBA_SEASON, team_name=None
                 team_name = tm
                 break
     if not team_name:
-        team_name = st.session_state.get("favorite_team") or "New York Knicks"
+        team_name = (
+            st.session_state.get("favorite_team")
+            or st.session_state.get("_nba_persist_team")
+            or "New York Knicks"
+        )
     return fetch_playoff_gamelog(name, team_name, season)
 
 @st.cache_data(ttl=3600)
@@ -17948,10 +17952,32 @@ def main():
         pdemo.ensure_global_demo_seed(st)
 
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
-    default_idx = team_keys_sorted.index("New York Knicks") if "New York Knicks" in team_keys_sorted else 0
+    from nba_persistent_state import NBA_PAGE_RADIO_KEY, NBA_TEAM_SELECT_KEY
+
     _restore_team = st.session_state.pop("_nba_restore_team", None)
     if _restore_team and _restore_team in team_keys_sorted:
-        default_idx = team_keys_sorted.index(_restore_team)
+        st.session_state[NBA_TEAM_SELECT_KEY] = _restore_team
+        st.session_state["favorite_team"] = _restore_team
+    elif NBA_TEAM_SELECT_KEY not in st.session_state:
+        _saved_team = st.session_state.get("favorite_team")
+        if _saved_team in team_keys_sorted:
+            st.session_state[NBA_TEAM_SELECT_KEY] = _saved_team
+        else:
+            st.session_state[NBA_TEAM_SELECT_KEY] = (
+                "New York Knicks" if "New York Knicks" in team_keys_sorted else team_keys_sorted[0]
+            )
+
+    _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
+    _set_lgc_route_skip_bracket_api(_peek_sidebar_page_key() == "Live Game Center")
+    _pre_lgc_stt = _get_lgc_local_playoff_state() if _lgc_route_skip_bracket_api_active() else None
+    _sidebar_stt = _val_stt or _pre_lgc_stt
+    favorite_team = st.sidebar.selectbox(
+        "Choose your 2026 NBA playoff team",
+        team_keys_sorted,
+        key=NBA_TEAM_SELECT_KEY,
+        format_func=(lambda tn: _sidebar_team_label(tn, _sidebar_stt)) if _sidebar_stt else _sidebar_team_label,
+    )
+    st.session_state["favorite_team"] = favorite_team
 
     if pp.show_sidebar_debug(st):
         QA_MODE = st.sidebar.toggle(
@@ -17987,17 +18013,6 @@ def main():
             value=True,
             help="Pull completed playoff games on a timer (about every 60s) so series scores and advancement update without code edits.",
         )
-
-    _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
-    _set_lgc_route_skip_bracket_api(_peek_sidebar_page_key() == "Live Game Center")
-    _pre_lgc_stt = _get_lgc_local_playoff_state() if _lgc_route_skip_bracket_api_active() else None
-    _sidebar_stt = _val_stt or _pre_lgc_stt
-    favorite_team = st.sidebar.selectbox(
-        "Choose your 2026 NBA playoff team",
-        team_keys_sorted,
-        index=default_idx,
-        format_func=(lambda tn: _sidebar_team_label(tn, _sidebar_stt)) if _sidebar_stt else _sidebar_team_label,
-    )
 
     from suite_analytical_question import render_applied_math_sidebar_entry
 
@@ -18048,8 +18063,20 @@ def main():
     if dev_lab_visible():
         pages["🛠️ Dev Lab"] = "Dev Lab"
     labels = list(pages.keys())
-    def_label = PAGE_LABEL_ALIASES.get(st.session_state.pop("page_override", "🏠 Home Dashboard"), "🏠 Home Dashboard")
-    page_label = st.sidebar.radio("Choose page", labels, index=labels.index(def_label) if def_label in labels else 0)
+    _page_restore = st.session_state.pop("page_override", None)
+    if _page_restore:
+        _alias = PAGE_LABEL_ALIASES.get(_page_restore, _page_restore)
+        if _alias in labels:
+            st.session_state[NBA_PAGE_RADIO_KEY] = _alias
+    elif NBA_PAGE_RADIO_KEY not in st.session_state:
+        _last = st.session_state.get("page_label_last")
+        if _last in labels:
+            st.session_state[NBA_PAGE_RADIO_KEY] = _last
+        else:
+            st.session_state[NBA_PAGE_RADIO_KEY] = "🏠 Home Dashboard"
+    if st.session_state.get(NBA_PAGE_RADIO_KEY) not in labels:
+        st.session_state[NBA_PAGE_RADIO_KEY] = "🏠 Home Dashboard"
+    page_label = st.sidebar.radio("Choose page", labels, key=NBA_PAGE_RADIO_KEY)
     st.session_state["_nba_persist_team"] = favorite_team
     st.session_state["page_label_last"] = page_label
     page = pages[page_label]
