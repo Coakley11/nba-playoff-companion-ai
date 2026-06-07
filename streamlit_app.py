@@ -15783,6 +15783,11 @@ def _render_live_gc_layer1(team_name, profile, state):
 
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Win probability", f"{prob}%")
+    try:
+        st.session_state["live_win_prob_display"] = float(prob)
+        st.session_state["_last_win_prob"] = float(prob)
+    except (TypeError, ValueError):
+        pass
     m2.metric("Quarter", f"Q{parsed['period']}" if parsed.get("period") else "—")
     m3.metric("Clock", parsed.get("clock") or "—")
     m4.metric("Margin", f"{parsed['margin']:+d}")
@@ -18107,18 +18112,20 @@ def main():
     )
     try:
         from applied_math_context import build_nba_applied_math_context
-
-        _nba_ami_ctx = build_nba_applied_math_context(_nba_ami_page, st.session_state)
     except Exception:
-        _nba_ami_ctx = {"team": favorite_team, "page": _nba_ami_page}
+        build_nba_applied_math_context = None  # type: ignore[misc, assignment]
 
     render_applied_math_sidebar_entry(
         st,
         source_app="nba",
         source_page=_nba_ami_page,
         session_state=st.session_state,
-        context_extra=_nba_ami_ctx,
         developer_mode=bool(DEV_MODE),
+        context_extra_builder=(
+            lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
+            if build_nba_applied_math_context
+            else {"team": favorite_team, "page": _nba_ami_page}
+        ),
     )
 
     if not DEV_MODE:
