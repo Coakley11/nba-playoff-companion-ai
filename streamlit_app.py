@@ -17909,12 +17909,13 @@ def main():
     boot_t = boot_t0
     _set_lgc_route_skip_bracket_api(False)
 
+    nba_restored = False
     try:
         from nba_persistent_state import restore_nba_disk_state_once
 
-        restore_nba_disk_state_once(st)
-    except Exception:
-        pass
+        nba_restored = restore_nba_disk_state_once(st)
+    except Exception as exc:
+        st.session_state["_nba_restore_error"] = str(exc)[:240]
 
     if _is_lgc_route_early():
         _run_lgc_emergency_route(boot_t0)
@@ -17968,7 +17969,7 @@ def main():
         _saved_team = st.session_state.get("favorite_team")
         if _saved_team in team_keys_sorted:
             st.session_state[NBA_TEAM_SELECT_KEY] = _saved_team
-        else:
+        elif not nba_restored and "_nba_restore_error" not in st.session_state:
             st.session_state[NBA_TEAM_SELECT_KEY] = (
                 "New York Knicks" if "New York Knicks" in team_keys_sorted else team_keys_sorted[0]
             )

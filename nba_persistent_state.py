@@ -27,7 +27,53 @@ _PERSIST_KEYS = (
     "ULTRA_FAST_VALIDATION_MODE",
     "HOME_DASH_LIVE_UPDATES",
     "manual_live_enabled",
+    # Page sub-state
+    "legacy_tracker_player",
+    "pp_hub_player",
+    "pp_hub_season",
+    "pp_hub_stat",
+    "_live_gc_sel_team",
+    "_live_gc_gid",
+    # Live Game Center manual override panel
+    "manual_live_home_team",
+    "manual_live_away_team",
+    "manual_live_home_score",
+    "manual_live_away_score",
+    "manual_live_quarter",
+    "manual_live_clock",
+    "manual_live_status",
+    "manual_live_series_score",
+    "manual_live_top_performers",
+    "manual_live_top_plays",
+    "manual_live_injuries",
+    "manual_live_notes",
 )
+
+_NBA_DYNAMIC_PREFIXES = (
+    "load_matchup_intel_",
+    "live_gc_last_known_",
+    "live_gc_swing_",
+)
+
+
+def _collect_nba_dynamic_state(ss: dict[str, Any]) -> dict[str, Any]:
+    dynamic: dict[str, Any] = {}
+    for key in list(ss.keys()):
+        sk = str(key)
+        if any(sk.startswith(prefix) for prefix in _NBA_DYNAMIC_PREFIXES):
+            try:
+                dynamic[sk] = copy.deepcopy(ss[key])
+            except Exception:
+                dynamic[sk] = ss[key]
+    return dynamic
+
+
+def _apply_nba_dynamic_state(st: Any, dynamic: dict[str, Any]) -> None:
+    for key, val in dynamic.items():
+        try:
+            st.session_state[key] = copy.deepcopy(val)
+        except Exception:
+            st.session_state[key] = val
 
 
 def build_nba_disk_state(st: Any) -> dict[str, Any]:
@@ -36,10 +82,12 @@ def build_nba_disk_state(st: Any) -> dict[str, Any]:
     for key in _PERSIST_KEYS:
         if key in ss:
             state[key] = copy.deepcopy(ss[key])
-    # Persist last sidebar team by storing team name if widget used selectbox value
     team = ss.get("_nba_persist_team")
     if team:
         state["favorite_team"] = str(team)
+    dynamic = _collect_nba_dynamic_state(ss)
+    if dynamic:
+        state["_nba_dynamic"] = dynamic
     return state
 
 
@@ -48,6 +96,9 @@ def apply_nba_disk_state(st: Any, state: dict[str, Any]) -> None:
     if team:
         st.session_state["_nba_restore_team"] = team
         st.session_state["favorite_team"] = team
+    dynamic = state.pop("_nba_dynamic", None)
+    if isinstance(dynamic, dict):
+        _apply_nba_dynamic_state(st, dynamic)
     for key, val in state.items():
         st.session_state[key] = copy.deepcopy(val)
     restored_team = st.session_state.get("_nba_restore_team") or st.session_state.get("favorite_team")
@@ -67,6 +118,11 @@ def apply_nba_session_defaults(st: Any) -> None:
         ss.pop(key, None)
     ss.pop(NBA_TEAM_SELECT_KEY, None)
     ss.pop(NBA_PAGE_RADIO_KEY, None)
+    for key in list(ss.keys()):
+        sk = str(key)
+        if any(sk.startswith(prefix) for prefix in _NBA_DYNAMIC_PREFIXES):
+            ss.pop(key, None)
+    ss.pop("_nba_dynamic", None)
 
 
 def restore_nba_disk_state_once(st: Any) -> bool:
