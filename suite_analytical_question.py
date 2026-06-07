@@ -475,8 +475,6 @@ def render_analyze_with_applied_math_sidebar(
                 )
             st.rerun()
 
-    if developer_mode:
-        st.sidebar.caption(f"🛠 {AMI_SIDEBAR_DEPLOY_LABEL} · {AMI_SIDEBAR_DEPLOY_VERSION}")
     st.sidebar.divider()
 
 

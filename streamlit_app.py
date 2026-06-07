@@ -2332,7 +2332,7 @@ VALIDATION_PLAYOFF_STATE_KEY = "_validation_playoff_stt"
 VALIDATION_WARMED_KEY = "_validation_playoff_warmed"
 
 # Developer workspace: when True, Dev Lab appears in the sidebar. When False, use the sidebar toggle.
-DEV_MODE = True
+DEV_MODE = False
 
 PAGE_PERF_KEY = "_nba_page_perf"
 
