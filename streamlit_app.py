@@ -18111,9 +18111,10 @@ def main():
         or "🏠 Home Dashboard"
     )
     try:
-        from applied_math_context import build_nba_applied_math_context
+        from applied_math_context import build_nba_applied_math_context, build_source_state
     except Exception:
         build_nba_applied_math_context = None  # type: ignore[misc, assignment]
+        build_source_state = None  # type: ignore[misc, assignment]
 
     render_applied_math_sidebar_entry(
         st,
@@ -18125,6 +18126,11 @@ def main():
             lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
             if build_nba_applied_math_context
             else {"team": favorite_team, "page": _nba_ami_page}
+        ),
+        source_state_builder=(
+            lambda: build_source_state(_nba_ami_page, st.session_state)
+            if build_source_state
+            else None
         ),
     )
 

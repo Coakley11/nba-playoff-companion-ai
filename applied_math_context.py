@@ -156,3 +156,72 @@ def build_nba_applied_math_context(page: str, session_state: dict[str, Any]) -> 
                 if v is not None and v != "" and k not in ctx:
                     ctx[k] = v
     return ctx
+
+
+def build_source_state(page: str, session_state: dict[str, Any]) -> dict[str, Any]:
+    """Serializable snapshot for Return Insight page restore."""
+    from datetime import datetime, timezone
+
+    p = str(page or "").strip()
+    low = p.lower()
+    widget_params: dict[str, Any] = {}
+    entity_params: dict[str, Any] = {"page": p}
+    filter_params: dict[str, Any] = {}
+
+    team = session_state.get("_nba_persist_team") or session_state.get("favorite_team")
+    if team:
+        entity_params["team"] = str(team)
+        widget_params["favorite_team"] = str(team)
+
+    if "matchup" in low or "injury" in low:
+        mi = session_state.get("_ami_matchup_context")
+        if isinstance(mi, dict):
+            entity_params.update({k: v for k, v in mi.items() if v is not None})
+        opp = session_state.get("matchup_opponent") or entity_params.get("opponent")
+        if opp:
+            entity_params["opponent"] = str(opp)
+
+    if "legacy" in low or "playoff tracker" in low:
+        leg = session_state.get("_ami_legacy_context") or session_state.get("_ami_stat_gap_context")
+        if isinstance(leg, dict):
+            entity_params.update({k: v for k, v in leg.items() if v is not None})
+
+    if "live" in low or "game" in low:
+        for k in ("live_win_prob_display", "_last_win_prob", "live_selected_team"):
+            if session_state.get(k) is not None:
+                widget_params[k] = session_state[k]
+
+    page_label = str(session_state.get("page_label_last") or session_state.get("page_override") or p)
+    return {
+        "source_app": "nba",
+        "source_page": p,
+        "page_params": {"page": page_label},
+        "entity_params": entity_params,
+        "widget_params": widget_params,
+        "filter_params": filter_params,
+        "chart_params": {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def apply_source_state_to_session(session_state: dict[str, Any], source_state: dict[str, Any]) -> None:
+    """Map stored source_state into NBA session restore keys."""
+    if not source_state:
+        return
+    ent = dict(source_state.get("entity_params") or {})
+    wp = dict(source_state.get("widget_params") or {})
+    team = ent.get("team") or wp.get("favorite_team")
+    if team:
+        session_state["_nba_restore_team"] = str(team)
+        session_state["favorite_team"] = str(team)
+    page = str(
+        source_state.get("source_page")
+        or source_state.get("page_params", {}).get("page")
+        or ""
+    ).strip()
+    if page:
+        session_state["page_override"] = page
+    for k, v in wp.items():
+        if v is not None:
+            session_state[k] = v
+
