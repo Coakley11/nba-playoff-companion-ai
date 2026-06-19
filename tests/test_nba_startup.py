@@ -39,6 +39,14 @@ class TestNbaStartupDiagnostics(unittest.TestCase):
 
         self.assertTrue(should_defer_heavy_startup(st))
 
+    def test_default_fast_load_for_new_session(self) -> None:
+        ss = _FakeSessionState({})
+        st = _FakeSt(ss)
+        from nba_startup import ensure_fast_load_defaults
+
+        ensure_fast_load_defaults(st)
+        self.assertTrue(ss.get("QA_MODE"))
+
 
 if __name__ == "__main__":
     unittest.main()

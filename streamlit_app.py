@@ -1368,13 +1368,14 @@ def _is_home_eliminated(team_name):
     p = TEAM_PROFILES.get(team_name) or {}
     if not p:
         return False
-    try:
-        if get_team_playoff_status(team_name).get("status") == "eliminated":
+    if not _validation_mode_active():
+        try:
+            if get_team_playoff_status(team_name).get("status") == "eliminated":
+                return True
+        except Exception:
+            pass
+        if _dynamic_playoff_eliminated(team_name):
             return True
-    except Exception:
-        pass
-    if _dynamic_playoff_eliminated(team_name):
-        return True
     if p.get("status") == "Eliminated":
         return True
     stt = str(p.get("status") or "").strip().lower()
@@ -2579,7 +2580,7 @@ def safe_float(x, default=0.0):
     try: return float(x or default)
     except Exception: return default
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def fetch_completed_games_recent(days_back=30, days_forward=1, api_refresh=False):
     """Opt-in completed game pull for the custom playoff bracket.
 
@@ -2761,6 +2762,8 @@ def get_merged_playoff_state(use_demo_backup=None, api_refresh=None):
         api_refresh = d_api if api_refresh is None else api_refresh
     else:
         d_demo, d_api = use_demo_backup, api_refresh
+    if _qa_skip_expensive_apis():
+        return _build_static_playoff_state_fast()
     if _validation_mode_active() and not d_api and d_demo:
         return _get_validation_playoff_state()
     return get_playoff_state_cached(use_demo_backup, api_refresh)
@@ -2875,7 +2878,7 @@ def _static_first_round_games_for_pair(team_a, team_b):
     return out
 
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def build_first_round_series_cached(use_demo_backup=True, api_refresh=True):
     """First-round series: NBA API game logs first, static scores/games when the feed is empty."""
     dynamic = {}
@@ -2937,7 +2940,7 @@ def build_first_round_series_cached(use_demo_backup=True, api_refresh=True):
 
     return result
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def build_second_round_series_cached(use_demo_backup=False, api_refresh=False):
     """Build second-round series automatically from NBA API data.
 
@@ -2974,7 +2977,7 @@ def build_second_round_series():
     return build_second_round_series_cached(use_demo, api_refresh)
 
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def build_conference_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """East/West Conference Finals shells from second-round winners + API games.
 
@@ -3028,7 +3031,7 @@ def _cf_champion_for_conference(cf_map, conf):
     return None
 
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def build_nba_finals_series_cached(use_demo_backup=False, api_refresh=False):
     """NBA Finals shell once both conference champions exist; games from API only."""
     cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
@@ -3659,7 +3662,7 @@ def series_for_team(team_name):
     return sk, ss
 
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def get_team_context_cached(team_name: str, use_demo_backup: bool = True, api_refresh: bool = True):
     """Central lightweight team context reused by pages without rewalking bracket state."""
     profile = get_effective_team_profile(team_name)
@@ -17968,13 +17971,20 @@ PAGE_LABEL_ALIASES = {
 }
 
 def _sidebar_team_label(team_name, stt=None):
-    """Mark eliminated teams so offseason Home sections are easy to find in the picker."""
-    try:
-        if get_team_playoff_status(team_name, stt).get("status") == "eliminated":
-            return f"📋 {team_name} (offseason outlook)"
-    except Exception:
-        if _is_home_eliminated(team_name):
-            return f"📋 {team_name} (offseason outlook)"
+    """Mark eliminated teams — static profile only during Fast Load (no bracket engine)."""
+    if _validation_mode_active():
+        return team_name
+    if stt is not None:
+        try:
+            if get_team_playoff_status(team_name, stt).get("status") == "eliminated":
+                return f"📋 {team_name} (offseason outlook)"
+        except Exception:
+            pass
+        return team_name
+    p = TEAM_PROFILES.get(team_name) or {}
+    stt_static = str(p.get("status") or "").strip().lower()
+    if p.get("status") == "Eliminated" or "eliminat" in stt_static:
+        return f"📋 {team_name} (offseason outlook)"
     return team_name
 
 
@@ -18075,6 +18085,13 @@ def main():
         pass
 
     try:
+        from nba_startup import ensure_fast_load_defaults
+
+        ensure_fast_load_defaults(st)
+    except Exception:
+        pass
+
+    try:
         from suite_resume_launch import apply_suite_resume_launch
 
         apply_suite_resume_launch(st, "nba")
@@ -18105,10 +18122,7 @@ def main():
 
         restore_nba_disk_shell(st)
         _sync_validation_mode_globals()
-        if should_defer_heavy_startup(st):
-            mark_deferred_workspace_sync(st)
-        else:
-            nba_restored = prepare_nba_workspace(st)
+        mark_deferred_workspace_sync(st)
     except Exception as exc:
         st.session_state["_nba_restore_error"] = str(exc)[:240]
     try:
@@ -18171,6 +18185,24 @@ def main():
 
     team_keys_sorted = sorted(TEAM_PROFILES.keys())
 
+    st.sidebar.markdown("### Load speed")
+    st.sidebar.caption("Use fast load while testing workspace profiles or slow networks.")
+    QA_MODE = st.sidebar.toggle(
+        "Fast load",
+        value=bool(st.session_state.get("QA_MODE", False)),
+        key="QA_MODE",
+        help="Skips heavy NBA API calls, bracket sync, autorefresh, and defers expensive page sections.",
+    )
+    ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
+        "Lite mode (no network)",
+        value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
+        key="ULTRA_FAST_VALIDATION_MODE",
+        help="Fastest startup: demo snapshots and placeholders only — no live API, CDN, or Plotly.",
+    )
+    _sync_validation_mode_globals()
+    if _validation_mode_active():
+        _render_validation_mode_banner()
+
     _restore_team = st.session_state.pop("_nba_restore_team", None)
     if _restore_team and _restore_team in team_keys_sorted:
         st.session_state[NBA_TEAM_SELECT_KEY] = _restore_team
@@ -18215,24 +18247,7 @@ def main():
         except Exception:
             pass
 
-    st.sidebar.markdown("### Load speed")
-    st.sidebar.caption("Use fast load while testing workspace profiles or slow networks.")
-    QA_MODE = st.sidebar.toggle(
-        "Fast load",
-        value=bool(st.session_state.get("QA_MODE", False)),
-        key="QA_MODE",
-        help="Skips heavy NBA API calls, bracket sync, autorefresh, and defers expensive page sections.",
-    )
-    ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
-        "Lite mode (no network)",
-        value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
-        key="ULTRA_FAST_VALIDATION_MODE",
-        help="Fastest startup: demo snapshots and placeholders only — no live API, CDN, or Plotly.",
-    )
-    _sync_validation_mode_globals()
-    if _validation_mode_active():
-        _render_validation_mode_banner()
-    elif pp.is_demo_mode(st):
+    if pp.is_demo_mode(st):
         USE_DEMO_BACKUP = True
         ENABLE_BRACKET_API_REFRESH = False
     else:
@@ -18260,27 +18275,24 @@ def main():
         build_nba_applied_math_context = None  # type: ignore[misc, assignment]
         build_source_state = None  # type: ignore[misc, assignment]
 
-    render_applied_math_sidebar_entry(
-        st,
-        source_app="nba",
-        source_page=_nba_ami_page,
-        session_state=st.session_state,
-        developer_mode=can_show_developer_tools(st=st),
-        context_extra_builder=(
-            (lambda: {"team": favorite_team, "page": _nba_ami_page, "fast_load": True})
-            if _validation_mode_active()
-            else (
+    if not _validation_mode_active():
+        render_applied_math_sidebar_entry(
+            st,
+            source_app="nba",
+            source_page=_nba_ami_page,
+            session_state=st.session_state,
+            developer_mode=can_show_developer_tools(st=st),
+            context_extra_builder=(
                 lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
                 if build_nba_applied_math_context
                 else {"team": favorite_team, "page": _nba_ami_page}
-            )
-        ),
-        source_state_builder=(
-            lambda: build_source_state(_nba_ami_page, st.session_state)
-            if build_source_state
-            else None
-        ),
-    )
+            ),
+            source_state_builder=(
+                lambda: build_source_state(_nba_ami_page, st.session_state)
+                if build_source_state
+                else None
+            ),
+        )
 
     if is_developer_workspace(st=st) and not DEV_MODE:
         st.sidebar.toggle(
@@ -18338,6 +18350,12 @@ def main():
     st.session_state["page_label_last"] = page_label
     page = pages[page_label]
     mark_startup_phase(st, "sidebar", boot_t0)
+    try:
+        from nba_startup import mark_shell_usable
+
+        mark_shell_usable(st, boot_t0)
+    except Exception:
+        pass
     _set_lgc_route_skip_bracket_api(page == "Live Game Center")
     _lgc_stt = _get_lgc_local_playoff_state() if page == "Live Game Center" else None
     profile = get_effective_team_profile(
@@ -18363,11 +18381,27 @@ def main():
     if page in playoff_auto_refresh_pages:
         tick_playoff_state_autorefresh(page.replace(" ", "_").lower())
 
-    from suite_analytical_question import render_suite_applied_math_insight
+    _skip_heavy_page = False
+    try:
+        from nba_startup import should_skip_page_heavy_body
 
-    render_suite_applied_math_insight(st, source_app="nba", source_page=page)
+        _skip_heavy_page = should_skip_page_heavy_body(st, page)
+    except Exception:
+        _skip_heavy_page = _validation_mode_active() and _validation_page_deferred(page)
 
-    if page == "Home Dashboard":
+    if not _validation_mode_active():
+        from suite_analytical_question import render_suite_applied_math_insight
+
+        render_suite_applied_math_insight(st, source_app="nba", source_page=page)
+
+    if _skip_heavy_page:
+        try:
+            from nba_startup import render_fast_load_page_placeholder
+
+            render_fast_load_page_placeholder(st, page, favorite_team)
+        except Exception:
+            st.info(f"Fast load — {page} placeholder. Load full content when ready.")
+    elif page == "Home Dashboard":
         render_playoff_command_center(favorite_team)
     elif page == "Playoff Bracket":
         render_bracket(favorite_team)
@@ -18409,7 +18443,7 @@ def main():
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
-    if pop_deferred_workspace_sync(st):
+    if pop_deferred_workspace_sync(st) and not should_defer_heavy_startup(st):
         defer_t0 = pytime.perf_counter()
         try:
             from nba_persistent_state import prepare_nba_workspace
@@ -18420,7 +18454,7 @@ def main():
         try:
             from nba_startup import record_startup_section
 
-            record_startup_section(st, "restore", (pytime.perf_counter() - defer_t0) * 1000.0)
+            record_startup_section(st, "cloud_sync", (pytime.perf_counter() - defer_t0) * 1000.0)
         except Exception:
             pass
 
