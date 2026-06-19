@@ -1,4 +1,5 @@
 
+from typing import Any
 import html
 import os
 import re
@@ -23,6 +24,15 @@ try:
     NBA_TEAM_SELECT_KEY = _NBA_TEAM_KEY
 except Exception:
     pass
+
+try:
+    from suite_workspace import can_show_developer_tools, is_developer_workspace
+except ImportError:
+    def can_show_developer_tools(*, st: Any = None) -> bool:  # type: ignore[misc]
+        return False
+
+    def is_developer_workspace(*, st: Any = None, workspace_id: str | None = None) -> bool:  # type: ignore[misc]
+        return False
 
 # ==========================================================
 # Optional packages
@@ -14737,8 +14747,9 @@ def _render_live_game_center_previous(favorite_team, profile):
                 except Exception:
                     pass
 
-        with st.expander("Developer debug", expanded=False):
-            _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
+        if can_show_developer_tools(st=st):
+            with st.expander("Developer debug", expanded=False):
+                _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
         return
 
     if tier in ("no_game_window", "window_off_today", "unknown"):
@@ -14804,8 +14815,9 @@ def _render_live_game_center_previous(favorite_team, profile):
     else:
         _live_gc_render_fallback_content(favorite_team, profile, include_outlook=True)
 
-    with st.expander("Developer debug", expanded=False):
-        _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
+    if can_show_developer_tools(st=st):
+        with st.expander("Developer debug", expanded=False):
+            _live_gc_render_debug_panel(favorite_team, fb, det_ctx)
 
 
 
@@ -18127,7 +18139,7 @@ def main():
         source_app="nba",
         source_page=_nba_ami_page,
         session_state=st.session_state,
-        developer_mode=bool(DEV_MODE),
+        developer_mode=can_show_developer_tools(st=st),
         context_extra_builder=(
             lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
             if build_nba_applied_math_context
@@ -18140,14 +18152,14 @@ def main():
         ),
     )
 
-    if not DEV_MODE:
+    if is_developer_workspace(st=st) and not DEV_MODE:
         st.sidebar.toggle(
             "Enable Dev Lab (developer)",
             value=False,
             key="dev_lab_enabled",
             help="Show the Dev Lab page for testing features without affecting the main fan experience.",
         )
-    elif DEV_MODE:
+    elif is_developer_workspace(st=st) and DEV_MODE:
         st.sidebar.caption("🛠️ Dev mode — Dev Lab visible")
     if pp.show_sidebar_debug(st):
         SHOW_PERF_DEBUG = st.sidebar.toggle(

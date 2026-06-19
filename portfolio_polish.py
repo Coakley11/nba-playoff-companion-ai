@@ -71,7 +71,12 @@ def show_trust_strip(st) -> bool:
 
 
 def show_sidebar_debug(st) -> bool:
-    return not is_screenshot_mode(st)
+    try:
+        from suite_workspace import can_show_developer_tools
+
+        return can_show_developer_tools(st=st)
+    except ImportError:
+        return not is_screenshot_mode(st)
 
 
 def _clear_demo_flags(st) -> None:
