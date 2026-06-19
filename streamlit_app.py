@@ -777,12 +777,6 @@ def _configure_app_shell():
     import portfolio_polish as pp
 
     st.set_page_config(page_title="Daniel Cohen — NBA Playoff Companion AI", page_icon="🏀", layout="wide")
-    if not pp.is_screenshot_mode(st):
-        st.title("Daniel Cohen — NBA Playoff Companion AI")
-        st.caption(
-            "2026 NBA Playoff companion app — live game center, automatic series tracking, "
-            "bracket, box scores, and fan-focused analysis"
-        )
     pp.inject_polish_css(st, app_slug="nba")
     _inject_global_app_css()
 
@@ -2439,13 +2433,30 @@ def _validation_gates_status():
     }
 
 
+
+
+def _sync_validation_mode_globals():
+    """Apply persisted fast-load toggles to module globals before heavy startup work."""
+    global USE_DEMO_BACKUP, ENABLE_BRACKET_API_REFRESH, QA_MODE, ULTRA_FAST_VALIDATION_MODE
+    try:
+        QA_MODE = bool(st.session_state.get("QA_MODE", False))
+        ULTRA_FAST_VALIDATION_MODE = bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False))
+    except Exception:
+        QA_MODE = bool(globals().get("QA_MODE", False))
+        ULTRA_FAST_VALIDATION_MODE = bool(globals().get("ULTRA_FAST_VALIDATION_MODE", False))
+    if _validation_mode_active():
+        USE_DEMO_BACKUP = True
+        ENABLE_BRACKET_API_REFRESH = False
+        _warm_validation_playoff_state()
+
+
 def _render_validation_mode_banner():
     if not _validation_mode_active():
         return
     g = _validation_gates_status()
-    mode = "ULTRA-FAST VALIDATION" if g["ultra_fast"] else "QA MODE"
+    mode = "Lite mode (no network)" if g["ultra_fast"] else "Fast load"
     warm = st.session_state.get("_validation_warm_ms")
-    warm_txt = f" · playoff snapshot warmed in {warm:.0f} ms" if warm else ""
+    warm_txt = f" · playoff snapshot ready in {warm:.0f} ms" if warm else ""
     st.markdown(
         f"<div style='padding:8px 12px;border-radius:8px;background:#0f172a;color:#e2e8f0;"
         f"font-size:12px;line-height:1.45;margin-bottom:8px'>"
@@ -18039,6 +18050,23 @@ def main():
     except Exception as exc:
         st.session_state["_nba_restore_error"] = str(exc)[:240]
 
+    _sync_validation_mode_globals()
+
+    try:
+        import portfolio_polish as _pp_header
+        if not _pp_header.is_screenshot_mode(st):
+            try:
+                from suite_workspace import get_active_workspace_id, workspace_label as _nba_ws_label
+
+                _pp_header.render_nba_suite_header(
+                    st,
+                    workspace_label=_nba_ws_label(get_active_workspace_id(st)),
+                )
+            except Exception:
+                _pp_header.render_nba_suite_header(st)
+    except Exception:
+        pass
+
     if _is_lgc_route_early():
         _run_lgc_emergency_route(boot_t0)
         return
@@ -18101,26 +18129,23 @@ def main():
     )
     st.session_state["favorite_team"] = favorite_team
 
-    if pp.show_sidebar_debug(st):
-        QA_MODE = st.sidebar.toggle(
-            "QA mode (fast testing)",
-            value=bool(st.session_state.get("QA_MODE", False)),
-            key="QA_MODE",
-            help="Skips bracket API sync, autorefresh, Plotly, and heavy Live GC. Uses one session playoff snapshot.",
-        )
-        ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
-            "Ultra-fast validation (no network)",
-            value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
-            key="ULTRA_FAST_VALIDATION_MODE",
-            help="Fastest Cloud QA: no API/CDN/Plotly. Home and Matchup Lineups still show full fan UI; other pages may offer expand.",
-        )
-    else:
-        QA_MODE = bool(st.session_state.get("QA_MODE", False))
-        ULTRA_FAST_VALIDATION_MODE = bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False))
+    st.sidebar.markdown("### Load speed")
+    st.sidebar.caption("Use fast load while testing workspace profiles or slow networks.")
+    QA_MODE = st.sidebar.toggle(
+        "Fast load",
+        value=bool(st.session_state.get("QA_MODE", False)),
+        key="QA_MODE",
+        help="Skips heavy NBA API calls, bracket sync, autorefresh, and defers expensive page sections.",
+    )
+    ULTRA_FAST_VALIDATION_MODE = st.sidebar.toggle(
+        "Lite mode (no network)",
+        value=bool(st.session_state.get("ULTRA_FAST_VALIDATION_MODE", False)),
+        key="ULTRA_FAST_VALIDATION_MODE",
+        help="Fastest startup: demo snapshots and placeholders only — no live API, CDN, or Plotly.",
+    )
+    _sync_validation_mode_globals()
     if _validation_mode_active():
-        USE_DEMO_BACKUP = True
-        ENABLE_BRACKET_API_REFRESH = False
-        _warm_validation_playoff_state()
+        _render_validation_mode_banner()
     elif pp.is_demo_mode(st):
         USE_DEMO_BACKUP = True
         ENABLE_BRACKET_API_REFRESH = False
@@ -18156,9 +18181,13 @@ def main():
         session_state=st.session_state,
         developer_mode=can_show_developer_tools(st=st),
         context_extra_builder=(
-            lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
-            if build_nba_applied_math_context
-            else {"team": favorite_team, "page": _nba_ami_page}
+            (lambda: {"team": favorite_team, "page": _nba_ami_page, "fast_load": True})
+            if _validation_mode_active()
+            else (
+                lambda: build_nba_applied_math_context(_nba_ami_page, st.session_state)
+                if build_nba_applied_math_context
+                else {"team": favorite_team, "page": _nba_ami_page}
+            )
         ),
         source_state_builder=(
             lambda: build_source_state(_nba_ami_page, st.session_state)

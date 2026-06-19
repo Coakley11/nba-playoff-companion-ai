@@ -26,6 +26,7 @@ __all__ = (
     "inject_polish_css",
     "render_executive_summary",
     "render_hero_banner",
+    "render_nba_suite_header",
     "render_professional_empty",
     "instructional_caption",
     "expander_default",
@@ -191,6 +192,42 @@ def inject_polish_css(st, *, app_slug: str = "app") -> None:
         }}
         .pp-hero-screenshot h2 {{ margin: 0; font-size: 1.4rem; color: #f0f6fc; }}
         .pp-hero-screenshot p {{ margin: 6px 0 0; color: #8b949e; font-size: 0.9rem; }}
+        .pp-nba-hero {{
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 42%, #7c2d12 100%);
+            color: #f8fafc;
+            border-radius: 14px;
+            padding: 20px 22px;
+            margin: 0 0 16px 0;
+            border: 1px solid rgba(251, 146, 60, 0.35);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+        }}
+        .pp-nba-hero-kicker {{
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #fdba74;
+            margin-bottom: 6px;
+        }}
+        .pp-nba-hero h2 {{
+            margin: 0;
+            font-size: 1.55rem;
+            font-weight: 700;
+            color: #fff7ed;
+            letter-spacing: -0.02em;
+        }}
+        .pp-nba-hero-sub {{
+            margin: 8px 0 0;
+            color: #cbd5e1;
+            font-size: 0.95rem;
+            line-height: 1.45;
+            max-width: 920px;
+        }}
+        .pp-nba-hero-meta {{
+            margin-top: 10px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+        }}
         .pp-demo-banner {{
             background: linear-gradient(90deg, #ecfdf5 0%, #f0fdf4 100%);
             border: 1px solid #86efac;
@@ -237,6 +274,30 @@ def render_hero_banner(st, title: str, subtitle: str) -> None:
         <div class="pp-hero-screenshot">
             <h2>{html.escape(title)}</h2>
             <p>{html.escape(subtitle)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_nba_suite_header(st, *, workspace_label: str = "") -> None:
+    """Polished suite header card for NBA Playoff Companion."""
+    profile = html.escape(str(workspace_label or "").strip())
+    profile_line = (
+        f'<div class="pp-nba-hero-meta">Profile: {profile} · workspace-scoped saves</div>'
+        if profile
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="pp-nba-hero">
+            <div class="pp-nba-hero-kicker">Daniel AI Suite · Basketball</div>
+            <h2>NBA Playoff Companion</h2>
+            <div class="pp-nba-hero-sub">
+                Live game center, playoff tracking, matchup intelligence, and fan-focused analysis
+                for the 2026 NBA postseason.
+            </div>
+            {profile_line}
         </div>
         """,
         unsafe_allow_html=True,
