@@ -7,7 +7,7 @@ from typing import Any
 
 from suite_user_persistence import (
     autosave_if_changed,
-    restore_once,
+    sync_workspace_protocol,
 )
 
 APP_ID = "nba"
@@ -125,12 +125,19 @@ def apply_nba_session_defaults(st: Any) -> None:
     ss.pop("_nba_dynamic", None)
 
 
-def restore_nba_disk_state_once(st: Any) -> bool:
-    return restore_once(
+def prepare_nba_workspace(st: Any) -> bool:
+    """Authoritative workspace-scoped disk + cloud sync before sidebar widgets."""
+    return sync_workspace_protocol(
         st,
         APP_ID,
         apply_state=lambda st_obj, s: apply_nba_disk_state(st_obj, s),
+        cloud_first=True,
     )
+
+
+def restore_nba_disk_state_once(st: Any) -> bool:
+    """Backward-compatible alias — prefer ``prepare_nba_workspace()`` at startup."""
+    return prepare_nba_workspace(st)
 
 
 def autosave_nba_state(st: Any) -> None:

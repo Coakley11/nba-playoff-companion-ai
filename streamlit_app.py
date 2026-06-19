@@ -18009,17 +18009,12 @@ def main():
     boot_t = boot_t0
     _set_lgc_route_skip_bracket_api(False)
 
-    nba_restored = False
     try:
-        from nba_persistent_state import restore_nba_disk_state_once
+        from suite_workspace import init_suite_workspace
 
-        nba_restored = restore_nba_disk_state_once(st)
-    except Exception as exc:
-        st.session_state["_nba_restore_error"] = str(exc)[:240]
-
-    if _is_lgc_route_early():
-        _run_lgc_emergency_route(boot_t0)
-        return
+        init_suite_workspace(st)
+    except Exception:
+        pass
 
     try:
         from suite_resume_launch import apply_suite_resume_launch
@@ -18027,6 +18022,26 @@ def main():
         apply_suite_resume_launch(st, "nba")
     except Exception:
         pass
+
+    try:
+        from applied_math_return_insight import hydrate_investment_ami_return_state, insight_return_query_id
+
+        if insight_return_query_id(st) or str(st.query_params.get("suite_ai_question_id") or "").strip():
+            hydrate_investment_ami_return_state(st, "nba")
+    except Exception:
+        pass
+
+    nba_restored = False
+    try:
+        from nba_persistent_state import prepare_nba_workspace
+
+        nba_restored = prepare_nba_workspace(st)
+    except Exception as exc:
+        st.session_state["_nba_restore_error"] = str(exc)[:240]
+
+    if _is_lgc_route_early():
+        _run_lgc_emergency_route(boot_t0)
+        return
 
     try:
         from nba_persistent_state import (
