@@ -2447,7 +2447,6 @@ def _sync_validation_mode_globals():
     if _validation_mode_active():
         USE_DEMO_BACKUP = True
         ENABLE_BRACKET_API_REFRESH = False
-        _warm_validation_playoff_state()
 
 
 def _render_validation_mode_banner():
@@ -3344,7 +3343,7 @@ def get_effective_team_profile(team_name, stt=None):
     return base
 
 
-@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC)
+@st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = True):
     """Single cached playoff engine: every round, team status, and series scores in one snapshot."""
     first = build_first_round_series_cached(use_demo_backup, api_refresh)
@@ -18113,14 +18112,22 @@ def main():
         if _saved_team in team_keys_sorted:
             st.session_state[NBA_TEAM_SELECT_KEY] = _saved_team
         elif not nba_restored and "_nba_restore_error" not in st.session_state:
-            st.session_state[NBA_TEAM_SELECT_KEY] = (
-                "New York Knicks" if "New York Knicks" in team_keys_sorted else team_keys_sorted[0]
-            )
+            try:
+                from suite_workspace import DEFAULT_WORKSPACE_ID, get_active_workspace_id
 
-    _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
+                _ws_default = get_active_workspace_id(st)
+            except Exception:
+                _ws_default = "daniel"
+            if _ws_default in (DEFAULT_WORKSPACE_ID, "daniel"):
+                _fallback_team = (
+                    "New York Knicks" if "New York Knicks" in team_keys_sorted else team_keys_sorted[0]
+                )
+            else:
+                _fallback_team = team_keys_sorted[0]
+            st.session_state[NBA_TEAM_SELECT_KEY] = _fallback_team
+
     _set_lgc_route_skip_bracket_api(_peek_sidebar_page_key() == "Live Game Center")
-    _pre_lgc_stt = _get_lgc_local_playoff_state() if _lgc_route_skip_bracket_api_active() else None
-    _sidebar_stt = _val_stt or _pre_lgc_stt
+    _sidebar_stt = None
     favorite_team = st.sidebar.selectbox(
         "Choose your 2026 NBA playoff team",
         team_keys_sorted,
@@ -18128,6 +18135,17 @@ def main():
         format_func=(lambda tn: _sidebar_team_label(tn, _sidebar_stt)) if _sidebar_stt else _sidebar_team_label,
     )
     st.session_state["favorite_team"] = favorite_team
+    _tracked_team = st.session_state.get("_nba_autosave_team")
+    if _tracked_team is None:
+        st.session_state["_nba_autosave_team"] = favorite_team
+    elif _tracked_team != favorite_team:
+        st.session_state["_nba_autosave_team"] = favorite_team
+        try:
+            from nba_persistent_state import persist_nba_team_change
+
+            persist_nba_team_change(st, favorite_team)
+        except Exception:
+            pass
 
     st.sidebar.markdown("### Load speed")
     st.sidebar.caption("Use fast load while testing workspace profiles or slow networks.")
@@ -18335,8 +18353,10 @@ def main():
 
         try:
             from nba_persistent_state import autosave_nba_state
+            from suite_user_persistence import clear_workspace_autosave_block
 
             autosave_nba_state(st)
+            clear_workspace_autosave_block(st, "nba")
         except Exception:
             pass
 

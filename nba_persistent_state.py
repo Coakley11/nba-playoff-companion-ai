@@ -140,6 +140,16 @@ def restore_nba_disk_state_once(st: Any) -> bool:
     return prepare_nba_workspace(st)
 
 
+def persist_nba_team_change(st: Any, team: str) -> bool:
+    """Immediately persist team selection for the active workspace profile."""
+    st.session_state["_nba_persist_team"] = team
+    st.session_state["favorite_team"] = team
+    st.session_state["favorite_team_sidebar"] = team
+    from suite_user_persistence import force_autosave
+
+    return force_autosave(st, APP_ID, build_state=build_nba_disk_state, reason="team_change")
+
+
 def autosave_nba_state(st: Any) -> None:
     autosave_if_changed(st, APP_ID, build_state=build_nba_disk_state)
 

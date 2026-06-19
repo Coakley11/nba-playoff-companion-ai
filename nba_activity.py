@@ -7,6 +7,15 @@ from __future__ import annotations
 from typing import Any
 
 
+def _active_workspace_id() -> str:
+    try:
+        from suite_workspace import get_active_workspace_id
+
+        return get_active_workspace_id()
+    except Exception:
+        return "daniel"
+
+
 def _record(
     event: str,
     *,
@@ -20,16 +29,19 @@ def _record(
     try:
         from suite_activity_client import record_activity
 
+        payload = dict(metrics or {})
+        payload.setdefault("workspace_id", _active_workspace_id())
+        team = str(payload.get("team") or "").strip()
         record_activity(
             "nba",
             event,
             page=page or "NBA Companion",
-            metrics=metrics or {},
+            metrics=payload,
             summary=summary,
             resume_key=resume_key,
             resume_title=resume_title,
             resume_subtitle=resume_subtitle,
-            local_state={"team": metrics.get("team", ""), "page": page},
+            local_state={"team": team, "page": page, "workspace_id": payload["workspace_id"]},
         )
     except Exception:
         pass
