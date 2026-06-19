@@ -87,13 +87,30 @@ def _record_via_cloud(
         return False
 
 
-def _fallback_path(app: str) -> Path:
+def _scoped_activity_app(app: str, metrics: dict[str, Any] | None = None) -> str:
+    """Resolve workspace-scoped storage key for activity writes."""
+    try:
+        from suite_workspace import normalize_workspace_id, scoped_cloud_app_id
+
+        ws = ""
+        if metrics:
+            ws = str(metrics.get("workspace_id") or "").strip()
+        if ws:
+            return scoped_cloud_app_id(app, normalize_workspace_id(ws))
+        return scoped_cloud_app_id(app)
+    except Exception:
+        return str(app or "").strip()
+
+
+def _fallback_path(app: str, metrics: dict[str, Any] | None = None) -> Path:
     LOCAL_FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
-    return LOCAL_FALLBACK_DIR / f"{app}_activity_fallback.json"
+    scoped = _scoped_activity_app(app, metrics)
+    safe = scoped.replace("/", "_").replace("\\", "_")
+    return LOCAL_FALLBACK_DIR / f"{safe}_activity_fallback.json"
 
 
 def _fallback_append(app: str, event: str, page: str, metrics: dict[str, Any], summary: str) -> None:
-    path = _fallback_path(app)
+    path = _fallback_path(app, metrics)
     rows: list[dict[str, Any]] = []
     if path.is_file():
         try:

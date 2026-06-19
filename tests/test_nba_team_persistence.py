@@ -38,13 +38,14 @@ class TestNbaTeamPersistence(unittest.TestCase):
                 "suite_user_persistence.DATA_DIR", data
             ), patch("suite_workspace.resolve_workspace_id", return_value="ariel"), patch(
                 "suite_cloud_state.save_cloud_full_session", return_value=True
-            ):
+            ), patch("nba_activity.log_team_selected") as mock_log:
                 ok = persist_nba_team_change(st, "Boston Celtics")
                 path = state_file_path("nba", "ariel")
             self.assertTrue(ok)
             self.assertTrue(path.is_file())
             blob = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(blob["state"]["favorite_team"], "Boston Celtics")
+            mock_log.assert_called_once_with("Boston Celtics", page="NBA Companion")
 
     def test_nba_activity_tags_workspace_id(self) -> None:
         with patch("suite_workspace.get_active_workspace_id", return_value="ariel"):

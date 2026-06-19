@@ -193,43 +193,45 @@ def inject_polish_css(st, *, app_slug: str = "app") -> None:
         .pp-hero-screenshot h2 {{ margin: 0; font-size: 1.4rem; color: #f0f6fc; }}
         .pp-hero-screenshot p {{ margin: 6px 0 0; color: #8b949e; font-size: 0.9rem; }}
         .pp-nba-hero {{
-            background: linear-gradient(135deg, #0b1220 0%, #1e3a8a 38%, #9a3412 100%);
+            background: linear-gradient(135deg, #0b1220 0%, #1e3a8a 32%, #c2410c 72%, #9a3412 100%);
             color: #f8fafc;
-            border-radius: 16px;
-            padding: 28px 32px;
-            margin: 0 0 18px 0;
-            border: 1px solid rgba(251, 146, 60, 0.45);
-            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
-            width: 100%;
+            border-radius: 18px;
+            padding: 34px 40px;
+            margin: 0 auto 22px auto;
+            border: 1px solid rgba(251, 146, 60, 0.5);
+            box-shadow: 0 14px 36px rgba(15, 23, 42, 0.28);
+            width: min(100%, 1180px);
+            max-width: 100%;
             box-sizing: border-box;
         }}
         .pp-nba-hero-kicker {{
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             color: #fdba74;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }}
         .pp-nba-hero h2 {{
             margin: 0;
-            font-size: clamp(1.65rem, 2.4vw, 2.15rem);
+            font-size: clamp(1.85rem, 2.8vw, 2.45rem);
             font-weight: 800;
             color: #fff7ed;
-            letter-spacing: -0.03em;
-            line-height: 1.15;
+            letter-spacing: -0.035em;
+            line-height: 1.12;
         }}
         .pp-nba-hero-sub {{
-            margin: 10px 0 0;
+            margin: 14px 0 0;
             color: #cbd5e1;
-            font-size: 1rem;
-            line-height: 1.5;
-            max-width: 980px;
+            font-size: 1.05rem;
+            line-height: 1.55;
+            max-width: 920px;
         }}
         .pp-nba-hero-meta {{
-            margin-top: 12px;
-            font-size: 0.82rem;
+            margin-top: 14px;
+            font-size: 0.86rem;
             color: #94a3b8;
+            letter-spacing: 0.01em;
         }}
         .pp-demo-banner {{
             background: linear-gradient(90deg, #ecfdf5 0%, #f0fdf4 100%);

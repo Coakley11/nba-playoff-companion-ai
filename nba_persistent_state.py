@@ -125,13 +125,27 @@ def apply_nba_session_defaults(st: Any) -> None:
     ss.pop("_nba_dynamic", None)
 
 
-def prepare_nba_workspace(st: Any) -> bool:
-    """Authoritative workspace-scoped disk + cloud sync before sidebar widgets."""
+def restore_nba_disk_shell(st: Any) -> bool:
+    """Fast disk-only restore for shell widgets — no cloud round-trip."""
+    try:
+        from suite_user_persistence import _load_raw
+
+        disk_state, _, _ = _load_raw(APP_ID)
+    except Exception:
+        return False
+    if not disk_state:
+        return False
+    apply_nba_disk_state(st, disk_state)
+    return True
+
+
+def prepare_nba_workspace(st: Any, *, cloud_first: bool = True) -> bool:
+    """Authoritative workspace-scoped disk + cloud sync."""
     return sync_workspace_protocol(
         st,
         APP_ID,
         apply_state=lambda st_obj, s: apply_nba_disk_state(st_obj, s),
-        cloud_first=True,
+        cloud_first=cloud_first,
     )
 
 
@@ -145,6 +159,17 @@ def persist_nba_team_change(st: Any, team: str) -> bool:
     st.session_state["_nba_persist_team"] = team
     st.session_state["favorite_team"] = team
     st.session_state["favorite_team_sidebar"] = team
+    page = str(
+        st.session_state.get("page_label_last")
+        or st.session_state.get("page_override")
+        or "NBA Companion"
+    ).strip()
+    try:
+        from nba_activity import log_team_selected
+
+        log_team_selected(team, page=page)
+    except Exception:
+        pass
     from suite_user_persistence import force_autosave
 
     return force_autosave(st, APP_ID, build_state=build_nba_disk_state, reason="team_change")

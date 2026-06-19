@@ -2404,7 +2404,7 @@ def _warm_validation_playoff_state():
     if st.session_state.get(VALIDATION_WARMED_KEY):
         return
     t0 = pytime.perf_counter()
-    stt = get_playoff_state_cached(True, False)
+    stt = _build_static_playoff_state_fast()
     st.session_state[VALIDATION_PLAYOFF_STATE_KEY] = stt
     st.session_state[VALIDATION_WARMED_KEY] = True
     st.session_state["_validation_warm_ms"] = (pytime.perf_counter() - t0) * 1000.0
@@ -2415,7 +2415,7 @@ def _get_validation_playoff_state():
     stt = st.session_state.get(VALIDATION_PLAYOFF_STATE_KEY)
     if stt:
         return stt
-    return get_playoff_state_cached(True, False)
+    return _build_static_playoff_state_fast()
 
 
 def _validation_gates_status():
@@ -3343,9 +3343,48 @@ def get_effective_team_profile(team_name, stt=None):
     return base
 
 
+
+
+def _build_static_playoff_state_fast():
+    """Demo bracket from static templates — no NBA API calls (Fast Load / Lite Mode)."""
+    first = {}
+    for key, meta in FIRST_ROUND_SERIES.items():
+        first[key] = {
+            "conf": meta.get("conf"),
+            "round": "First Round",
+            "a": meta.get("a"),
+            "b": meta.get("b"),
+            "a_wins": meta.get("a_wins", 0),
+            "b_wins": meta.get("b_wins", 0),
+            "winner": meta.get("winner"),
+            "games": list(meta.get("games") or []),
+        }
+    stt = {
+        "first": first,
+        "second": {},
+        "cf": {},
+        "finals": {},
+        "east_fr": [dict(s) for s in first.values() if s.get("conf") == "East"],
+        "west_fr": [dict(s) for s in first.values() if s.get("conf") == "West"],
+        "east_sr": [],
+        "west_sr": [],
+        "east_cf": None,
+        "west_cf": None,
+        "use_demo_backup": True,
+        "api_refresh": False,
+    }
+    stt["team_status"] = _build_team_status_map(stt)
+    return stt
+
+
 @st.cache_data(ttl=PLAYOFF_STATE_CACHE_TTL_SEC, show_spinner=False)
 def get_playoff_state_cached(use_demo_backup: bool = True, api_refresh: bool = True):
     """Single cached playoff engine: every round, team status, and series scores in one snapshot."""
+    try:
+        if _qa_skip_expensive_apis():
+            return _build_static_playoff_state_fast()
+    except Exception:
+        pass
     first = build_first_round_series_cached(use_demo_backup, api_refresh)
     second = build_second_round_series_cached(use_demo_backup, api_refresh)
     cf = build_conference_finals_series_cached(use_demo_backup, api_refresh)
@@ -6568,6 +6607,15 @@ def render_legacy_tracker_page(team_name):
     if pp.is_demo_mode(st) and "Jalen Brunson" in player_pool:
         st.session_state.setdefault("legacy_tracker_player", "Jalen Brunson")
     player = st.selectbox("Choose player", player_pool, key="legacy_tracker_player")
+    _lt_sig = (team_name, player)
+    if st.session_state.get("_nba_legacy_tracker_sig") != _lt_sig:
+        st.session_state["_nba_legacy_tracker_sig"] = _lt_sig
+        try:
+            from nba_activity import log_legacy_tracker_player
+
+            log_legacy_tracker_player(team_name, player)
+        except Exception:
+            pass
     if _qa_skip_expensive_apis() and not pp.is_demo_mode(st):
         logs = None
         current = {
@@ -18041,15 +18089,34 @@ def main():
     except Exception:
         pass
 
+    from nba_startup import (
+        mark_deferred_workspace_sync,
+        mark_startup_phase,
+        pop_deferred_workspace_sync,
+        render_startup_diagnostics,
+        should_defer_heavy_startup,
+    )
+
+    mark_startup_phase(st, "init", boot_t0)
+    restore_t0 = pytime.perf_counter()
     nba_restored = False
     try:
-        from nba_persistent_state import prepare_nba_workspace
+        from nba_persistent_state import prepare_nba_workspace, restore_nba_disk_shell
 
-        nba_restored = prepare_nba_workspace(st)
+        restore_nba_disk_shell(st)
+        _sync_validation_mode_globals()
+        if should_defer_heavy_startup(st):
+            mark_deferred_workspace_sync(st)
+        else:
+            nba_restored = prepare_nba_workspace(st)
     except Exception as exc:
         st.session_state["_nba_restore_error"] = str(exc)[:240]
+    try:
+        from nba_startup import record_startup_section
 
-    _sync_validation_mode_globals()
+        record_startup_section(st, "restore", (pytime.perf_counter() - restore_t0) * 1000.0)
+    except Exception:
+        pass
 
     try:
         import portfolio_polish as _pp_header
@@ -18065,6 +18132,7 @@ def main():
                 _pp_header.render_nba_suite_header(st)
     except Exception:
         pass
+    mark_startup_phase(st, "header", boot_t0)
 
     if _is_lgc_route_early():
         _run_lgc_emergency_route(boot_t0)
@@ -18269,6 +18337,7 @@ def main():
     st.session_state["_nba_persist_team"] = favorite_team
     st.session_state["page_label_last"] = page_label
     page = pages[page_label]
+    mark_startup_phase(st, "sidebar", boot_t0)
     _set_lgc_route_skip_bracket_api(page == "Live Game Center")
     _lgc_stt = _get_lgc_local_playoff_state() if page == "Live Game Center" else None
     profile = get_effective_team_profile(
@@ -18340,6 +18409,21 @@ def main():
             st.caption(f"Playoff state cache TTL: {PLAYOFF_STATE_CACHE_TTL_SEC}s · auto-refresh: {PLAYOFF_BRACKET_REFRESH_MS // 1000}s on bracket pages")
             st.caption("Heavy live feeds, player logs, injuries, and raw rotation tables are cached and/or behind buttons or expanders where possible.")
 
+    if pop_deferred_workspace_sync(st):
+        defer_t0 = pytime.perf_counter()
+        try:
+            from nba_persistent_state import prepare_nba_workspace
+
+            prepare_nba_workspace(st)
+        except Exception:
+            pass
+        try:
+            from nba_startup import record_startup_section
+
+            record_startup_section(st, "restore", (pytime.perf_counter() - defer_t0) * 1000.0)
+        except Exception:
+            pass
+
     if not pp.skip_background_persistence(st):
         try:
             sig = (favorite_team, page_label or page)
@@ -18359,6 +18443,9 @@ def main():
             clear_workspace_autosave_block(st, "nba")
         except Exception:
             pass
+
+    mark_startup_phase(st, "complete", boot_t0)
+    render_startup_diagnostics(st, boot_t0)
 
     if not pp.is_capture_mode(st):
         st.divider()
