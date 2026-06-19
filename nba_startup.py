@@ -121,6 +121,21 @@ def render_startup_diagnostics(st: Any, boot_t0: float) -> None:
             )
 
 
+def resolve_profile_playoff_state(
+    *,
+    validation_mode: bool,
+    page: str,
+    validation_stt: Any = None,
+    lgc_stt: Any = None,
+) -> Any:
+    """Pick playoff state for team profile overlay without undefined locals."""
+    if validation_mode:
+        return validation_stt
+    if page == "Live Game Center":
+        return lgc_stt
+    return None
+
+
 def render_fast_load_page_placeholder(st: Any, page: str, team: str) -> None:
     """Safe placeholder while Fast Load keeps heavy sections off the critical path."""
     try:

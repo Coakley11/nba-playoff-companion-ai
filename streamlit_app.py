@@ -18358,9 +18358,19 @@ def main():
         pass
     _set_lgc_route_skip_bracket_api(page == "Live Game Center")
     _lgc_stt = _get_lgc_local_playoff_state() if page == "Live Game Center" else None
-    profile = get_effective_team_profile(
-        favorite_team, _val_stt if _validation_mode_active() else _lgc_stt
-    )
+    _val_stt = _get_validation_playoff_state() if _validation_mode_active() else None
+    try:
+        from nba_startup import resolve_profile_playoff_state
+
+        _active_stt = resolve_profile_playoff_state(
+            validation_mode=_validation_mode_active(),
+            page=page,
+            validation_stt=_val_stt,
+            lgc_stt=_lgc_stt,
+        )
+    except Exception:
+        _active_stt = _val_stt if _validation_mode_active() else _lgc_stt
+    profile = get_effective_team_profile(favorite_team, _active_stt)
     inject_team_brand_css(favorite_team)
     app_page_t0 = pytime.perf_counter()
     _page_perf_begin(page)

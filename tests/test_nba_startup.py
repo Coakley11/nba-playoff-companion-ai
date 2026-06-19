@@ -47,6 +47,54 @@ class TestNbaStartupDiagnostics(unittest.TestCase):
         ensure_fast_load_defaults(st)
         self.assertTrue(ss.get("QA_MODE"))
 
+    def test_resolve_profile_playoff_state_validation(self) -> None:
+        from nba_startup import resolve_profile_playoff_state
+
+        stt = {"team_status": {}}
+        active = resolve_profile_playoff_state(
+            validation_mode=True,
+            page="Home Dashboard",
+            validation_stt=stt,
+            lgc_stt=None,
+        )
+        self.assertIs(active, stt)
+
+    def test_resolve_profile_playoff_state_lgc_fallback(self) -> None:
+        from nba_startup import resolve_profile_playoff_state
+
+        lgc = {"first": {}}
+        active = resolve_profile_playoff_state(
+            validation_mode=False,
+            page="Live Game Center",
+            validation_stt=None,
+            lgc_stt=lgc,
+        )
+        self.assertIs(active, lgc)
+
+    def test_resolve_profile_playoff_state_normal_page(self) -> None:
+        from nba_startup import resolve_profile_playoff_state
+
+        active = resolve_profile_playoff_state(
+            validation_mode=False,
+            page="Home Dashboard",
+            validation_stt={"x": 1},
+            lgc_stt={"y": 2},
+        )
+        self.assertIsNone(active)
+
+    def test_main_profile_stt_path_no_name_error(self) -> None:
+        """Regression: Fast Load + validation must not reference undefined _val_stt."""
+        from nba_startup import resolve_profile_playoff_state
+
+        validation_stt = {"team_status": {"Boston Celtics": {"status": "active"}}}
+        active = resolve_profile_playoff_state(
+            validation_mode=True,
+            page="Legacy Tracker",
+            validation_stt=validation_stt,
+            lgc_stt=None,
+        )
+        self.assertIs(active, validation_stt)
+
 
 if __name__ == "__main__":
     unittest.main()
