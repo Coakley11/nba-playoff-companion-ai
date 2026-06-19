@@ -2538,6 +2538,12 @@ def _resolve_live_gc_emergency_local_state(team_name, profile):
 
 def dev_lab_visible():
     """Dev Lab is hidden from normal users unless DEV_MODE or the developer toggle is on."""
+    try:
+        from suite_workspace import can_show_developer_tools
+
+        return can_show_developer_tools(st=st)
+    except ImportError:
+        pass
     if DEV_MODE:
         return True
     try:
