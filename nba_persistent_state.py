@@ -14,6 +14,13 @@ APP_ID = "nba"
 
 NBA_TEAM_SELECT_KEY = "favorite_team_sidebar"
 NBA_PAGE_RADIO_KEY = "nba_choose_page"
+_DISK_SHELL_KEY = "_nba_disk_shell_applied"
+_TEAM_WIDGET_INIT_KEY = "_nba_team_widget_init"
+
+_WORKSPACE_DEFAULT_TEAMS: dict[str, str] = {
+    "daniel": "New York Knicks",
+    "ariel": "Boston Celtics",
+}
 
 _PERSIST_KEYS = (
     "favorite_team_sidebar",
@@ -91,19 +98,82 @@ def build_nba_disk_state(st: Any) -> dict[str, Any]:
     return state
 
 
+def clear_nba_startup_restore_flags(st: Any) -> None:
+    """Reset disk shell + team widget init when workspace profile changes."""
+    for key in (
+        _DISK_SHELL_KEY,
+        "_nba_disk_shell_had_state",
+        _TEAM_WIDGET_INIT_KEY,
+        "_nba_restore_team",
+        "_nba_autosave_team",
+        NBA_TEAM_SELECT_KEY,
+    ):
+        st.session_state.pop(key, None)
+
+
+def default_team_for_workspace(team_keys: list[str], workspace_id: str | None = None) -> str:
+    """Profile-aware default — avoid alphabetically-first Hawks for every non-Daniel profile."""
+    try:
+        from suite_workspace import get_active_workspace_id, normalize_workspace_id
+
+        ws = normalize_workspace_id(workspace_id or get_active_workspace_id())
+    except Exception:
+        ws = "daniel"
+    preferred = _WORKSPACE_DEFAULT_TEAMS.get(ws)
+    if preferred and preferred in team_keys:
+        return preferred
+    if "New York Knicks" in team_keys:
+        return "New York Knicks"
+    return team_keys[0] if team_keys else ""
+
+
+def init_nba_team_selector_state(
+    st: Any,
+    team_keys: list[str],
+    *,
+    nba_restored: bool = False,
+) -> None:
+    """Seed sidebar team widget once per session — never overwrite user picks on reruns."""
+    if st.session_state.get(_TEAM_WIDGET_INIT_KEY):
+        return
+    keys = [t for t in team_keys if t]
+    restore_team = st.session_state.pop("_nba_restore_team", None)
+    if restore_team in keys:
+        picked = restore_team
+    elif st.session_state.get(NBA_TEAM_SELECT_KEY) in keys:
+        picked = st.session_state[NBA_TEAM_SELECT_KEY]
+    else:
+        saved = st.session_state.get("favorite_team") or st.session_state.get("_nba_persist_team")
+        if saved in keys:
+            picked = saved
+        elif not nba_restored and "_nba_restore_error" not in st.session_state:
+            picked = default_team_for_workspace(keys)
+        else:
+            picked = default_team_for_workspace(keys)
+    if picked in keys:
+        st.session_state[NBA_TEAM_SELECT_KEY] = picked
+        st.session_state["favorite_team"] = picked
+        st.session_state["_nba_persist_team"] = picked
+    st.session_state[_TEAM_WIDGET_INIT_KEY] = True
+
+
 def apply_nba_disk_state(st: Any, state: dict[str, Any]) -> None:
+    widget_ready = bool(st.session_state.get(_TEAM_WIDGET_INIT_KEY))
     team = state.pop("favorite_team", None)
-    if team:
+    if team and not widget_ready:
         st.session_state["_nba_restore_team"] = team
         st.session_state["favorite_team"] = team
     dynamic = state.pop("_nba_dynamic", None)
     if isinstance(dynamic, dict):
         _apply_nba_dynamic_state(st, dynamic)
     for key, val in state.items():
+        if widget_ready and key in (NBA_TEAM_SELECT_KEY, "favorite_team"):
+            continue
         st.session_state[key] = copy.deepcopy(val)
-    restored_team = st.session_state.get("_nba_restore_team") or st.session_state.get("favorite_team")
-    if restored_team:
-        st.session_state[NBA_TEAM_SELECT_KEY] = restored_team
+    if not widget_ready:
+        restored_team = st.session_state.get("_nba_restore_team") or st.session_state.get("favorite_team")
+        if restored_team:
+            st.session_state[NBA_TEAM_SELECT_KEY] = restored_team
     page_label = st.session_state.get("page_label_last") or st.session_state.get("page_override")
     if page_label:
         st.session_state[NBA_PAGE_RADIO_KEY] = page_label
@@ -126,17 +196,22 @@ def apply_nba_session_defaults(st: Any) -> None:
 
 
 def restore_nba_disk_shell(st: Any) -> bool:
-    """Fast disk-only restore for shell widgets — no cloud round-trip."""
+    """Fast disk-only restore for shell widgets — once per session, no cloud round-trip."""
+    if st.session_state.get(_DISK_SHELL_KEY):
+        return bool(st.session_state.get("_nba_disk_shell_had_state"))
     try:
         from suite_user_persistence import _load_raw
 
         disk_state, _, _ = _load_raw(APP_ID)
     except Exception:
+        st.session_state[_DISK_SHELL_KEY] = True
+        st.session_state["_nba_disk_shell_had_state"] = False
         return False
-    if not disk_state:
-        return False
-    apply_nba_disk_state(st, disk_state)
-    return True
+    if disk_state:
+        apply_nba_disk_state(st, disk_state)
+    st.session_state[_DISK_SHELL_KEY] = True
+    st.session_state["_nba_disk_shell_had_state"] = bool(disk_state)
+    return bool(disk_state)
 
 
 def prepare_nba_workspace(st: Any, *, cloud_first: bool = True) -> bool:

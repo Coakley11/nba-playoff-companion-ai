@@ -126,6 +126,12 @@ def _on_active_workspace_changed(st: Any) -> None:
     for key in DEVELOPER_SESSION_FLAG_KEYS:
         ss.pop(key, None)
     try:
+        from nba_persistent_state import clear_nba_startup_restore_flags
+
+        clear_nba_startup_restore_flags(st)
+    except Exception:
+        pass
+    try:
         import streamlit as st_module
 
         st_module.cache_data.clear()

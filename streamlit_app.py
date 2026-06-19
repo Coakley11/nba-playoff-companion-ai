@@ -18203,28 +18203,12 @@ def main():
     if _validation_mode_active():
         _render_validation_mode_banner()
 
-    _restore_team = st.session_state.pop("_nba_restore_team", None)
-    if _restore_team and _restore_team in team_keys_sorted:
-        st.session_state[NBA_TEAM_SELECT_KEY] = _restore_team
-        st.session_state["favorite_team"] = _restore_team
-    elif NBA_TEAM_SELECT_KEY not in st.session_state:
-        _saved_team = st.session_state.get("favorite_team")
-        if _saved_team in team_keys_sorted:
-            st.session_state[NBA_TEAM_SELECT_KEY] = _saved_team
-        elif not nba_restored and "_nba_restore_error" not in st.session_state:
-            try:
-                from suite_workspace import DEFAULT_WORKSPACE_ID, get_active_workspace_id
+    try:
+        from nba_persistent_state import init_nba_team_selector_state
 
-                _ws_default = get_active_workspace_id(st)
-            except Exception:
-                _ws_default = "daniel"
-            if _ws_default in (DEFAULT_WORKSPACE_ID, "daniel"):
-                _fallback_team = (
-                    "New York Knicks" if "New York Knicks" in team_keys_sorted else team_keys_sorted[0]
-                )
-            else:
-                _fallback_team = team_keys_sorted[0]
-            st.session_state[NBA_TEAM_SELECT_KEY] = _fallback_team
+        init_nba_team_selector_state(st, team_keys_sorted, nba_restored=nba_restored)
+    except Exception:
+        pass
 
     _set_lgc_route_skip_bracket_api(_peek_sidebar_page_key() == "Live Game Center")
     _sidebar_stt = None
