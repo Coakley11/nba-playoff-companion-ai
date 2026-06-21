@@ -5,3 +5,6 @@ numpy
 statsmodels
 nba_api
 streamlit-autorefresh
+
+supabase>=2.0.0
+
