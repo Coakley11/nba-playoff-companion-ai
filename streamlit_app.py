@@ -18084,12 +18084,13 @@ def main():
     except Exception:
         pass
 
-try:
-    from suite_app_shell import apply_suite_auth_gate
+    try:
+        from suite_app_shell import apply_suite_auth_gate
 
-    apply_suite_auth_gate(st)
-except Exception:
-    pass
+        apply_suite_auth_gate(st)
+    except Exception:
+        pass
+
     try:
         from nba_startup import ensure_fast_load_defaults
 
