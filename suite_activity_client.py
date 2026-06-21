@@ -87,8 +87,8 @@ def _record_via_cloud(
         return False
 
 
-def _scoped_activity_app(app: str, metrics: dict[str, Any] | None = None) -> str:
-    """Resolve workspace-scoped storage key for activity writes."""
+def _fallback_path(app: str, metrics: dict[str, Any] | None = None) -> Path:
+    LOCAL_FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
     try:
         from suite_workspace import normalize_workspace_id, scoped_cloud_app_id
 
@@ -96,17 +96,13 @@ def _scoped_activity_app(app: str, metrics: dict[str, Any] | None = None) -> str
         if metrics:
             ws = str(metrics.get("workspace_id") or "").strip()
         if ws:
-            return scoped_cloud_app_id(app, normalize_workspace_id(ws))
-        return scoped_cloud_app_id(app)
+            scoped = scoped_cloud_app_id(app, normalize_workspace_id(ws))
+        else:
+            scoped = scoped_cloud_app_id(app)
+        safe = scoped.replace("/", "_").replace("\\", "_")
+        return LOCAL_FALLBACK_DIR / f"{safe}_activity_fallback.json"
     except Exception:
-        return str(app or "").strip()
-
-
-def _fallback_path(app: str, metrics: dict[str, Any] | None = None) -> Path:
-    LOCAL_FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
-    scoped = _scoped_activity_app(app, metrics)
-    safe = scoped.replace("/", "_").replace("\\", "_")
-    return LOCAL_FALLBACK_DIR / f"{safe}_activity_fallback.json"
+        return LOCAL_FALLBACK_DIR / f"{app}_activity_fallback.json"
 
 
 def _fallback_append(app: str, event: str, page: str, metrics: dict[str, Any], summary: str) -> None:
@@ -180,6 +176,12 @@ def record_activity(
 ) -> None:
     global _LAST_RECORD_TRACE
     metrics = metrics or {}
+    try:
+        from suite_workspace import get_active_workspace_id
+
+        metrics.setdefault("workspace_id", get_active_workspace_id())
+    except ImportError:
+        pass
     trace: dict[str, Any] = {
         "app": app,
         "event": event,

@@ -793,7 +793,6 @@ def sync_workspace_protocol(
             disk_state=disk_state, disk_ts=disk_ts, winner=picked.source,
             reason="already synced", applied=False,
         )
-        _mark_workspace_sync_skipped(st, app_id, skip_reason)
         _record_startup_restore_diagnostics(
             st, app_id,
             cloud_state=cloud_state, cloud_ts=cloud_ts,

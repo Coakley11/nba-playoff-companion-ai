@@ -591,7 +591,7 @@ def metrics_for_applied_math_resume(payload: dict[str, Any]) -> dict[str, Any]:
     """Metrics bundle for deep links into Applied Intelligence."""
     ctx = dict(payload.get("context") or {})
     ctx_lines = format_context_lines(ctx)
-    return {
+    metrics = {
         "question": payload.get("question"),
         "question_id": payload.get("question_id"),
         "source_app": payload.get("source_app"),
@@ -605,6 +605,13 @@ def metrics_for_applied_math_resume(payload: dict[str, Any]) -> dict[str, Any]:
         "saved_item_type": _CONTEXT_ITEM_TYPE,
         "saved_item_key": payload.get("question_id"),
     }
+    try:
+        from suite_workspace import get_active_workspace_id
+
+        metrics["workspace_id"] = get_active_workspace_id()
+    except ImportError:
+        pass
+    return metrics
 
 
 def _upsert_applied_intelligence_resume(

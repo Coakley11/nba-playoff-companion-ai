@@ -18084,6 +18084,12 @@ def main():
     except Exception:
         pass
 
+try:
+    from suite_app_shell import apply_suite_auth_gate
+
+    apply_suite_auth_gate(st)
+except Exception:
+    pass
     try:
         from nba_startup import ensure_fast_load_defaults
 
@@ -18170,11 +18176,16 @@ def main():
         pass
 
     try:
-        from suite_command_center_link import render_command_center_sidebar_link
+        from suite_app_shell import render_suite_sidebar_account_shell
 
-        render_command_center_sidebar_link(st)
+        render_suite_sidebar_account_shell(st)
     except Exception:
-        pass
+        try:
+            from suite_command_center_link import render_command_center_sidebar_link
+
+            render_command_center_sidebar_link(st)
+        except Exception:
+            pass
 
     import portfolio_polish as pp
     import portfolio_demo as pdemo

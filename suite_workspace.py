@@ -123,14 +123,10 @@ def _on_active_workspace_changed(st: Any) -> None:
         sk = str(key)
         if sk.startswith(("_cc_", "_ami_", "activity_", "_suite_activity")):
             ss.pop(key, None)
+        elif sk.startswith(("_suite_ai_", "ps_")) or sk in ("view_mode", "ps_library_problem"):
+            ss.pop(key, None)
     for key in DEVELOPER_SESSION_FLAG_KEYS:
         ss.pop(key, None)
-    try:
-        from nba_persistent_state import clear_nba_startup_restore_flags
-
-        clear_nba_startup_restore_flags(st)
-    except Exception:
-        pass
     try:
         import streamlit as st_module
 
@@ -232,10 +228,20 @@ def init_suite_workspace(st: Any) -> str:
     Apply ?suite_workspace=, else session/persisted choice.
     Call once near app startup before restore/autosave.
     """
+    from_url = _qp_get(st, _QUERY_PARAM)
+    if from_url:
+        incoming = normalize_workspace_id(from_url)
+        current = normalize_workspace_id(
+            str(st.session_state.get(SESSION_KEY) or load_persisted_workspace_id())
+        )
+        if incoming != current:
+            set_active_workspace_id(st, incoming)
+            st.session_state[_INITIALIZED_KEY] = True
+            return incoming
+
     if st.session_state.get(_INITIALIZED_KEY):
         return get_active_workspace_id(st)
 
-    from_url = _qp_get(st, _QUERY_PARAM)
     if from_url:
         set_active_workspace_id(st, from_url)
     elif SESSION_KEY not in st.session_state:

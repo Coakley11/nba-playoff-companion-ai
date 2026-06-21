@@ -404,8 +404,12 @@ def load_current_states() -> dict[str, dict[str, Any]]:
         metrics = row.get("metrics")
         if not isinstance(metrics, dict):
             metrics = {}
+        page = str(row.get("page") or "")
+        full_session = metrics.get("full_session")
+        if isinstance(full_session, dict) and not page.strip():
+            page = str(full_session.get("view_mode") or full_session.get("page") or "")
         out[logical] = {
-            "page": str(row.get("page") or ""),
+            "page": page,
             "summary": str(row.get("summary") or ""),
             "metrics": metrics,
             "updated_at": str(row.get("updated_at") or "")[:19],

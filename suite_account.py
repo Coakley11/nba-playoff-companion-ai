@@ -15,14 +15,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from suite_user import account_mode, get_account_user_id, get_display_name, get_external_user_id
+from suite_user import (
+    account_mode,
+    get_account_user_id,
+    get_display_name,
+    get_external_user_id,
+    get_user_email,
+)
 
 
 def account_summary() -> dict[str, str]:
+    email = get_user_email()
     return {
         "external_id": get_external_user_id(),
         "user_id": get_account_user_id(),
         "display_name": get_display_name(),
+        "email": email,
         "mode": account_mode(),
     }
 
