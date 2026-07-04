@@ -18078,9 +18078,9 @@ def main():
     _set_lgc_route_skip_bracket_api(False)
 
     try:
-        from suite_workspace import init_suite_workspace
+        from suite_workspace import bootstrap_suite_workspace
 
-        init_suite_workspace(st)
+        bootstrap_suite_workspace(st)
     except Exception:
         pass
 
