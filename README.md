@@ -11,26 +11,11 @@ Built as part of the **Daniel Cohen AI Suite** (shared workspace auth, cloud per
 
 ---
 
-## At a Glance
+## Executive Summary
 
-| | |
-|---|---|
-| **Role** | Full-stack Python sports app — live data ingestion, playoff-native UX, and test-driven persistence |
-| **Stack** | Python 3.11+ · Streamlit · pandas · NBA CDN/API feeds · optional Supabase · suite deep links |
-| **Scale** | 10+ fan-facing pages · fast-load shell · deferred workspace sync · playoff tracker + legacy |
-| **Differentiators** | One favorite team at a time · honest live-state banners · curated playoff rotations · workspace-scoped team/settings state |
+Most NBA apps are generic stat sites. This app is a **playoff command center for one favorite team** — 10+ fan-facing pages spanning live game center, bracket tracking, matchup intelligence, player and legacy stories, franchise history, and offseason outlooks, backed by a fast-load shell, CDN scoreboard ingestion, curated playoff rotations, and workspace-scoped persistence in the Daniel Cohen AI Suite.
 
----
-
-## For Employers & Reviewers
-
-This project demonstrates product engineering for live sports data: CDN-first scoreboard with graceful fallback, playoff-native navigation for elimination/offseason modes, and **per-account workspace isolation** so Daniel and Ariel (or `coakley11`) never share team selection, tracker state, or settings. Inspect `tests/test_workspace_account_ownership.py` and `nba_persistent_state.py` without running the full UI.
-
----
-
-## 1. Executive Summary
-
-Most NBA apps are generic stat sites. This app is a **playoff command center for one favorite team**.
+The goal is to help fans follow their team through the playoffs with trustworthy live context, matchup intelligence, player stories, and postseason continuity — not just box scores.
 
 NBA Playoff Companion AI answers:
 
@@ -44,19 +29,94 @@ The app is designed as a portfolio piece demonstrating **live API integration, f
 
 ---
 
-## 2. Why This Project Is Different
+## Example Questions This App Can Help Answer
+
+**Playoff Context**
+- Where is my team in the bracket right now?
+- What is the current series score and who do we play next?
+- Has my team been eliminated — and what happens on the dashboard after that?
+
+**Live Games**
+- What games are live right now?
+- Is the scoreboard data current or in safe/demo mode?
+- What does the box score look like for the game I'm following?
+
+**Matchups & Lineups**
+- How do tonight's likely lineups compare?
+- Which rotation players matter most in this matchup?
+- Are we relying on curated playoff rotations or stale depth-chart data?
+
+**Players & Legacy**
+- Which players are driving this playoff run?
+- Who should I track in the Legacy Tracker?
+- How is a player's playoff performance trending across rounds?
+
+**Franchise & Offseason**
+- What does our playoff history look like?
+- What did previous rounds tell us about this team?
+- If we're out, what is the offseason outlook?
+
+---
+
+## At a Glance
+
+| | |
+|---|---|
+| **Role** | Full-stack Python sports app — live data ingestion, playoff-native UX, and test-driven persistence |
+| **Stack** | Python 3.11+ · Streamlit · pandas · NBA CDN/API feeds · optional Supabase · suite deep links |
+| **Scale** | 10+ fan-facing pages · fast-load shell · deferred workspace sync · playoff tracker + legacy |
+| **Differentiators** | One favorite team at a time · honest live-state banners · curated playoff rotations · workspace-scoped team/settings state |
+
+---
+
+## Development Scope
+
+NBA Playoff Companion AI is part of a seven-application analytics suite developed by a single developer.
+
+The project combines live sports data ingestion, software engineering, product design, persistence systems, authentication, cloud deployment, and cross-application workflows into a unified platform — one of several sibling apps (Command Center, Baseball, Music, Investment, AMI, FutureLens) sharing suite infrastructure.
+
+---
+
+## For Employers & Reviewers
+
+This project demonstrates product engineering for live sports data and fan-first UX:
+
+| Skill area | Evidence in NBA |
+|------------|----------------|
+| **Live data engineering** | CDN scoreboard first, graceful API fallback, honest live-state banners |
+| **Product development** | Playoff-native navigation, elimination/offseason modes, fast-load shell |
+| **Analytics architecture** | Series modeling, lineup intelligence, player trend tracking |
+| **Persistence design** | Deferred workspace sync, disk + cloud restore, activity events |
+| **Systems design** | Suite auth, resume launch, workspace-scoped state paths |
+| **Cross-application integration** | Command Center deep links, suite activity feed |
+
+Inspect `tests/test_workspace_account_ownership.py` and `nba_persistent_state.py` without running the full UI.
+
+---
+
+## Why This Project Is Different
+
+Most NBA apps try to cover the whole league at once — box scores, standings, and stat tables with no playoff narrative.
+
+NBA Playoff Companion AI was designed as a **single-team playoff command center** — one favorite franchise, one narrative thread, one dashboard that changes meaningfully when your team is live, advancing, or eliminated.
+
+The same platform architecture supports bracket context, live game center, matchup intelligence, player tracking, franchise history, and offseason continuity through a shared persistence, routing, and fan-experience layer.
 
 | Typical NBA app | This platform |
 |-----------------|---------------|
 | League-wide stats hub | Single-team playoff command center |
 | Slow first paint | Fast-load shell with deferred heavy restore |
 | Silent API failures | Honest banners + safe mode |
-| Shared local state | Account-owned workspace isolation |
+| Surface-level depth charts | Curated playoff rotations when API data is stale |
+| Single-purpose pages | Integrated home, live, bracket, matchup, tracker, and legacy flow |
 | Generic sidebar | Suite auth, workspace badge, Command Center link |
+| Isolated local state | Account-owned workspace isolation + Supabase sync |
+
+NBA Playoff Companion AI is a **fan-first playoff product**, not another league-wide stats site.
 
 ---
 
-## 3. Key Features
+## Key Features
 
 | Page / Area | Highlights |
 |-------------|------------|
@@ -72,7 +132,7 @@ The app is designed as a portfolio piece demonstrating **live API integration, f
 
 ---
 
-## 4. Analytics & AI Methods
+## Analytics & AI Methods
 
 | Method | Use |
 |--------|-----|
@@ -85,7 +145,7 @@ The app is designed as a portfolio piece demonstrating **live API integration, f
 
 ---
 
-## 5. Technical Architecture
+## Technical Architecture
 
 ```
 streamlit_app.py           # Main shell, routing, fast-load path
@@ -116,7 +176,7 @@ docs/                      # Product source of truth (vision, pages)
 
 ---
 
-## 6. Screenshots
+## Screenshots
 
 | # | Page | Filename (placeholder) | What to show |
 |---|------|------------------------|--------------|
@@ -128,7 +188,23 @@ docs/                      # Product source of truth (vision, pages)
 
 ---
 
-## 7. Local Setup
+## Portfolio Value
+
+NBA Playoff Companion AI shows that you can:
+
+- Ingest **live sports data** with CDN-first scoreboard logic, graceful fallback, and honest failure banners
+- Design **fan-first playoff UX** — fast first paint, elimination/offseason modes, and emotional continuity after a team is out
+- Model **playoff context** — series records, round labels, lineup intelligence, and player trend narratives
+- Implement **deferred persistence** so heavy workspace restore does not block the first screen
+- Build **multiplayer-ready state** — account-owned workspaces, disk + cloud sync, and foreign URL rejection
+- Integrate **suite-wide workflows** — auth, resume launch, activity events, and Command Center handoffs across a large Streamlit app
+- Translate product requirements into **test-driven engineering** (`test_workspace_account_ownership.py`, `test_nba_workspace.py`)
+
+A hiring manager can grasp scope and sophistication in **2–3 minutes** from this README plus the live demo.
+
+---
+
+## Local Setup
 
 ### Requirements
 
@@ -159,7 +235,7 @@ Enable **Dev Lab** via `DEV_MODE = True` at top of `streamlit_app.py` or the sid
 
 ---
 
-## 8. Roadmap
+## Roadmap
 
 **Near term**
 - [ ] Manual Daniel/Ariel workspace validation (team, tracker, settings isolation)
@@ -175,7 +251,7 @@ See [`docs/DEVELOPMENT_PRIORITIES.md`](docs/DEVELOPMENT_PRIORITIES.md) for activ
 
 ---
 
-## 9. Testing
+## Testing
 
 ```bash
 python -m pytest tests/test_workspace_account_ownership.py tests/test_nba_workspace.py -q
