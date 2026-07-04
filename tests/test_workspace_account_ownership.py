@@ -7,10 +7,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from suite_auth import allowed_workspaces_for_user, enforce_workspace_ownership
 from suite_workspace import (
+    SESSION_KEY,
     bootstrap_suite_workspace,
     get_active_workspace_id,
     init_suite_workspace,
@@ -39,6 +41,9 @@ class _FakeSt:
     def __init__(self, session: dict | None = None, *, query: dict | None = None) -> None:
         self.session_state: dict = dict(session or {})
         self.query_params = dict(query or {})
+
+    def caption(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
 
 
 class TestWorkspaceAccountOwnership(unittest.TestCase):
@@ -235,6 +240,44 @@ class TestWorkspaceAccountOwnership(unittest.TestCase):
             ), patch("suite_workspace._PERSISTED_FILE", persist):
                 self.assertEqual(load_persisted_workspace_id(session_state=None), "guest")
                 self.assertEqual(load_persisted_workspace_id(session_state={}), "guest")
+
+    def test_coakley11_presets_not_all_presets(self) -> None:
+        st = _FakeSt(
+            _auth_session(
+                user_id="uuid-coakley",
+                email="coakley11@aol.com",
+                external_id="coakley11",
+            )
+        )
+        with patch("suite_auth.is_auth_enabled", return_value=True), patch(
+            "suite_auth.is_authenticated", return_value=True
+        ), patch("suite_workspace_registry.can_switch_workspaces", return_value=False):
+            from suite_workspace import _workspace_presets_for_session
+
+            presets = _workspace_presets_for_session(st)
+            self.assertEqual(len(presets), 1)
+            self.assertEqual(presets[0]["id"], "coakley11")
+
+    def test_coakley11_workspace_picker_hidden(self) -> None:
+        session = _auth_session(
+            user_id="uuid-coakley",
+            email="coakley11@aol.com",
+            external_id="coakley11",
+        )
+        session[SESSION_KEY] = "coakley11"
+        st = _FakeSt(session)
+        with patch("suite_auth.is_auth_enabled", return_value=True), patch(
+            "suite_auth.is_authenticated", return_value=True
+        ), patch("suite_workspace_registry.can_switch_workspaces", return_value=False), patch(
+            "suite_workspace.bootstrap_suite_workspace", return_value="coakley11"
+        ), patch("suite_auth.enforce_workspace_ownership"), patch(
+            "streamlit.selectbox"
+        ) as select_mock:
+            from suite_workspace import render_workspace_selector_sidebar
+
+            ws = render_workspace_selector_sidebar(st)
+            self.assertEqual(ws, "coakley11")
+            select_mock.assert_not_called()
 
     def test_bootstrap_refresh_stays_coakley11(self) -> None:
         """Second bootstrap (refresh) keeps coakley11 owned workspace."""
