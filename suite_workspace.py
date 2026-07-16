@@ -237,9 +237,32 @@ DEVELOPER_SESSION_FLAG_KEYS: tuple[str, ...] = (
 
 
 def is_developer_workspace(*, st: Any | None = None, workspace_id: str | None = None) -> bool:
-    """Daniel is the admin/developer workspace (Phase 1 — not auth)."""
+    """Legacy helper — Daniel workspace id. Prefer :func:`is_admin_session` for auth gates."""
     wid = workspace_id if workspace_id not in (None, "") else resolve_workspace_id(st=st)
     return normalize_workspace_id(wid) == DEFAULT_WORKSPACE_ID
+
+
+def _session_state_from_st(st: Any | None = None) -> Any | None:
+    try:
+        if st is not None and hasattr(st, "session_state"):
+            ss = st.session_state
+            return ss if hasattr(ss, "get") else None
+        import streamlit as st_module  # noqa: WPS433
+
+        ss = st_module.session_state
+        return ss if hasattr(ss, "get") else None
+    except Exception:
+        return None
+
+
+def is_admin_session(*, st: Any | None = None) -> bool:
+    """True when the current Streamlit session is an authorized admin account."""
+    try:
+        from suite_workspace_registry import is_admin_user
+
+        return is_admin_user(session_state=_session_state_from_st(st))
+    except Exception:
+        return False
 
 
 def _developer_query_enabled(st: Any | None = None) -> bool:
@@ -274,8 +297,15 @@ def is_developer_mode_enabled(*, st: Any | None = None) -> bool:
 
 
 def can_show_developer_tools(*, st: Any | None = None) -> bool:
-    """Daniel workspace only, with explicit developer mode enabled."""
-    return is_developer_workspace(st=st) and is_developer_mode_enabled(st=st)
+    """
+    Admin accounts only, with explicit developer mode enabled.
+
+    Fail-safe: non-admins never see developer / diagnostics / deploy tools,
+    even if ``?dev=1`` or a session toggle is set.
+    """
+    if not is_admin_session(st=st):
+        return False
+    return is_developer_mode_enabled(st=st)
 
 
 def _qp_get(st: Any, name: str) -> str:
@@ -409,9 +439,17 @@ def _workspace_presets_for_session(st: Any) -> tuple[dict[str, str], ...]:
 
         if is_auth_enabled() and is_authenticated(st.session_state):
             allowed_ids = allowed_workspaces_for_session(st.session_state)
-            allowed = frozenset(allowed_ids)
+            allowed = frozenset(normalize_workspace_id(w) for w in allowed_ids)
             filtered = tuple(p for p in WORKSPACE_PRESETS if p["id"] in allowed)
-            if not filtered and allowed_ids:
+            known = {p["id"] for p in filtered}
+            extras = tuple(
+                {"id": normalize_workspace_id(wid), "label": workspace_label(wid)}
+                for wid in allowed_ids
+                if normalize_workspace_id(wid) not in known
+            )
+            if extras:
+                filtered = filtered + extras
+            elif not filtered and allowed_ids:
                 filtered = tuple(
                     {"id": normalize_workspace_id(wid), "label": workspace_label(wid)}
                     for wid in allowed_ids
@@ -529,7 +567,7 @@ def render_workspace_selector_sidebar(st: Any) -> str:
 
         if not can_switch_workspaces(session_state=st.session_state):
             _sync_workspace_selector_widget(st, current)
-            st.caption(f"Active workspace: **{workspace_label(current)}** (`{current}`)")
+            st.caption(f"Active workspace: **{workspace_label(current)}**")
             return current
     except ImportError:
         pass
@@ -554,7 +592,10 @@ def render_workspace_selector_sidebar(st: Any) -> str:
             pass
     elif st.session_state.get(WORKSPACE_SELECTOR_WIDGET_KEY) != workspace_label(current):
         _sync_workspace_selector_widget(st, current)
-    st.caption(f"Active profile: **{workspace_label(current)}** (`{current}`)")
+    if can_show_developer_tools(st=st):
+        st.caption(f"Active profile: **{workspace_label(current)}** (`{current}`)")
+    else:
+        st.caption(f"Active profile: **{workspace_label(current)}**")
     return current
 
 

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from collections.abc import Callable
 from typing import Any
 
-from activity_time import parse_activity_timestamp, utc_now_iso
+from activity_time import format_eastern_time_label, parse_activity_timestamp, utc_now_iso
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ _CTX_JSON_SUBTITLE_LIMIT = 8000
 _CONTEXT_ITEM_TYPE = "analytical_question_context"
 ANALYTICAL_QUESTION_CONTINUE_PRIORITY = 64
 ANALYTICAL_QUESTION_BUTTON_LABEL = "Continue in Applied Mathematics →"
+PRACTICE_LOG_ANALYSIS_TITLE = "Music Practice Log Analysis"
+PRACTICE_LOG_ANALYSIS_CONTINUE_PRIORITY = 65
 _SEND_COOLDOWN_SECONDS = 120
 
 _SOURCE_AREA: dict[str, str] = {
@@ -215,12 +217,25 @@ def source_app_label(source_app: str) -> str:
     return _SOURCE_LABELS.get(key, key.replace("_", " ").title())
 
 
+def is_practice_log_analysis_context(context: dict[str, Any] | None) -> bool:
+    ctx = dict(context or {})
+    return (
+        str(ctx.get("user_request") or "") == "analyze_practice"
+        or str(ctx.get("intent") or "") in {"practice_history_analysis", "practice_log_analysis"}
+        or str(ctx.get("display_category") or "") == "analysis_handoff"
+        or str(ctx.get("handoff_kind") or "") == "practice_log_analysis"
+    )
+
+
 def source_question_card_title(
     source_app: str,
     context: dict[str, Any] | None = None,
 ) -> str:
     """Normalized Continue / activity title for cross-app questions."""
-    app = normalize_source_app_id(source_app, context)
+    ctx = dict(context or {})
+    app = normalize_source_app_id(source_app, ctx)
+    if is_practice_log_analysis_context(ctx):
+        return PRACTICE_LOG_ANALYSIS_TITLE
     if app == "music":
         return "Music Coach question from Music"
     label = _SOURCE_LABELS.get(app, app.replace("_", " ").title())
@@ -566,11 +581,105 @@ def format_context_lines(context: dict[str, Any] | None) -> list[str]:
     return lines[:16]
 
 
+def format_practice_analysis_updated_label(generated_at: str) -> str:
+    """Human-readable updated timestamp for Command Center cards (America/New_York, ET)."""
+    raw = str(generated_at or "").strip()
+    if not raw:
+        return ""
+    dt = parse_activity_timestamp(raw)
+    if dt is None:
+        return raw[:19].replace("T", " ")
+    return format_eastern_time_label(dt)
+
+
+def _practice_log_top_song(payload: dict[str, Any]) -> str:
+    ctx = dict(payload.get("context") or {})
+    pl = ctx.get("practice_log_summary") if isinstance(ctx.get("practice_log_summary"), dict) else {}
+    by_song = pl.get("practice_time_by_song") if isinstance(pl.get("practice_time_by_song"), dict) else {}
+    if by_song:
+        top_key = max(by_song, key=lambda k: int(by_song.get(k) or 0))
+        return str(top_key or "").strip()
+    songs = pl.get("most_practiced_songs")
+    if isinstance(songs, list) and songs:
+        return str(songs[0] or "").strip()
+    return ""
+
+
+def _practice_log_instrument_label(payload: dict[str, Any]) -> str:
+    ctx = dict(payload.get("context") or {})
+    pl = ctx.get("practice_log_summary") if isinstance(ctx.get("practice_log_summary"), dict) else {}
+    by_inst = pl.get("practice_time_by_instrument") if isinstance(pl.get("practice_time_by_instrument"), dict) else {}
+    if not by_inst:
+        return ""
+    items = [(str(k), int(v or 0)) for k, v in by_inst.items() if str(k).strip()]
+    if not items:
+        return ""
+    items.sort(key=lambda row: -row[1])
+    total = sum(mins for _, mins in items) or 1
+    fmt = lambda key: str(key).replace("_", " ").title()
+    if len(items) == 1:
+        return f"Main instrument: {fmt(items[0][0])}"
+    top_key, top_mins = items[0]
+    if top_mins / total >= 0.6:
+        return f"Main instrument: {fmt(top_key)}"
+    return "Multiple instruments"
+
+
+def practice_log_analysis_instrument_song_line(payload: dict[str, Any]) -> str:
+    parts: list[str] = []
+    top_song = _practice_log_top_song(payload)
+    if top_song:
+        parts.append(f"Top song: {top_song}")
+    inst = _practice_log_instrument_label(payload)
+    if inst:
+        parts.append(inst)
+    return " · ".join(parts)
+
+
+def practice_log_analysis_card_subtitle(payload: dict[str, Any]) -> str:
+    generated = str(
+        payload.get("report_generated_at")
+        or (payload.get("context") or {}).get("report_generated_at")
+        or ""
+    ).strip()
+    parts: list[str] = []
+    top_song = _practice_log_top_song(payload)
+    if top_song:
+        parts.append(f"Top song: {top_song}")
+    inst = _practice_log_instrument_label(payload)
+    if inst:
+        parts.append(inst)
+    updated = format_practice_analysis_updated_label(generated)
+    if updated:
+        parts.append(f"Updated {updated}")
+    if parts:
+        return " · ".join(parts)
+    ctx = dict(payload.get("context") or {})
+    pl = ctx.get("practice_log_summary") if isinstance(ctx.get("practice_log_summary"), dict) else {}
+    count = int(pl.get("session_count") or 0)
+    mins = int(pl.get("total_minutes") or 0)
+    if count > 0:
+        return f"{count} session(s), {mins} min logged — review patterns and next focus"
+    return "Practice history analysis from Music Practice Coach"
+
+
+def practice_log_analysis_resume_subtitle(payload: dict[str, Any]) -> str:
+    return practice_log_analysis_card_subtitle(payload)
+
+
 def analytical_question_continue_copy(payload: dict[str, Any]) -> tuple[str, str, str]:
     """Return (title, subtitle, button_label) for Command Center Continue cards."""
     ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
     app = normalize_source_app_id(str(payload.get("source_app") or ""), ctx)
     question = str(payload.get("question") or "").strip()
+    if is_practice_log_analysis_context(ctx):
+        card_payload = {
+            "source_app": payload.get("source_app") or app,
+            "context": ctx,
+            "report_generated_at": payload.get("report_generated_at") or ctx.get("report_generated_at"),
+        }
+        subtitle = practice_log_analysis_card_subtitle(card_payload)
+        return (PRACTICE_LOG_ANALYSIS_TITLE, subtitle, "Continue Practice Log Analysis →")
     title = source_question_card_title(app, ctx)
     if app == "music":
         return (title, question, "Continue with Music Coach →")
@@ -579,8 +688,10 @@ def analytical_question_continue_copy(payload: dict[str, Any]) -> tuple[str, str
 
 def analytical_question_storage_subtitle(payload: dict[str, Any]) -> str:
     """Resume-item subtitle for storage/rebuild — question only on CC cards; context stays in metrics/URL."""
-    question = str(payload.get("question") or "").strip()
     ctx = dict(payload.get("context") or {})
+    if is_practice_log_analysis_context(ctx):
+        return practice_log_analysis_resume_subtitle(payload)
+    question = str(payload.get("question") or "").strip()
     ctx_json = json.dumps(ctx, ensure_ascii=False) if ctx else ""
     if ctx_json:
         return f"{question}\n__ctx_json__:{ctx_json[:_CTX_JSON_SUBTITLE_LIMIT]}"
