@@ -1,4 +1,13 @@
 
+# SECURITY (2026-11-23): first, before any app module. After an in-place Streamlit Cloud pull the process can
+# still hold the previous release's auth modules; this loads the current ones (see suite_security_module_refresh).
+try:
+    import suite_security_module_refresh as _suite_security_module_refresh
+
+    _suite_security_module_refresh.refresh_pre_fix_modules()
+except Exception:  # never block start-up
+    pass
+
 from typing import Any
 import html
 import os
